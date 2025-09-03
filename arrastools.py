@@ -9,7 +9,7 @@ import tkinter as tk
 length = 4
 
 # Function
-global size_automation, controller, pologambling, ballcash
+global size_automation, controller, ballcash
 arena_size_delay=50
 s = 25 #ball spacing in px
 size_automation = False
@@ -236,7 +236,7 @@ def start_brain_damage():
         braindamage_thread.start()
 
 def on_press(key):
-    global size_automation, braindamage, pologambling, ballcash
+    global size_automation, braindamage, ballcash
     try:
         if key == keyboard.Key.esc:
             controller.type("estop")
