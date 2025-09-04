@@ -6,12 +6,12 @@ from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 import tkinter as tk
 
-length = 4
 
 # Function
 global size_automation, controller, ballcash
 arena_size_delay=50
-s = 25 #ball spacing in px
+s = 25 # ball spacing in px
+length = 4 # side length of tail square
 size_automation = False
 ballcash = False
 ballcrash_thread = None
@@ -110,7 +110,10 @@ def ballcrash():
     controller.press("`")
     for _ in range(50):
         for _ in range(100):
-            controller.type("ch")
+            controller.press("c")
+            controller.release("c")
+            controller.press("h")
+            controller.release("h")
     controller.release("`")
 
 def balls():
