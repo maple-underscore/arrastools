@@ -6,12 +6,13 @@ from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 import tkinter as tk
 
+length = 4
 
 # Function
-global size_automation, controller, ballcash
+global size_automation, controller, pologambling, ballcash
 arena_size_delay=50
-s = 25 # ball spacing in px
-length = 4 # side length of tail square
+s = 25 #ball spacing in px
+pologambling = False
 size_automation = False
 ballcash = False
 ballcrash_thread = None
@@ -19,7 +20,9 @@ braindamage = False
 controller = KeyboardController()
 pressed_keys = set()
 automation_thread = None
+pologambling_thread = None
 braindamage_thread = None  # Add this global variable
+ball10x10_thread = None  # Add this global variable
 
 def create_number_input_window(title):
     def handle_return(event=None):
@@ -74,6 +77,13 @@ def click_positions(pos_list, delay=0.5):
         print(f"Clicked at {x}, {y}")
         time.sleep(delay)
 
+def polo_gambling():
+    global pologambling
+    while pologambling:
+        controller.press('x')
+        time.sleep(0.1)
+        controller.release('x')
+
 def conq_quickstart():
     controller.type("kyyv")
     mouse = MouseController()
@@ -90,20 +100,17 @@ def conq_quickstart():
 
 def wallcrash():
     controller.press("`")
-    for _ in range(1800):
-        controller.type("x")
+    controller.type("x"*1800)
     controller.release("`")
 
 def nuke():
     controller.press("`")
-    for _ in range(400):
-        controller.type("wk")
+    controller.type("wk"*400)
     controller.release("`")
 
 def shape():
     controller.press("`")
-    for _ in range(400):
-        controller.type("f")
+    controller.type("f"*1000)
     controller.release("`")
 
 def ballcrash():
@@ -118,22 +125,19 @@ def ballcrash():
 
 def balls():
     controller.press("`")
-    for _ in range(210):
-        controller.type("ch")
+    controller.type("ch"*210)
     controller.release("`")
 
 def walls():
     controller.press("`")
-    for _ in range(210):
-        controller.type("X")
+    controller.type("x"*210)
     controller.release("`")
 
 def ball10x10():
     controller.press("`")
     mouse = MouseController()
     init = mouse.position
-    for _ in range(int(length*33)):
-        controller.type("ch")
+    controller.type("ch"*int(length*33))
     time.sleep(1)
     starting_position = (init[0], init[1]+2*s)
     i2=0
@@ -205,6 +209,44 @@ def ball10x10():
         down = not down
     controller.release("`")
 
+def joint():
+    controller.press("`")
+    mouse = MouseController()
+    i2=0
+    down = True
+    while i2 < length:
+        i=0
+        while i < length:
+            controller.press("j")
+            time.sleep(0.04)
+            if down:
+                mouse.position = (mouse.position[0], mouse.position[1]+s)
+                time.sleep(0.04)
+                controller.release("j")
+                if i == length-1:
+                    mouse.position = (mouse.position[0], mouse.position[1]-s)
+                    time.sleep(0.04)
+                    controller.press("j")
+            else:
+                mouse.position = (mouse.position[0], mouse.position[1]-s)
+                time.sleep(0.04)
+                controller.release("j")
+                if i == length-1:
+                    mouse.position = (mouse.position[0], mouse.position[1]+s)
+                    time.sleep(0.04)
+                    controller.press("j")
+            i+=1
+        i2+=1
+        time.sleep(0.04)
+        if down:
+            mouse.position = (mouse.position[0]+s, mouse.position[1])
+        else:
+            mouse.position = (mouse.position[0]+s, mouse.position[1])
+        time.sleep(0.04)
+        controller.release("j")
+        down = not down
+    controller.release("`")
+
 
 def brain_damage():
     global braindamage
@@ -215,14 +257,25 @@ def brain_damage():
 
 def score():
     controller.press("`")
-    for _ in range(400):
-        controller.type("n")
+    controller.type("n"*400)
     controller.release("`")
 
 def ball():
     controller.press("`")
     controller.type("ch")
     controller.release("`")
+
+def colorballs():
+    controller.press("`")
+    mouse = MouseController()
+    init = mouse.position
+    for i in range(27):
+        mouse.position = [init[0]-i*15, init[1]]
+        time.sleep(0.02)
+        controller.type("c")
+    controller.release("`")
+        
+
 
 def start_arena_automation():
     global automation_thread
@@ -238,11 +291,28 @@ def start_brain_damage():
         braindamage_thread.daemon = True
         braindamage_thread.start()
 
+def start_pologambling():
+    global pologambling_thread
+    if pologambling_thread is None or not pologambling_thread.is_alive():
+        pologambling_thread = threading.Thread(target=polo_gambling)
+        pologambling_thread.daemon = True
+        pologambling_thread.start()
+
+def start_ball10x10():
+    global ball10x10_thread
+    if ball10x10_thread is None or not ball10x10_thread.is_alive():
+        ball10x10_thread = threading.Thread(target=ball10x10)
+        ball10x10_thread.daemon = True
+        ball10x10_thread.start()
+
 def on_press(key):
-    global size_automation, braindamage, ballcash
+    global size_automation, braindamage, pologambling, ballcash
     try:
         if key == keyboard.Key.esc:
-            controller.type("estop")
+            size_automation = False
+            braindamage = False
+            pologambling = False
+            print("estop")
             exit(0)
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
@@ -266,7 +336,7 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='5':
             if 'ctrl' in pressed_keys:
                 print("ball square")
-                ball10x10()
+                start_ball10x10()
         elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
                 print("death by ball")
@@ -295,11 +365,12 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("200 walls")
                 walls()
-        elif hasattr(key, 'char') and key.char and key.char=='0':
+        elif hasattr(key, 'char') and key.char and key.char=='c':
             if 'ctrl' in pressed_keys:
-                size_automation = False
-                braindamage = False
-                print("All automation is now OFF.") 
+                colorballs()
+        elif hasattr(key, 'char') and key.char and key.char=='j':
+            if 'ctrl' in pressed_keys:
+                joint()
     except Exception as e:
         print(f"Error: {e}")
     
