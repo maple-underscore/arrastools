@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Open Local HTML File</title>
+  <style>
+    body { font-family: sans-serif; background: #222; color: #eee; padding: 2em; }
+    .controls { display:flex; gap:8px; align-items:center; }
+    .file-btn, .open-btn { padding: 0.5em 1em; font-size: 1em; cursor: pointer; border: none; background:#007acc; color:#fff; border-radius:4px; }
+    .open-btn { background:#2d7a2d; }
+  </style>
+</head>
+<body>
+  <h2>Open a Local HTML File in a New Tab</h2>
+
+  <div class="controls">
+    <!-- hidden file input; user interacts with the "Choose file" and "Open" buttons -->
+    <input type="file" id="fileInput" accept=".html,.htm,text/html" style="display:none" />
+    <button id="chooseBtn" class="file-btn">Choose file…</button>
+    <button id="openBtn" class="open-btn" disabled>Open</button>
+    <span id="filename" style="margin-left:8px;color:#ccc;font-size:0.95em">No file selected</span>
+  </div>
+
+  <script>
+    const input = document.getElementById('fileInput');
+    const chooseBtn = document.getElementById('chooseBtn');
+    const openBtn = document.getElementById('openBtn');
+    const filenameSpan = document.getElementById('filename');
+    let lastUrl = null;
+    let selectedFile = null;
+
+    // Open file chooser when "Choose file…" clicked
+    chooseBtn.addEventListener('click', () => input.click());
+
+    // When file selected, enable Open button and show name
+    input.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) {
+        selectedFile = null;
+        filenameSpan.textContent = 'No file selected';
+        openBtn.disabled = true;
+        return;
+      }
+      selectedFile = file;
+      filenameSpan.textContent = file.name;
+      openBtn.disabled = false;
+    });
+
+    // Open selected file in a new tab when Open clicked
+    openBtn.addEventListener('click', () => {
+      if (!selectedFile) return;
+
+      // revoke previous blob URL
+      if (lastUrl) {
+        try { URL.revokeObjectURL(lastUrl); } catch (_) {}
+        lastUrl = null;
+      }
+
+      const blobUrl = URL.createObjectURL(selectedFile);
+      lastUrl = blobUrl;
+
+      // create an anchor and click it (ensures a user gesture)
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a); // some browsers require it in DOM
+      a.click();
+      a.remove();
+
+      // keep blob until page unload
+      window.addEventListener('beforeunload', () => { if (lastUrl) URL.revokeObjectURL(lastUrl); });
+    });
+
+    // Optional: allow double-click on filename to re-open chooser
+    filenameSpan.addEventListener('dblclick', () => input.click());
+  </script>
+</body>
+</html>

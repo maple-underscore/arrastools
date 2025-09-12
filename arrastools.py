@@ -77,13 +77,6 @@ def click_positions(pos_list, delay=0.5):
         print(f"Clicked at {x}, {y}")
         time.sleep(delay)
 
-def polo_gambling():
-    global pologambling
-    while pologambling:
-        controller.press('x')
-        time.sleep(0.1)
-        controller.release('x')
-
 def conq_quickstart():
     controller.type("kyyv")
     mouse = MouseController()
@@ -117,10 +110,8 @@ def ballcrash():
     controller.press("`")
     for _ in range(50):
         for _ in range(100):
-            controller.press("c")
-            controller.release("c")
-            controller.press("h")
-            controller.release("h")
+            controller.tap("c")
+            controller.tap("h")        
     controller.release("`")
 
 def balls():
@@ -265,18 +256,6 @@ def ball():
     controller.type("ch")
     controller.release("`")
 
-def colorballs():
-    controller.press("`")
-    mouse = MouseController()
-    init = mouse.position
-    for i in range(27):
-        mouse.position = [init[0]-i*15, init[1]]
-        time.sleep(0.02)
-        controller.type("c")
-    controller.release("`")
-        
-
-
 def start_arena_automation():
     global automation_thread
     if automation_thread is None or not automation_thread.is_alive():
@@ -365,12 +344,6 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("200 walls")
                 walls()
-        elif hasattr(key, 'char') and key.char and key.char=='c':
-            if 'ctrl' in pressed_keys:
-                colorballs()
-        elif hasattr(key, 'char') and key.char and key.char=='j':
-            if 'ctrl' in pressed_keys:
-                joint()
     except Exception as e:
         print(f"Error: {e}")
     
