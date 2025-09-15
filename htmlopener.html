@@ -46,30 +46,23 @@
       openBtn.disabled = false;
     });
 
-    // Open selected file in a new tab when Open clicked
+    // Open selected file in a new about:blank tab when Open clicked
     openBtn.addEventListener('click', () => {
       if (!selectedFile) return;
 
-      // revoke previous blob URL
-      if (lastUrl) {
-        try { URL.revokeObjectURL(lastUrl); } catch (_) {}
-        lastUrl = null;
-      }
-
-      const blobUrl = URL.createObjectURL(selectedFile);
-      lastUrl = blobUrl;
-
-      // create an anchor and click it (ensures a user gesture)
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      document.body.appendChild(a); // some browsers require it in DOM
-      a.click();
-      a.remove();
-
-      // keep blob until page unload
-      window.addEventListener('beforeunload', () => { if (lastUrl) URL.revokeObjectURL(lastUrl); });
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const html = e.target.result;
+        const newWin = window.open('about:blank', '_blank');
+        if (newWin) {
+          newWin.document.open();
+          newWin.document.write(html);
+          newWin.document.close();
+        } else {
+          alert('Failed to open new tab. Please allow pop-ups.');
+        }
+      };
+      reader.readAsText(selectedFile);
     });
 
     // Optional: allow double-click on filename to re-open chooser

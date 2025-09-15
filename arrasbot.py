@@ -77,6 +77,7 @@ Bot initialized in {round(init, 3)} seconds
         if (rgb == (167, 81, 68) or rgb == (138, 27, 34) or rgb == (201, 92, 75)):
             if not disconnected:
                 take_screenshot("disconnected")
+                log_file.write(f"[DISCONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Disconnected at {timestamp()}")
             log_file.write(f"Disconnected at {timestamp()}\n")
             controller.release("w")
@@ -95,6 +96,7 @@ Bot initialized in {round(init, 3)} seconds
             time.sleep(3)
             if rgb == (176, 100, 81) and not disconnected and not died:
                 take_screenshot("died")
+                log_file.write(f"[DEATH] screenshot taken at {timestamp()}\n")
                 print(f"Died at {timestamp()}")
                 log_file.write(f"Died at {timestamp()}\n")
                 died = True
@@ -103,6 +105,7 @@ Bot initialized in {round(init, 3)} seconds
                 pass
         elif rgb == (223, 116, 90) and (disconnected or died):
             take_screenshot("reconnected")
+            log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")
             log_file.write(f"Successfully reconnected at {timestamp()}\n")
             disconnected = False
@@ -137,6 +140,7 @@ Bot initialized in {round(init, 3)} seconds
         if time.time() - lastscreenshot > 60:
             take_screenshot()
             lastscreenshot = time.time()
+            log_file.write(f"[PERIODIC] screenshot taken at {timestamp()}\n")
         if time.time() - lastmove > 30:
             mouse.position = (mouse.position[0]+1, mouse.position[1])
             time.sleep(0.1)
