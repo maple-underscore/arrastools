@@ -139,8 +139,8 @@ Bot initialized in {round(init, 3)} seconds
             time.sleep(0.1)
         if time.time() - lastscreenshot > 60:
             take_screenshot()
-            lastscreenshot = time.time()
             log_file.write(f"[PERIODIC] screenshot taken at {timestamp()}\n")
+            lastscreenshot = time.time()
         if time.time() - lastmove > 30:
             mouse.position = (mouse.position[0]+1, mouse.position[1])
             time.sleep(0.1)
