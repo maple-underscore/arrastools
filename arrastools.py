@@ -9,10 +9,9 @@ import tkinter as tk
 length = 4
 
 # Function
-global size_automation, controller, pologambling, ballcash
+global size_automation, controller, ballcash
 arena_size_delay=50
 s = 25 #ball spacing in px
-pologambling = False
 size_automation = False
 ballcash = False
 ballcrash_thread = None
@@ -20,7 +19,6 @@ braindamage = False
 controller = KeyboardController()
 pressed_keys = set()
 automation_thread = None
-pologambling_thread = None
 braindamage_thread = None  # Add this global variable
 ball10x10_thread = None  # Add this global variable
 
@@ -270,13 +268,6 @@ def start_brain_damage():
         braindamage_thread.daemon = True
         braindamage_thread.start()
 
-def start_pologambling():
-    global pologambling_thread
-    if pologambling_thread is None or not pologambling_thread.is_alive():
-        pologambling_thread = threading.Thread(target=polo_gambling)
-        pologambling_thread.daemon = True
-        pologambling_thread.start()
-
 def start_ball10x10():
     global ball10x10_thread
     if ball10x10_thread is None or not ball10x10_thread.is_alive():
@@ -285,12 +276,11 @@ def start_ball10x10():
         ball10x10_thread.start()
 
 def on_press(key):
-    global size_automation, braindamage, pologambling, ballcash
+    global size_automation, braindamage, ballcash
     try:
         if key == keyboard.Key.esc:
             size_automation = False
             braindamage = False
-            pologambling = False
             print("estop")
             exit(0)
         elif key == keyboard.Key.ctrl_l:
