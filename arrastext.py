@@ -4,53 +4,135 @@ import threading
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
+import tkinter as tk
 
+global controller, mouse
 controller = KeyboardController()
 mouse = MouseController()
-
-global ball_spacing
-ball_spacing = 25
-size = 3, 5
-text = ""
+s = 25
+letters3 = [
+    " XXX  X X  XXX  X X  X X ",# a 0
+    " XX   X X  XXX  X X  XX  ",# b 1
+    " XXX  X    X    X    XXX ",# c 2
+    " XX   X X  X X  X X  XX  ",# d 3
+    " XXX  X    XXX  X    XXX ",# e 4
+    " XXX  X    XXX  X    X   ",# f 5
+    " XXX  X    X X  X X  XXX ",# g 6
+    " X X  X X  XXX  X X  X X ",# h 7
+    " XXX   X    X    X   XXX ",# i 8
+    " XXX   X    X    X   XX  ",# j 9
+    " X X  X X  XX   X X  X X ",# k 10
+    " X    X    X    X    XXX ",# l 11
+    "X   XXX XXX X XX   XX   X",# m 12
+    "X   XXX  XX X XX  XXX   X",# n 13
+    " XXX  X X  X X  X X  XXX ",# o 14
+    " XXX  X X  XXX  X    X   ",# p 15
+    " XXX  X X  XXX    X    X ",# q 16
+    " XXX  X X  XX   X X  X X ",# r 17
+    " XXX  X    XXX    X  XXX ",# s 18
+    " XXX   X    X    X    X  ",# t 19
+    " X X  X X  X X  X X  XXX ",# u 20
+    " X X  X X  X X  X X   X  ",# v 21
+    "X X XX X XX X XX X X X X ",# w 22
+    " X X  X X   X   X X  X X ",# x 23
+    " X X  X X   X    X    X  ",# y 24
+    " XXX    X   X   X    XXX " # z 25
+]
+numbers1 = [
+    " XXX  X X  X X  X X  XXX ",# 0 0
+    " XX    X    X    X   XXX ",# 1 1
+    " XXX    X  XXX  X    XXX ",# 2 2
+    " XXX    X  XXX    X  XXX ",# 3 3
+    " X X  X X  XXX    X    X ",# 4 4
+    " XXX  X    XXX    X  XXX ",# 5 5
+    " XXX  X    XXX  X X  XXX ",# 6 6
+    " XXX    X    X    X    X ",# 7 7
+    " XXX  X X  XXX  X X  XXX ",# 8 8
+    " XXX  X X  XXX    X  XXX ",# 9 9
+    " X X XXXXX X X XXXXX X X ",# # 10
+    "  XX  X    X    X     XX ",# ( 11
+    " XXX  X    X    X    XXX ",# [ 12
+    " XXX  X   XX    X    XXX ",# { 13
+    "  XX    X    X    X   XX ",# ) 14
+    " XXX    X    X    X  XXX ",# ] 15
+    " XXX    X    XX   X  XXX ",# } 16
+    "   X    X   X   X    X   ",# / 17
+    " X    X     X     X    X ",# \ 18
+    " XXX    X  XXX        X  ",# ? 19
+    "   X   X   X     X     X ",# < 20
+    " X     X     X   X   X   ",# > 21
+    "                    XXXXX",# _ 22
+    "           XXX           ",# - 23
+    "  X    X  XXXXX  X    X  ",# + 24
+    "     XXXXX     XXXXX     ",# = 25
+    "     XXX XX XXX          ",# ~ 26
+    "  X   X X                " # ^ 27
+]
+letters2 = [
+    "X XX X         ",# " 0
+    " X  X          ",# ' 1
+    "             X ",# . 2
+    "          X  X " # , 3
+    "    X     X    ",# : 4
+    "    X     X  X ",# ; 5
+    " X  X  X  X  X ",# | 6
+    " X  X  X     X ",# ! 7
+]
+letters5 = [
+    "XXXXXX   XXXXXXX   XX   X",# a 0
+    "XXXX X   XXXXXXX   XXXXX ",# b 1
+    "XXXXXX    X    X    XXXXX",# c 2
+    "XXXX X   XX   XX   XXXXX ",# d 3
+    "XXXXXX    XXXXXX    XXXXX",# e 4
+    "XXXXXX    XXXXXX    X    ",# f 5
+    "XXXXXX    X XXXX   XXXXXX",# g 6
+    "X   XX   XXXXXXX   XX   X",# h 7
+    "XXXXX  X    X    X  XXXXX",# i 8
+    "XXXXX  X    X  X X  XXX  ",# j 9
+    "X   XX  X XXX  X  X X   X",# k 10
+    "X    X    X    X    XXXXX",# l 11
+    "X   XXX XXX X XX   XX   X",# m 12
+    "X   XXX  XX X XX  XXX   X",# n 13
+    "XXXXXX   XX   XX   XXXXXX",# o 14
+    "XXXXXX   XXXXXXX    X    ",# p 15
+    "XXXXXX   XX   XX  X XXX X",# q 16
+    "XXXXXX   XXXXX X   XX   X",# r 17
+    "XXXXXX    XXXXX    XXXXXX",# s 18
+    "XXXXX  X    X    X    X  ",# t 19
+    "X   XX   XX   XX   XXXXXX",# u 20
+    "X   XX   X X X  X X   X  ",# v 21
+    "X X XX X XX X XX X X X X ",# w 22
+    "X   X X X   X   X X X   X",# x 23
+    "X   X X X   X    X    X  ",# y 24
+    "XXXXX   X   X   X   XXXXX" # z 25
+]
 
 def ball(x, y):
-    controller.press("`")
     mouse.position = (x, y)
-    time.sleep(0.04)
+    controller.press("`")
     for _ in range(3):
         controller.tap("c")
         controller.tap("h")
     controller.release("`")
 
-def textplacer(text, x, y, pos, sizex, sizey):
+def placeletter(letterdata, x=5, y=5, start=mouse.position):
+    # letter height and width are paramaterized
+    # default size is 5 x 5
     try:
-        if not isinstance(text, str) or (sizex < 3 or sizey < 5):
-            return False
-        localx = x
-        localy = y
-        for letter in text:
-            if letter == "a":
-                for _ in range(sizex-1):
-                    localx+=ball_spacing
-                    ball(localx, localy)
-                localx-=ball_spacing*(sizex-1)
-                for _ in range(sizey-1):
-                    localy+=ball_spacing
-                    ball(localx, localy)
-                for _ in range(sizex-1):
-                    localx+=ball_spacing
-                    ball(localx, localy)
-                localx-=ball_spacing*(sizex-1)
-                localy-=ball_spacing*(sizey-3)
-                for _ in range(sizex-1):
-                    localx+=ball_spacing
-                    ball(localx, localy)
-            return True
-            print(f"Placed letter {letter}")
+        if len(letterdata) == (x * y):
+            for pos in range(x * y):
+                mouse.position = (start[0] + (s * (pos % x)), start[1] + (s * (pos - (pos % x)) / y))
+                if letterdata[pos] == "X":
+                    ball(mouse.position())
+            mouse.position = (start[0] + (s * (x + 1)), start[1])
+        else:
+            print("String length out of bounds")
     except Exception as e:
-        print(f"Uncaught exception {e}")
-        return False
+        print(f"Exception as {e}")
 
-
-pos = mouse.position
-textplacer(text, pos[0], pos[1]+2*ball_spacing, pos, size[0], size[1])
+placeletter(letters3[7])
+placeletter(letters3[4])
+placeletter(letters3[11])
+placeletter(letters3[11])
+placeletter(letters3[14])
+placeletter(numbers1[7], 3)
