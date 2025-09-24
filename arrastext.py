@@ -5,6 +5,7 @@ from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 import tkinter as tk
+time.sleep(4)
 
 global controller, mouse
 controller = KeyboardController()
@@ -38,7 +39,7 @@ letters3 = [
     " X X  X X   X    X    X  ",# y 24
     " XXX    X   X   X    XXX " # z 25
 ]
-numbers1 = [
+letters2 = [
     " XXX  X X  X X  X X  XXX ",# 0 0
     " XX    X    X    X   XXX ",# 1 1
     " XXX    X  XXX  X    XXX ",# 2 2
@@ -68,15 +69,15 @@ numbers1 = [
     "     XXX XX XXX          ",# ~ 26
     "  X   X X                " # ^ 27
 ]
-letters2 = [
+numbers1 = [
     "X XX X         ",# " 0
     " X  X          ",# ' 1
     "             X ",# . 2
-    "          X  X " # , 3
+    "          X  X ",# , 3
     "    X     X    ",# : 4
     "    X     X  X ",# ; 5
     " X  X  X  X  X ",# | 6
-    " X  X  X     X ",# ! 7
+    " X  X  X     X " # ! 7
 ]
 letters5 = [
     "XXXXXX   XXXXXXX   XX   X",# a 0
@@ -107,28 +108,33 @@ letters5 = [
     "XXXXX   X   X   X   XXXXX" # z 25
 ]
 
-def ball(x, y):
-    mouse.position = (x, y)
+def ball(pos=mouse.position):
+    mouse.position = (pos)
     controller.press("`")
     for _ in range(3):
         controller.tap("c")
         controller.tap("h")
     controller.release("`")
 
-def placeletter(letterdata, x=5, y=5, start=mouse.position):
+def placeletter(letterdata, x = 5, y = 5, start=mouse.position, s = 25):
     # letter height and width are paramaterized
     # default size is 5 x 5
     try:
         if len(letterdata) == (x * y):
-            for pos in range(x * y):
-                mouse.position = (start[0] + (s * (pos % x)), start[1] + (s * (pos - (pos % x)) / y))
-                if letterdata[pos] == "X":
-                    ball(mouse.position())
-            mouse.position = (start[0] + (s * (x + 1)), start[1])
+            for xp in range(x):
+                for yp in range(y):
+                    mouse.position = (start[0] + (xp * s), start[1] + (yp * s))
+                    time.sleep(0.04)
+                    if letterdata[(yp + (xp * x))] == "X":
+                        ball(mouse.position)
+                    time.sleep(0.04)
+            time.sleep(0.04)
         else:
-            print("String length out of bounds")
-    except Exception as e:
-        print(f"Exception as {e}")
+            print(f"String length out of bounds ({len(letterdata)}/{(x * y)})")
+    except Exception as ex:
+        print(f"Exception as {ex}")
+    mouse.position = (start[0] + (x * s), start[1])
+    time.sleep(0.1)
 
 placeletter(letters3[7])
 placeletter(letters3[4])

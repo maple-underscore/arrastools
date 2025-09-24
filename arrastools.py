@@ -9,18 +9,31 @@ import tkinter as tk
 length = 4
 
 # Function
-global size_automation, controller, ballcash
+global size_automation, controller, dragabuser, dragabuser2, dragabuser3, dragabuser4, ballcash, mouse
 arena_size_delay=50
 s = 25 #ball spacing in px
 size_automation = False
+dragabuser = False
+dragabuser2 = False
+dragabuser3 = False
+dragabuser4 = False
 ballcash = False
 ballcrash_thread = None
 braindamage = False
 controller = KeyboardController()
+mouse = MouseController()
 pressed_keys = set()
 automation_thread = None
+dragabuse_thread = None
+dragabuse2_thread = None
+dragabuse3_thread = None
+dragabuse4_thread = None
 braindamage_thread = None  # Add this global variable
 ball10x10_thread = None  # Add this global variable
+
+# Add these globals near the top
+ctrl6_last_time = 0
+ctrl6_armed = False
 
 def create_number_input_window(title):
     def handle_return(event=None):
@@ -101,15 +114,17 @@ def nuke():
 
 def shape():
     controller.press("`")
-    controller.type("f"*1000)
+    controller.type("f"*500)
     controller.release("`")
 
 def ballcrash():
     controller.press("`")
     for _ in range(50):
         for _ in range(100):
-            controller.tap("c")
-            controller.tap("h")        
+            controller.press("c")
+            controller.release("c")
+            controller.press("h")
+            controller.release("h")
     controller.release("`")
 
 def balls():
@@ -124,10 +139,13 @@ def walls():
 
 def ball10x10():
     controller.press("`")
+    controller.tap("0")
+    controller.tap("-")
+    controller.tap("-")
     mouse = MouseController()
     init = mouse.position
     controller.type("ch"*int(length*33))
-    time.sleep(1)
+    time.sleep(3)
     starting_position = (init[0], init[1]+2*s)
     i2=0
     while i2 < length:
@@ -164,6 +182,11 @@ def ball10x10():
         i2+=1
     mouse.position = (init[0], init[1]+2*s)
     i2=0
+    time.sleep(0.1)
+    mouse.position = (mouse.position[0]-s, mouse.position[1])
+    time.sleep(2)
+    mouse.position = (mouse.position[0]+s, mouse.position[1])
+    time.sleep(0.1)
     down = True
     while i2 < length:
         i=0
@@ -196,46 +219,20 @@ def ball10x10():
         time.sleep(0.04)
         controller.release("j")
         down = not down
-    controller.release("`")
-
-def joint():
-    controller.press("`")
-    mouse = MouseController()
+    time.sleep(5)
+    mouse.position = init
+    controller.tap("k")
+    mouse.position = (init[0], init[1]+2*s)
     i2=0
-    down = True
     while i2 < length:
         i=0
         while i < length:
-            controller.press("j")
+            controller.tap("k")
             time.sleep(0.04)
-            if down:
-                mouse.position = (mouse.position[0], mouse.position[1]+s)
-                time.sleep(0.04)
-                controller.release("j")
-                if i == length-1:
-                    mouse.position = (mouse.position[0], mouse.position[1]-s)
-                    time.sleep(0.04)
-                    controller.press("j")
-            else:
-                mouse.position = (mouse.position[0], mouse.position[1]-s)
-                time.sleep(0.04)
-                controller.release("j")
-                if i == length-1:
-                    mouse.position = (mouse.position[0], mouse.position[1]+s)
-                    time.sleep(0.04)
-                    controller.press("j")
             i+=1
         i2+=1
         time.sleep(0.04)
-        if down:
-            mouse.position = (mouse.position[0]+s, mouse.position[1])
-        else:
-            mouse.position = (mouse.position[0]+s, mouse.position[1])
-        time.sleep(0.04)
-        controller.release("j")
-        down = not down
     controller.release("`")
-
 
 def brain_damage():
     global braindamage
@@ -252,6 +249,80 @@ def score():
 def ball():
     controller.press("`")
     controller.type("ch")
+    controller.release("`")
+        
+def slowwall():
+    controller.press("`")
+    for _ in range(50):
+        controller.tap("x")
+        time.sleep(0.08)
+    controller.release("`")
+
+def dragabuse():
+    global dragabuse
+    controller.press("`")
+    while dragabuser:
+        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
+        time.sleep(0.02)
+        pos = mouse.position
+        controller.press("w")
+        mouse.position = (pos[0]+random.randint(-5, 5), pos[1]+random.randint(-5, 5))
+        controller.release("w")
+        time.sleep(0.02)
+    controller.release("`")
+
+def dragabuse2():
+    global dragabuser2
+    controller.press("`")
+    while dragabuser2:
+        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
+        time.sleep(0.02)
+        pos = mouse.position
+        controller.press("z")
+        mouse.position = (pos[0]+random.randint(-20, 20), pos[1]+random.randint(-20, 20))
+        time.sleep(0.05)
+        controller.release("z")
+        time.sleep(0.02)
+    controller.release("`")
+
+def dragabuse3():
+    global dragabuser3
+    controller.press("`")
+    while dragabuser3:
+        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
+        time.sleep(0.02)
+        pos = mouse.position
+        controller.press("c")
+        mouse.position = (pos[0]+random.randint(-20, 20), pos[1]+random.randint(-20, 20))
+        time.sleep(0.05)
+        controller.release("c")
+        time.sleep(0.02)
+    controller.release("`")
+
+def dragabuse4():
+    global dragabuser4
+    controller.press("`")
+    while dragabuser4:
+        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
+        time.sleep(0.02)
+        pos = mouse.position
+        controller.press("w")
+        mouse.position = (pos[0]+random.randint(-5, 5), pos[1]+random.randint(-5, 5))
+        time.sleep(0.05)
+        controller.release("w")
+        time.sleep(0.02)
+        pos = mouse.position
+        controller.press("z")
+        mouse.position = (pos[0]+random.randint(-20, 20), pos[1]+random.randint(-20, 20))
+        time.sleep(0.05)
+        controller.release("z")
+        time.sleep(0.02)
+        pos = mouse.position
+        controller.press("c")
+        mouse.position = (pos[0]+random.randint(-20, 20), pos[1]+random.randint(-20, 20))
+        time.sleep(0.05)
+        controller.release("c")
+        time.sleep(0.02)
     controller.release("`")
 
 def start_arena_automation():
@@ -275,14 +346,50 @@ def start_ball10x10():
         ball10x10_thread.daemon = True
         ball10x10_thread.start()
 
+def start_dragabuse():
+    global dragabuse_thread
+    if dragabuse_thread is None or not dragabuse_thread.is_alive():
+        dragabuse_thread = threading.Thread(target=dragabuse)
+        dragabuse_thread.daemon = True
+        dragabuse_thread.start()
+
+def start_dragabuse2():
+    global dragabuse2_thread
+    if dragabuse2_thread is None or not dragabuse2_thread.is_alive():
+        dragabuse2_thread = threading.Thread(target=dragabuse2)
+        dragabuse2_thread.daemon = True
+        dragabuse2_thread.start()
+
+def start_dragabuse3():
+    global dragabuse3_thread
+    if dragabuse3_thread is None or not dragabuse3_thread.is_alive():
+        dragabuse3_thread = threading.Thread(target=dragabuse3)
+        dragabuse3_thread.daemon = True
+        dragabuse3_thread.start()
+
+def start_dragabuse4():
+    global dragabuse4_thread
+    if dragabuse4_thread is None or not dragabuse4_thread.is_alive():
+        dragabuse4_thread = threading.Thread(target=dragabuse4)
+        dragabuse4_thread.daemon = True
+        dragabuse4_thread.start()
+
 def on_press(key):
-    global size_automation, braindamage, ballcash
+    global size_automation, braindamage, ballcash, dragabuser, dragabuser2, dragabuser3, dragabuser4
+    global ctrl6_last_time, ctrl6_armed
     try:
         if key == keyboard.Key.esc:
-            size_automation = False
-            braindamage = False
-            print("estop")
-            exit(0)
+            if 'ctrl' in pressed_keys:
+                print("estop")
+                exit(0)
+            else:
+                size_automation = False
+                braindamage = False
+                dragabuser = False
+                dragabuser2 = False
+                dragabuser3 = False
+                dragabuser4 = False
+                # stop all threads
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
         elif hasattr(key, 'char') and key.char and key.char=='1':
@@ -308,20 +415,27 @@ def on_press(key):
                 start_ball10x10()
         elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
-                print("death by ball")
-                ballcrash()
+                now = time.time()
+                if ctrl6_armed and (now - ctrl6_last_time <= 5):
+                    print("death by ball")
+                    ballcrash()
+                    ctrl6_armed = False
+                else:
+                    print("Press ctrl+6 again within 5 seconds to confirm death by ball.")
+                    ctrl6_armed = True
+                    ctrl6_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='7':
             if 'ctrl' in pressed_keys:
                 print("Wall crashing...")
                 wallcrash()
-        elif hasattr(key, 'char') and key.char and key.char=='8':
-            if 'ctrl' in pressed_keys:
-                print("shape nuke")
-                shape() 
         elif hasattr(key, 'char') and key.char and key.char=='9':
             if 'ctrl' in pressed_keys:
                 print("NUKE GO BRRRRRRRRRR")
                 nuke()
+        elif hasattr(key, 'char') and key.char and key.char=='f':
+            if 'ctrl' in pressed_keys:
+                print("shape nuke")
+                shape() 
         elif hasattr(key, 'char') and key.char and key.char=='n':
             if 'ctrl' in pressed_keys:
                 print("score")
@@ -334,6 +448,29 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("200 walls")
                 walls()
+        elif hasattr(key, 'char') and key.char and key.char=='s':
+            if 'ctrl' in pressed_keys:
+                slowwall()
+        elif hasattr(key, 'char') and key.char and key.char=='d':
+            if 'ctrl' in pressed_keys:
+                dragabuser = True
+                print("drag abuse")
+                start_dragabuse()
+        elif hasattr(key, 'char') and key.char and key.char=='z':
+            if 'ctrl' in pressed_keys:
+                dragabuser2 = True
+                print("type abuse")
+                start_dragabuse2()
+        elif hasattr(key, 'char') and key.char and key.char=='c':
+            if 'ctrl' in pressed_keys:
+                dragabuser3 = True
+                print("color abuse")
+                start_dragabuse3()
+        elif hasattr(key, 'char') and key.char and key.char=='a':
+            if 'ctrl' in pressed_keys:
+                dragabuser4 = True
+                print("all abuse")
+                start_dragabuse4()
     except Exception as e:
         print(f"Error: {e}")
     

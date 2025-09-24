@@ -49,7 +49,7 @@ start4 = time.time()
 print("Creating directories")
 HOME = str(Path.home())
 foldername = f"arrasbot_{timestamp()}"
-SCREENSHOT_DIR = os.path.join(HOME, "Desktop", foldername)
+SCREENSHOT_DIR = os.path.join(HOME, "Desktop", "arrasbot", foldername)
 start4 = time.time()-start4
 
 print("Creating log file")
@@ -110,16 +110,23 @@ Bot initialized in {round(init, 3)} seconds
             log_file.write(f"Successfully reconnected at {timestamp()}\n")
             if disconnected:
                 controller.tap(Key.enter)
+                time.sleep(0.04)
                 controller.type("$arena team 1")
+                time.sleep(0.04)
                 controller.tap(Key.enter)
                 time.sleep(0.1)
                 controller.tap(Key.enter)
+                time.sleep(0.04)
                 controller.type("$arena size 500 500")
+                time.sleep(0.04)
                 controller.tap(Key.enter)
                 time.sleep(0.1)
                 controller.tap(Key.enter)
+                time.sleep(0.04)
                 controller.type("$arena spawnpoint 0 0")
+                time.sleep(0.04)
                 controller.tap(Key.enter)
+                time.sleep(0.1)
             disconnected = False
             died = False
             controller.tap("h")
