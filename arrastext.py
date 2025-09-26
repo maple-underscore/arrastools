@@ -111,29 +111,31 @@ letters5 = [
 def ball(pos=mouse.position):
     mouse.position = (pos)
     controller.press("`")
-    for _ in range(3):
+    for _ in range(4):
         controller.tap("c")
         controller.tap("h")
     controller.release("`")
 
-def placeletter(letterdata, x = 5, y = 5, start=mouse.position, s = 25):
+def placeletter(letterdata, x = 5, y = 5, s = 25):
     # letter height and width are paramaterized
     # default size is 5 x 5
+    start = mouse.position
     try:
         if len(letterdata) == (x * y):
-            for xp in range(x):
-                for yp in range(y):
+            for yp in range(y):
+                for xp in range(x):
                     mouse.position = (start[0] + (xp * s), start[1] + (yp * s))
                     time.sleep(0.04)
-                    if letterdata[(yp + (xp * x))] == "X":
+                    if letterdata[(xp + (yp * y))] == "X":
                         ball(mouse.position)
-                    time.sleep(0.04)
+                    time.sleep(0.1)
             time.sleep(0.04)
         else:
             print(f"String length out of bounds ({len(letterdata)}/{(x * y)})")
     except Exception as ex:
         print(f"Exception as {ex}")
     mouse.position = (start[0] + (x * s), start[1])
+    start = mouse.position
     time.sleep(0.1)
 
 placeletter(letters3[7])

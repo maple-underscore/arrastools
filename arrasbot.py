@@ -1,10 +1,10 @@
-import mss, time, numpy as np
+import mss, time, numpy as np, os
 from datetime import datetime
 from pynput import mouse
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
-import os
 from pathlib import Path
+from ping3 import ping
 
 init = time.time()
 start1 = time.time()
@@ -23,6 +23,10 @@ start2 = time.time()-start2
 
 start3 = time.time()
 print("Defining functions")
+def getping():
+    target = "arras.io"
+    return ping(target)
+
 def get_pixel_rgb(x, y):
     bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
     img = sct.grab(bbox)
@@ -87,9 +91,10 @@ Bot initialized in {round(init, 3)} seconds
                 log_file.write(f"Disconnected, attempting to reconnect at {timestamp()}\n")
             disconnected = True
             mouse.position = (922, 767)
+            pingm = getping()
             for _ in range(200):
                 mouse.click(Button.left, 1)
-                time.sleep(0.03)
+                time.sleep(pingm/1000)
         elif rgb == (176, 100, 81) and not disconnected and not died:
             print(f"Checking death at {timestamp()}")
             log_file.write(f"Checking death at {timestamp()}\n")
@@ -108,25 +113,7 @@ Bot initialized in {round(init, 3)} seconds
             log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")
             log_file.write(f"Successfully reconnected at {timestamp()}\n")
-            if disconnected:
-                controller.tap(Key.enter)
-                time.sleep(0.04)
-                controller.type("$arena team 1")
-                time.sleep(0.04)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                controller.tap(Key.enter)
-                time.sleep(0.04)
-                controller.type("$arena size 500 500")
-                time.sleep(0.04)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                controller.tap(Key.enter)
-                time.sleep(0.04)
-                controller.type("$arena spawnpoint 0 0")
-                time.sleep(0.04)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
+            
             disconnected = False
             died = False
             controller.tap("h")
@@ -139,11 +126,6 @@ Bot initialized in {round(init, 3)} seconds
             controller.tap("i")
             time.sleep(0.1)
             controller.release("`")
-            time.sleep(0.1)
-            controller.press("w")
-            time.sleep(0.1)
-            controller.press("a")
-            time.sleep(0.1)
         if time.time() - lastscreenshot > 60:
             take_screenshot()
             log_file.write(f"[PERIODIC] screenshot taken at {timestamp()}\n")
@@ -152,4 +134,6 @@ Bot initialized in {round(init, 3)} seconds
             mouse.position = (mouse.position[0]+1, mouse.position[1])
             time.sleep(0.1)
             mouse.position = (mouse.position[0]-1, mouse.position[1])
+            controller.tap("a")
+            controller.tap("d")
             lastmove = time.time()

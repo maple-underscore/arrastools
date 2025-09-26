@@ -392,6 +392,14 @@ def on_press(key):
                 # stop all threads
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
+        elif key == keyboard.Key.up:
+            mouse.position[1] -= 1
+        elif key == keyboard.Key.down:
+            mouse.position[1] += 1
+        elif key == keyboard.Key.left:
+            mouse.position[0] -= 1
+        elif key == keyboard.Key.right:
+            mouse.position[0] += 1
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
                 size_automation = True
