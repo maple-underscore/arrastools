@@ -3,20 +3,19 @@ import time
 import threading
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
-from pynput.mouse import Controller as MouseController, Button
-import tkinter as tk
+from pynput.mouse import Controller as MouseController
 
 length = 4
 
 # Function
-global size_automation, controller, dragabuser, dragabuser2, dragabuser3, dragabuser4, ballcash, mouse
+global size_automation, controller, dragabuser, typeabuser, colorabuser, allabuser, ballcash, mouse
 arena_size_delay=50
 s = 25 #ball spacing in px
 size_automation = False
 dragabuser = False
-dragabuser2 = False
-dragabuser3 = False
-dragabuser4 = False
+typeabuser = False
+colorabuser = False
+allabuser = False
 ballcash = False
 ballcrash_thread = None
 braindamage = False
@@ -25,36 +24,15 @@ mouse = MouseController()
 pressed_keys = set()
 automation_thread = None
 dragabuse_thread = None
-dragabuse2_thread = None
-dragabuse3_thread = None
-dragabuse4_thread = None
+typeabuse_thread = None
+colorabuse_thread = None
+allabuse_thread = None
 braindamage_thread = None  # Add this global variable
 ball10x10_thread = None  # Add this global variable
 
 # Add these globals near the top
 ctrl6_last_time = 0
 ctrl6_armed = False
-
-def create_number_input_window(title):
-    def handle_return(event=None):
-        try:
-            num = float(entry.get())
-            return num
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-
-    root = tk.Tk()
-    root.title(title)
-    
-    label = tk.Label(root, text="Please enter a number:")
-    label.pack(pady=10)
-
-    entry = tk.Entry(root)
-    entry.pack(pady=5)
-    entry.bind('<Return>', handle_return)
-    entry.focus()
-
-    root.mainloop()
 
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
@@ -77,30 +55,6 @@ def arena_size_automation(interval_ms=20):
             time.sleep(interval_ms / 1000.0)
     except KeyboardInterrupt:
         pass
-
-
-def click_positions(pos_list, delay=0.5):
-    mouse = MouseController()
-    for x, y in pos_list:
-        mouse.position = (x, y)
-        time.sleep(0.02)
-        mouse.click(Button.left, 1)
-        print(f"Clicked at {x}, {y}")
-        time.sleep(delay)
-
-def conq_quickstart():
-    controller.type("kyyv")
-    mouse = MouseController()
-    click_positions([
-        (53.58203125, 948.08984375),
-        (167.4765625, 965.703125),
-        (166.66796875, 983.11328125),
-        (90.53515625, 998.28125),
-        (166.09765625, 1014.546875),
-        (166.71875, 1031.28125),
-        (92.51953125, 1049.71875)
-    ], 0)
-    mouse.position=(856, 638)
 
 def wallcrash():
     controller.press("`")
@@ -271,10 +225,10 @@ def dragabuse():
         time.sleep(0.02)
     controller.release("`")
 
-def dragabuse2():
-    global dragabuser2
+def typeabuse():
+    global typeabuser
     controller.press("`")
-    while dragabuser2:
+    while typeabuser:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -285,10 +239,10 @@ def dragabuse2():
         time.sleep(0.02)
     controller.release("`")
 
-def dragabuse3():
-    global dragabuser3
+def colorabuse():
+    global colorabuser
     controller.press("`")
-    while dragabuser3:
+    while colorabuser:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -299,10 +253,10 @@ def dragabuse3():
         time.sleep(0.02)
     controller.release("`")
 
-def dragabuse4():
-    global dragabuser4
+def allabuse():
+    global allabuser
     controller.press("`")
-    while dragabuser4:
+    while allabuser:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -353,29 +307,29 @@ def start_dragabuse():
         dragabuse_thread.daemon = True
         dragabuse_thread.start()
 
-def start_dragabuse2():
-    global dragabuse2_thread
-    if dragabuse2_thread is None or not dragabuse2_thread.is_alive():
-        dragabuse2_thread = threading.Thread(target=dragabuse2)
-        dragabuse2_thread.daemon = True
-        dragabuse2_thread.start()
+def start_typeabuse():
+    global typeabuse_thread
+    if typeabuse_thread is None or not typeabuse_thread.is_alive():
+        typeabuse_thread = threading.Thread(target=typeabuse)
+        typeabuse_thread.daemon = True
+        typeabuse_thread.start()
 
-def start_dragabuse3():
-    global dragabuse3_thread
-    if dragabuse3_thread is None or not dragabuse3_thread.is_alive():
-        dragabuse3_thread = threading.Thread(target=dragabuse3)
-        dragabuse3_thread.daemon = True
-        dragabuse3_thread.start()
+def start_colorabuse():
+    global colorabuse_thread
+    if colorabuse_thread is None or not colorabuse_thread.is_alive():
+        colorabuse_thread = threading.Thread(target=colorabuse)
+        colorabuse_thread.daemon = True
+        colorabuse_thread.start()
 
-def start_dragabuse4():
-    global dragabuse4_thread
-    if dragabuse4_thread is None or not dragabuse4_thread.is_alive():
-        dragabuse4_thread = threading.Thread(target=dragabuse4)
-        dragabuse4_thread.daemon = True
-        dragabuse4_thread.start()
+def start_allabuse():
+    global allabuse_thread
+    if allabuse_thread is None or not allabuse_thread.is_alive():
+        allabuse_thread = threading.Thread(target=allabuse)
+        allabuse_thread.daemon = True
+        allabuse_thread.start()
 
 def on_press(key):
-    global size_automation, braindamage, ballcash, dragabuser, dragabuser2, dragabuser3, dragabuser4
+    global size_automation, braindamage, ballcash, dragabuser, typeabuser, colorabuser, allabuser
     global ctrl6_last_time, ctrl6_armed
     try:
         if key == keyboard.Key.esc:
@@ -386,9 +340,9 @@ def on_press(key):
                 size_automation = False
                 braindamage = False
                 dragabuser = False
-                dragabuser2 = False
-                dragabuser3 = False
-                dragabuser4 = False
+                typeabuser = False
+                colorabuser = False
+                allabuser = False
                 # stop all threads
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
@@ -397,7 +351,7 @@ def on_press(key):
         elif key == keyboard.Key.down:
             mouse.position[1] += 1
         elif key == keyboard.Key.left:
-            mouse.position[0] -= 1
+            mouse.position[1] -= 1
         elif key == keyboard.Key.right:
             mouse.position[0] += 1
         elif hasattr(key, 'char') and key.char and key.char=='1':
@@ -405,10 +359,6 @@ def on_press(key):
                 size_automation = True
                 print("Arena size automation is now ON.")
                 start_arena_automation()
-        elif hasattr(key, 'char') and key.char and key.char=='2':
-            if 'ctrl' in pressed_keys:
-                print("Conqueror quickstart initiated.")
-                conq_quickstart()
         elif hasattr(key, 'char') and key.char and key.char=='3':
             if 'ctrl' in pressed_keys:
                 braindamage = True
@@ -466,19 +416,19 @@ def on_press(key):
                 start_dragabuse()
         elif hasattr(key, 'char') and key.char and key.char=='z':
             if 'ctrl' in pressed_keys:
-                dragabuser2 = True
+                typeabuser = True
                 print("type abuse")
-                start_dragabuse2()
+                start_typeabuse()
         elif hasattr(key, 'char') and key.char and key.char=='c':
             if 'ctrl' in pressed_keys:
-                dragabuser3 = True
+                colorabuser = True
                 print("color abuse")
-                start_dragabuse3()
+                start_colorabuse()
         elif hasattr(key, 'char') and key.char and key.char=='a':
             if 'ctrl' in pressed_keys:
-                dragabuser4 = True
+                allabuser = True
                 print("all abuse")
-                start_dragabuse4()
+                start_allabuse()
     except Exception as e:
         print(f"Error: {e}")
     
