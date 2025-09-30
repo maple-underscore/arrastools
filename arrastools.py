@@ -8,14 +8,14 @@ from pynput.mouse import Controller as MouseController
 length = 4
 
 # Function
-global size_automation, controller, dragabuser, typeabuser, colorabuser, allabuser, ballcash, mouse
+global size_automation, controller, dragaboosr, typeaboosr, coloraboosr, allaboosr, ballcash, mouse
 arena_size_delay=50
 s = 25 #ball spacing in px
 size_automation = False
-dragabuser = False
-typeabuser = False
-colorabuser = False
-allabuser = False
+dragaboosr = False
+typeaboosr = False
+coloraboosr = False
+allaboosr = False
 ballcash = False
 ballcrash_thread = None
 braindamage = False
@@ -23,10 +23,10 @@ controller = KeyboardController()
 mouse = MouseController()
 pressed_keys = set()
 automation_thread = None
-dragabuse_thread = None
-typeabuse_thread = None
-colorabuse_thread = None
-allabuse_thread = None
+dragaboos_thread = None
+typeaboos_thread = None
+coloraboos_thread = None
+allaboos_thread = None
 braindamage_thread = None  # Add this global variable
 ball10x10_thread = None  # Add this global variable
 
@@ -212,10 +212,10 @@ def slowwall():
         time.sleep(0.08)
     controller.release("`")
 
-def dragabuse():
-    global dragabuse
+def dragaboos():
+    global dragaboos
     controller.press("`")
-    while dragabuser:
+    while dragaboosr:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -225,10 +225,10 @@ def dragabuse():
         time.sleep(0.02)
     controller.release("`")
 
-def typeabuse():
-    global typeabuser
+def typeaboos():
+    global typeaboosr
     controller.press("`")
-    while typeabuser:
+    while typeaboosr:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -239,10 +239,10 @@ def typeabuse():
         time.sleep(0.02)
     controller.release("`")
 
-def colorabuse():
-    global colorabuser
+def coloraboos():
+    global coloraboosr
     controller.press("`")
-    while colorabuser:
+    while coloraboosr:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -253,10 +253,10 @@ def colorabuse():
         time.sleep(0.02)
     controller.release("`")
 
-def allabuse():
-    global allabuser
+def allaboos():
+    global allaboosr
     controller.press("`")
-    while allabuser:
+    while allaboosr:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -300,36 +300,36 @@ def start_ball10x10():
         ball10x10_thread.daemon = True
         ball10x10_thread.start()
 
-def start_dragabuse():
-    global dragabuse_thread
-    if dragabuse_thread is None or not dragabuse_thread.is_alive():
-        dragabuse_thread = threading.Thread(target=dragabuse)
-        dragabuse_thread.daemon = True
-        dragabuse_thread.start()
+def start_dragaboos():
+    global dragaboos_thread
+    if dragaboos_thread is None or not dragaboos_thread.is_alive():
+        dragaboos_thread = threading.Thread(target=dragaboos)
+        dragaboos_thread.daemon = True
+        dragaboos_thread.start()
 
-def start_typeabuse():
-    global typeabuse_thread
-    if typeabuse_thread is None or not typeabuse_thread.is_alive():
-        typeabuse_thread = threading.Thread(target=typeabuse)
-        typeabuse_thread.daemon = True
-        typeabuse_thread.start()
+def start_typeaboos():
+    global typeaboos_thread
+    if typeaboos_thread is None or not typeaboos_thread.is_alive():
+        typeaboos_thread = threading.Thread(target=typeaboos)
+        typeaboos_thread.daemon = True
+        typeaboos_thread.start()
 
-def start_colorabuse():
-    global colorabuse_thread
-    if colorabuse_thread is None or not colorabuse_thread.is_alive():
-        colorabuse_thread = threading.Thread(target=colorabuse)
-        colorabuse_thread.daemon = True
-        colorabuse_thread.start()
+def start_coloraboos():
+    global coloraboos_thread
+    if coloraboos_thread is None or not coloraboos_thread.is_alive():
+        coloraboos_thread = threading.Thread(target=coloraboos)
+        coloraboos_thread.daemon = True
+        coloraboos_thread.start()
 
-def start_allabuse():
-    global allabuse_thread
-    if allabuse_thread is None or not allabuse_thread.is_alive():
-        allabuse_thread = threading.Thread(target=allabuse)
-        allabuse_thread.daemon = True
-        allabuse_thread.start()
+def start_allaboos():
+    global allaboos_thread
+    if allaboos_thread is None or not allaboos_thread.is_alive():
+        allaboos_thread = threading.Thread(target=allaboos)
+        allaboos_thread.daemon = True
+        allaboos_thread.start()
 
 def on_press(key):
-    global size_automation, braindamage, ballcash, dragabuser, typeabuser, colorabuser, allabuser
+    global size_automation, braindamage, ballcash, dragaboosr, typeaboosr, coloraboosr, allaboosr
     global ctrl6_last_time, ctrl6_armed
     try:
         if key == keyboard.Key.esc:
@@ -339,10 +339,10 @@ def on_press(key):
             else:
                 size_automation = False
                 braindamage = False
-                dragabuser = False
-                typeabuser = False
-                colorabuser = False
-                allabuser = False
+                dragaboosr = False
+                typeaboosr = False
+                coloraboosr = False
+                allaboosr = False
                 # stop all threads
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
@@ -357,12 +357,12 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
                 size_automation = True
-                print("Arena size automation is now ON.")
+                print("lol arena having a stroke")
                 start_arena_automation()
         elif hasattr(key, 'char') and key.char and key.char=='3':
             if 'ctrl' in pressed_keys:
                 braindamage = True
-                print("Brain damage function called.")
+                print("brain dmg")
                 start_brain_damage()
         elif hasattr(key, 'char') and key.char and key.char=='4':
             if 'ctrl' in pressed_keys:
@@ -379,12 +379,12 @@ def on_press(key):
                     ballcrash()
                     ctrl6_armed = False
                 else:
-                    print("Press ctrl+6 again within 5 seconds to confirm death by ball.")
+                    print("press ctrl 6 again fr")
                     ctrl6_armed = True
                     ctrl6_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='7':
             if 'ctrl' in pressed_keys:
-                print("Wall crashing...")
+                print("wall crash l l")
                 wallcrash()
         elif hasattr(key, 'char') and key.char and key.char=='9':
             if 'ctrl' in pressed_keys:
@@ -411,24 +411,24 @@ def on_press(key):
                 slowwall()
         elif hasattr(key, 'char') and key.char and key.char=='d':
             if 'ctrl' in pressed_keys:
-                dragabuser = True
-                print("drag abuse")
-                start_dragabuse()
+                dragaboosr = True
+                print("drag aboos")
+                start_dragaboos()
         elif hasattr(key, 'char') and key.char and key.char=='z':
             if 'ctrl' in pressed_keys:
-                typeabuser = True
-                print("type abuse")
-                start_typeabuse()
+                typeaboosr = True
+                print("type aboos")
+                start_typeaboos()
         elif hasattr(key, 'char') and key.char and key.char=='c':
             if 'ctrl' in pressed_keys:
-                colorabuser = True
-                print("color abuse")
-                start_colorabuse()
+                coloraboosr = True
+                print("color aboos")
+                start_coloraboos()
         elif hasattr(key, 'char') and key.char and key.char=='a':
             if 'ctrl' in pressed_keys:
-                allabuser = True
-                print("all abuse")
-                start_allabuse()
+                allaboosr = True
+                print("all aboos")
+                start_allaboos()
     except Exception as e:
         print(f"Error: {e}")
     
