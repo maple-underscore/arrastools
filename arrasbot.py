@@ -12,6 +12,7 @@ print("Initializing variables")
 sct = mss.mss()
 disconnected = True
 died = False
+banned = False
 monitor = sct.monitors[1]  # Primary monitor
 start1 = time.time()-start1
 
@@ -76,49 +77,112 @@ Bot initialized in {round(init, 3)} seconds
     log_file.write(f"Bot initialized at {timestamp()}\n")
     lastmove = time.time()
     lastscreenshot = time.time()
+    lastdeath = time.time()
+    lastdisconnect = time.time()
     while True:
-        rgb = get_pixel_rgb(27, 930)
-        if (rgb == (167, 81, 68) or rgb == (138, 27, 34) or rgb == (201, 92, 75)):
-            if not disconnected:
-                take_screenshot("disconnected")
-                log_file.write(f"[DISCONNECTED] screenshot taken at {timestamp()}\n")
-            print(f"Disconnected at {timestamp()}")
-            log_file.write(f"Disconnected at {timestamp()}\n")
-            controller.release("w")
-            controller.release("a")
-            if not disconnected:
-                print(f"Disconnected, attempting to reconnect at {timestamp()}")
-                log_file.write(f"Disconnected, attempting to reconnect at {timestamp()}\n")
+        if get_pixel_rgb(1021, 716) == (152, 232, 241):
             disconnected = True
-            mouse.position = (922, 767)
-            pingm = getping()
-            for _ in range(200):
-                mouse.click(Button.left, 1)
-                time.sleep(pingm/1000)
-        elif rgb == (176, 100, 81) and not disconnected and not died:
+            log_file.write(f"Backroom crashed at {timestamp()}\n")
+            print(f"Backroom crashed at {timestamp()}")
+            mouse.position = (1021, 716)
+            time.sleep(0.1)
+            mouse.click(Button.left, 1)
+            time.sleep(0.1)
+            mouse.position = (132, 105)
+            time.sleep(0.1)
+            mouse.click(Button.left, 1)
+            time.sleep(2)
+            mouse.position = (923, 526)
+            time.sleep(0.1)
+            mouse.click(Button.left, 1)
+        if get_pixel_rgb(855, 255) == (150, 150, 159):
+            log_file.write(f"Detected backroom crash at {timestamp()}\n")
+            print(f"Detected backroom crash at {timestamp()}")
+            controller.press("`")
+            time.sleep(0.1)
+            controller.tap("j")
+            time.sleep(0.1)
+            controller.release("`")
+        rgb = get_pixel_rgb(27, 930)
+        if (rgb == (167, 81, 68) or rgb == (138, 27, 34) or rgb == (201, 92, 75) or rgb == (199, 118, 98) or rgb == (213, 114, 93)):
+            if get_pixel_rgb(686, 650) == (231, 137, 109) or get_pixel_rgb(837, 675) == (231, 137, 109):
+                log_file.write(f"Temporarily banned at {timestamp()}\n")
+                print(f"Temporarily banned at {timestamp()}")
+                banned = True
+                mouse.position = (922, 767)
+                while banned:
+                    if not get_pixel_rgb(700, 674) == (231, 137, 109):
+                        banned = False
+                    else:
+                        time.sleep(10)
+                        mouse.click(Button.left, 1)
+            else:
+                if not disconnected:
+                    take_screenshot("disconnected")
+                    log_file.write(f"[DISCONNECTED] screenshot taken at {timestamp()}\n")
+                    lastdisconnect = time.time()
+                if time.time() - lastdisconnect >= 20:
+                    log_file.write(f"Temporarily banned at {timestamp()}\n")
+                    print(f"Temporarily banned at {timestamp()}")
+                    banned = True
+                    mouse.position = (922, 767)
+                    rgb = get_pixel_rgb(700, 674)
+                    while banned:
+                        if not rgb == (167, 81, 68) or rgb == (138, 27, 34) or rgb == (201, 92, 75) or rgb == (199, 118, 98) or rgb == (213, 114, 93):
+                            banned = False
+                        else:
+                            time.sleep(10)
+                            mouse.click(Button.left, 1)
+                print(f"Disconnected at {timestamp()}")
+                log_file.write(f"Disconnected at {timestamp()}\n")
+                controller.release("w")
+                controller.release("a")
+                if not disconnected:
+                    print(f"Disconnected, attempting to reconnect at {timestamp()}")
+                    log_file.write(f"Disconnected, attempting to reconnect at {timestamp()}\n")
+                disconnected = True
+                mouse.position = (922, 767)
+                pingm = getping()
+                for _ in range(200):
+                    mouse.click(Button.left, 1)
+                    time.sleep(pingm/1000)
+        elif rgb == (176, 100, 81) and ((not disconnected or not died) or ((time.time() - lastdeath) > 5 and died)):
             print(f"Checking death at {timestamp()}")
             log_file.write(f"Checking death at {timestamp()}\n")
             time.sleep(3)
-            if rgb == (176, 100, 81) and not disconnected and not died:
+            if rgb == (176, 100, 81) and not disconnected and not died or ((time.time() - lastdeath) > 5 and died):
                 take_screenshot("died")
                 log_file.write(f"[DEATH] screenshot taken at {timestamp()}\n")
                 print(f"Died at {timestamp()}")
                 log_file.write(f"Died at {timestamp()}\n")
                 died = True
+                lastdeath = time.time()
                 controller.tap(Key.enter)
             else:
                 pass
         elif rgb == (223, 116, 90) and (disconnected or died):
+            if disconnected:
+                mouse.position = (4, 221)
+                time.sleep(0.2)
+                mouse.click(Button.left, 1)
+                time.sleep(1)
+                mouse.position = (250, 271)
+                for _ in range(5):
+                    mouse.click(Button.left, 1)
+                    time.sleep(0.1)
+                mouse.position = (250, 245)
+                for _ in range(5):
+                    mouse.click(Button.left, 1)
+                    time.sleep(0.1)
             take_screenshot("reconnected")
             log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")
             log_file.write(f"Successfully reconnected at {timestamp()}\n")
-            
             disconnected = False
             died = False
-            controller.tap("h")
-            controller.tap("u")
-            controller.tap("u")
+            controller.tap("j")
+            controller.tap("i")
+            controller.tap("y")
             controller.tap("c")
             time.sleep(0.1)
             controller.press("`")
@@ -134,6 +198,4 @@ Bot initialized in {round(init, 3)} seconds
             mouse.position = (mouse.position[0]+1, mouse.position[1])
             time.sleep(0.1)
             mouse.position = (mouse.position[0]-1, mouse.position[1])
-            controller.tap("a")
-            controller.tap("d")
             lastmove = time.time()

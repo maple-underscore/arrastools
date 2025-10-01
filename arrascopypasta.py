@@ -4,15 +4,18 @@ from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 #each line should be 60 chars long
 
-global ids, copypastaing, controller, thread
+global ids, copypastaing, controller, thread, filepaths
 sct = mss.mss()
 def get_pixel_rgb(x, y):
     bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
     img = sct.grab(bbox)
     pixel = np.array(img.pixel(0, 0))
     return tuple(int(v) for v in pixel[:3])
-ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast'] #etc
-filepaths = ["vsc/copypastas/longest.txt", "vsc/copypastas/long.txt", "vsc/copypastas/mcdonalds.txt", "vsc/copypastas/constitution.txt", "vsc/copypastas/roast.txt"]
+ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast', 'random', 'icecream', 'rage', 'bag', 'cake'] #etc
+filepaths = []
+for idx in ids:
+    exec(f"filepaths.append('/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')")
+print(filepaths)
 copypastaing = False
 thread = None
 time.sleep(2)
@@ -36,21 +39,22 @@ def copypasta(id):
             end = time.time()
             controller.tap(Key.enter)
             time.sleep(0.1)
-            controller.type(f"Loaded file from filepath > [{filepath[15:len(filepath)]}] <")
+            controller.type(f"Arras Copypasta Utility [ACU] > v1.5.1 < loading...")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Loaded > {leng} characters < | > [{file_size_kb:.2f}KB] <")
+            controller.type(f"Filepath: > [{filepath[15:]}] < | Loaded > {leng} chars <")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Time taken > [{round((end-start)*1000, 3)}ms] < Waiting for chat delay...")
+            controller.type(f"Size: > [{file_size_kb:.2f}KB] < | Time taken > [{round((end-start)*1000, 3)}ms] <")
             time.sleep(0.1)
             controller.tap(Key.enter)
             time.sleep(10)
             endf = False
+            start = time.time()
             while copypastaing and not endf:
                 for _ in range(3):
                     if pos+58 < leng-1:
@@ -70,15 +74,23 @@ def copypasta(id):
                             controller.tap(Key.enter)
                     else:
                         endf = True
+                        controller.tap(Key.enter)
+                        time.sleep(0.1)
                         controller.type(filer[pos:(leng-1)])
+                        time.sleep(0.1)
+                        controller.tap(Key.enter)
                         print("End of file")
-                    time.sleep(3.1)
+                    time.sleep(3.3)
+            print(f"Copypasta of > {leng} characters < finished")
             controller.tap(Key.enter)
             time.sleep(0.1)
             controller.type(f"Copypasta of > {leng} characters < finished")
             time.sleep(0.1)
+            for _ in range(2):
+                controller.tap(Key.enter)
+                time.sleep(0.1)
+            controller.type(f"Time taken: > {round(1000*(time.time()-start), 3)}ms <")
+            time.sleep(0.1)
             controller.tap(Key.enter)
             time.sleep(0.1)
-            print(f"Copypasta of > {leng} characters < finished")
-copypasta('mcdonalds')
-# ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast'] #etcad
+copypasta('rage')

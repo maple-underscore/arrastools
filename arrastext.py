@@ -11,7 +11,7 @@ global controller, mouse
 controller = KeyboardController()
 mouse = MouseController()
 s = 25
-letters3 = [
+letters35 = [
     " XXX  X X  XXX  X X  X X ",# a 0
     " XX   X X  XXX  X X  XX  ",# b 1
     " XXX  X    X    X    XXX ",# c 2
@@ -39,6 +39,33 @@ letters3 = [
     " X X  X X   X    X    X  ",# y 24
     " XXX    X   X   X    XXX " # z 25
 ]
+letters3 = [
+    'XXXX XXXXX XX X',
+    'XX X XXXXX XXX ',
+    'XXXX  X  X  XXX',
+    'XX X XX XX XXX ',
+    'XXXX  XXXX  XXX',#5 e
+    'XXXX  XXXX  X  ',
+    'XXXX  X XX XXXX',
+    'X XX XXXXX XX X',
+    'XXX X  X  X XXX',
+    'XXX X  X  X XX ',#10 j
+    'X XX XXX X XX X',
+    'X  X  X  X  XXX',
+    "X   XXX XXX X XX   XX   X",
+    "X   XXX  XX X XX  XXX   X",
+    'XXXX XX XX XXXX',#15 o
+    'XXXX XXXXX  X  ',
+    'XXXX XXXX  X  X',
+    'XXXX XXX X XX X',
+    'XXXX  XXX  XXXX',
+    'XXX X  X  X  X ',#20 t
+    'X XX XX XX XXXX',
+    'X XX XX XX X X ',
+    ' X  X  X  X X X',
+    'X XX X X X XX X',
+    'X XX X X  X  X ',
+    'XXX  X X X  XXX']#25 z
 letters2 = [
     " XXX  X X  X X  X X  XXX ",# 0 0
     " XX    X    X    X   XXX ",# 1 1
@@ -116,7 +143,7 @@ def ball(pos=mouse.position):
         controller.tap("h")
     controller.release("`")
 
-def placeletter(letterdata, x = 5, y = 5, s = 25):
+def placeletter(letterdata, x = 3, y = 5, s = 25):
     # letter height and width are paramaterized
     # default size is 5 x 5
     start = mouse.position
@@ -124,11 +151,11 @@ def placeletter(letterdata, x = 5, y = 5, s = 25):
         if len(letterdata) == (x * y):
             for yp in range(y):
                 for xp in range(x):
-                    mouse.position = (start[0] + (xp * s), start[1] + (yp * s))
-                    time.sleep(0.04)
                     if letterdata[(xp + (yp * y))] == "X":
+                        mouse.position = (start[0] + (xp * s), start[1] + (yp * s))
+                        time.sleep(0.04)
                         ball(mouse.position)
-                    time.sleep(0.1)
+                        time.sleep(0.1)
             time.sleep(0.04)
         else:
             print(f"String length out of bounds ({len(letterdata)}/{(x * y)})")
@@ -138,9 +165,6 @@ def placeletter(letterdata, x = 5, y = 5, s = 25):
     start = mouse.position
     time.sleep(0.1)
 
-placeletter(letters3[7])
-placeletter(letters3[4])
-placeletter(letters3[11])
-placeletter(letters3[11])
-placeletter(letters3[14])
-placeletter(numbers1[7], 3)
+placeletter(letters3[22])
+placeletter(letters3[15])
+placeletter(letters3[22])
