@@ -44,7 +44,7 @@ def copypasta(id):
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Filepath: > [{filepath[15:]}] < | Loaded > {leng} chars <")
+            controller.type(f"Filepath: > [.../{filepath[37:]}] < | Loaded > {leng} chars <")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
@@ -93,4 +93,4 @@ def copypasta(id):
             time.sleep(0.1)
             controller.tap(Key.enter)
             time.sleep(0.1)
-copypasta('rage')
+copypasta('random')

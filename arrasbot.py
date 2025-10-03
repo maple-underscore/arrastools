@@ -162,18 +162,18 @@ Bot initialized in {round(init, 3)} seconds
                 pass
         elif rgb == (223, 116, 90) and (disconnected or died):
             if disconnected:
-                mouse.position = (4, 221)
-                time.sleep(0.2)
-                mouse.click(Button.left, 1)
-                time.sleep(1)
-                mouse.position = (250, 271)
-                for _ in range(5):
-                    mouse.click(Button.left, 1)
-                    time.sleep(0.1)
-                mouse.position = (250, 245)
-                for _ in range(5):
-                    mouse.click(Button.left, 1)
-                    time.sleep(0.1)
+               mouse.position = (4, 221)
+               time.sleep(0.2)
+               mouse.click(Button.left, 1)
+               time.sleep(1)
+               mouse.position = (250, 271)
+               for _ in range(5):
+                   mouse.click(Button.left, 1)
+                   time.sleep(0.1)
+               mouse.position = (250, 245)
+               for _ in range(5):
+                   mouse.click(Button.left, 1)
+                   time.sleep(0.1)
             take_screenshot("reconnected")
             log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")

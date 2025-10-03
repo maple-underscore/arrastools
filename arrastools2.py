@@ -1,7 +1,7 @@
 import random, time, threading, os, mss, numpy as np
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
-from pynput.mouse import Controller as MouseController, Button
+from pynput.mouse import Controller as MouseController
 
 #globals
 global size_automation, controller, dragaboosr, typeaboosr, coloraboosr, allaboosr, ballcash, mouse
@@ -18,7 +18,7 @@ s = 25 #ball spacing in px
 
 # dynamic filepaths
 for id2 in ids:
-    filepaths.append(f"vsc/copypastas/{id2}.txt")
+    filepaths.append(f"/Users/alexoh/Desktop/vsc/copypastas/{id2}.txt")
 
 #defs
 copypastaing = False
@@ -59,7 +59,11 @@ def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
 
 def bot():
+    import mss, time, numpy as np, os
     from datetime import datetime
+    from pynput import mouse
+    from pynput.keyboard import Controller as KeyboardController, Key
+    from pynput.mouse import Controller as MouseController, Button
     from pathlib import Path
     from ping3 import ping
 
@@ -68,11 +72,12 @@ def bot():
     print("Initializing variables")
     disconnected = True
     died = False
-    banned = False
     start1 = time.time()-start1
 
     start2 = time.time()
     print("Initializing controllers")
+    controller = KeyboardController()
+    mouse = MouseController()
     start2 = time.time()-start2
 
     start3 = time.time()
@@ -80,6 +85,12 @@ def bot():
     def getping():
         target = "arras.io"
         return ping(target)
+
+    def get_pixel_rgb(x, y):
+        bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
+        img = sct.grab(bbox)
+        pixel = np.array(img.pixel(0, 0))
+        return tuple(int(v) for v in pixel[:3])
 
     def timestamp():
         return datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -124,9 +135,7 @@ def bot():
         log_file.write(f"Bot initialized at {timestamp()}\n")
         lastmove = time.time()
         lastscreenshot = time.time()
-        lastdeath = time.time()
-        lastdisconnect = time.time()
-        while True:
+        while boting:
             if get_pixel_rgb(1021, 716) == (152, 232, 241):
                 disconnected = True
                 log_file.write(f"Backroom crashed at {timestamp()}\n")
@@ -266,21 +275,22 @@ def copypasta(id):
             end = time.time()
             controller.tap(Key.enter)
             time.sleep(0.1)
-            controller.type(f"Loaded file from filepath > [{filepath[15:len(filepath)]}] <")
+            controller.type(f"Arras Copypasta Utility [ACU] > v1.5.1 < loading...")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Loaded > {leng} characters < | > [{file_size_kb:.2f}KB] <")
+            controller.type(f"Filepath: > [.../{filepath[37:]}] < | Loaded > {leng} chars <")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Time taken > [{round((end-start)*1000, 3)}ms] < Waiting for chat delay...")
+            controller.type(f"Size: > [{file_size_kb:.2f}KB] < | Time taken > [{round((end-start)*1000, 3)}ms] <")
             time.sleep(0.1)
             controller.tap(Key.enter)
             time.sleep(10)
             endf = False
+            start = time.time()
             while copypastaing and not endf and copypastas:
                 for _ in range(3):
                     if pos+58 < leng-1:
@@ -300,17 +310,26 @@ def copypasta(id):
                             controller.tap(Key.enter)
                     else:
                         endf = True
+                        controller.tap(Key.enter)
+                        time.sleep(0.1)
                         controller.type(filer[pos:(leng-1)])
+                        time.sleep(0.1)
+                        controller.tap(Key.enter)
                         print("End of file")
-                    time.sleep(3.1)
+                    time.sleep(3.3)
             if copypastas:
+                print(f"Copypasta of > {leng} characters < finished")
                 controller.tap(Key.enter)
                 time.sleep(0.1)
                 controller.type(f"Copypasta of > {leng} characters < finished")
                 time.sleep(0.1)
+                for _ in range(2):
+                    controller.tap(Key.enter)
+                    time.sleep(0.1)
+                controller.type(f"Time taken: > {round(1000*(time.time()-start), 3)}ms <")
+                time.sleep(0.1)
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-                print(f"Copypasta of > {leng} characters < finished")
             else:
                 controller.tap(Key.enter)
                 time.sleep(0.1)
@@ -599,13 +618,16 @@ def inputlistener():
     cmd = input("cmd > ")
     if cmd[0:10] == "!copypasta":
         start_copypasta(cmd[11:])
-    if cmd[0:4] == "!bot":
+    elif cmd[0:4] == "!bot":
         start_bot()
+    else:
+        print("invalid command")
 
 def start_copypasta(id2):
+    print(id2)
     global copypasta_thread
     if copypasta_thread is None or not copypasta_thread.is_alive():
-        copypasta_thread = threading.Thread(target=copypasta, args=(id2))
+        copypasta_thread = threading.Thread(target=copypasta, args=(id2,))
         copypasta_thread.daemon = True
         copypasta_thread.start()
 
@@ -671,6 +693,8 @@ def start_inputlistener():
         inputlistener_thread = threading.Thread(target=inputlistener)
         inputlistener_thread.daemon = True
         inputlistener_thread.start()
+
+start_inputlistener()
 
 def on_press(key):
     global size_automation, braindamage, ballcash, dragaboosr, typeaboosr, coloraboosr, allaboosr, copypastas
