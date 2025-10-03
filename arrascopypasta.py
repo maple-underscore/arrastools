@@ -14,8 +14,7 @@ def get_pixel_rgb(x, y):
 ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast', 'random', 'icecream', 'rage', 'bag', 'cake'] #etc
 filepaths = []
 for idx in ids:
-    exec(f"filepaths.append('/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')")
-print(filepaths)
+    filepaths.append(f'/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')
 copypastaing = False
 thread = None
 time.sleep(2)
