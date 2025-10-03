@@ -17,8 +17,8 @@ filepaths = []
 s = 25 #ball spacing in px
 
 # dynamic filepaths
-for id2 in ids:
-    filepaths.append(f"vsc/copypastas/{id2}.txt")
+for idx in ids:
+    filepaths.append(f'/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')
 
 #defs
 copypastaing = False
