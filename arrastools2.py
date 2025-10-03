@@ -1,7 +1,7 @@
 import random, time, threading, os, mss, numpy as np
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
-from pynput.mouse import Controller as MouseController
+from pynput.mouse import Controller as MouseController, Button
 
 #globals
 global size_automation, controller, dragaboosr, typeaboosr, coloraboosr, allaboosr, ballcash, mouse
@@ -339,74 +339,52 @@ def copypasta(id):
                 time.sleep(0.1)
                 print("copypasta_thread forced shutdown")
 
-def arena_size_automation(interval_ms=20, atype = 1):
+def arena_size_automation(interval_ms=20):
     global size_automation
-    if atype == 1:
+    try:
         while size_automation:
             x = generate_even()
             y = generate_even()
             print(f"Sending command: $arena size {x} {y}")
             command = f"$arena size {x} {y}"
-            controller.tap(Key.enter)
+            controller.press(Key.enter)
+            controller.release(Key.enter)
             time.sleep(0.05)
             controller.type(command)
             time.sleep(0.05)
-            controller.tap(Key.enter)
+            controller.press(Key.enter)
+            controller.release(Key.enter)
             time.sleep(interval_ms / 1000.0)
-    elif atype == 2:
-        sup = True
-        x = 2
-        y = 2
-        while size_automation:
-            if x == 1026:
-                sup = False
-                x = 1024
-                y = 1024
-            if x == 0:
-                sup = True
-                x = 2
-                y = 2
-            command = f"$arena size {x} {y}"
-            controller.tap(Key.enter)
-            time.sleep(0.05)
-            controller.type(command)
-            time.sleep(0.05)
-            controller.tap(Key.enter)
-            if sup:
-                x += 2
-                y += 2
-            else:
-                x -= 2
-                y -= 2
-    elif atype == 3:
-        sup = True
-        x = 2
-        y = 1024
-        while size_automation:
-            if x == 1026:
-                sup = False
-                x = 1024
-                y = 2
-            if x == 0:
-                sup = True
-                x = 2
-                y = 1024
-            command = f"$arena size {x} {y}"
-            controller.tap(Key.enter)
-            time.sleep(0.05)
-            controller.type(command)
-            time.sleep(0.05)
-            controller.tap(Key.enter)
-            if sup:
-                x += 2
-                y -= 2
-            else:
-                x -= 2
-                y += 2
+    except KeyboardInterrupt:
+        pass
+
+
+def click_positions(pos_list, delay=0.5):
+    mouse = MouseController()
+    for x, y in pos_list:
+        mouse.position = (x, y)
+        time.sleep(0.02)
+        mouse.click(Button.left, 1)
+        print(f"Clicked at {x}, {y}")
+        time.sleep(delay)
+
+def conq_quickstart():
+    controller.type("kyyv")
+    mouse = MouseController()
+    click_positions([
+        (53.58203125, 948.08984375),
+        (167.4765625, 965.703125),
+        (166.66796875, 983.11328125),
+        (90.53515625, 998.28125),
+        (166.09765625, 1014.546875),
+        (166.71875, 1031.28125),
+        (92.51953125, 1049.71875)
+    ], 0)
+    mouse.position=(856, 638)
 
 def wallcrash():
     controller.press("`")
-    controller.type("x"*2000)
+    controller.type("x"*1800)
     controller.release("`")
 
 def nuke():
@@ -416,7 +394,7 @@ def nuke():
 
 def shape():
     controller.press("`")
-    controller.type("f"*1000)
+    controller.type("f"*700)
     controller.release("`")
 
 def ballcrash():
@@ -439,9 +417,17 @@ def walls():
     controller.type("x"*210)
     controller.release("`")
 
-def tail():
+def slowball():
+    global slowballs
     controller.press("`")
-    time.sleep(0.1)
+    while slowballs:
+        controller.tap("c")
+        controller.tap("h")
+        time.sleep(0.04)
+    controller.release("`")
+
+def ball10x10():
+    controller.press("`")
     controller.tap("0")
     controller.tap("-")
     controller.tap("-")
@@ -529,6 +515,7 @@ def brain_damage():
     mouse = MouseController()
     while braindamage:
         mouse.position = (random.randint(0, 1710), random.randint(168, 1112))
+        time.sleep(0.02)  # Add a small delay to prevent locking up your systema
 
 def score():
     controller.press("`")
@@ -547,51 +534,10 @@ def slowwall():
         time.sleep(0.08)
     controller.release("`")
 
-def dragaboos():
-    global dragaboos
+def randomwall():
+    global randomwall
     controller.press("`")
-    while dragaboosr:
-        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
-        time.sleep(0.02)
-        pos = mouse.position
-        controller.press("w")
-        mouse.position = (pos[0]+random.randint(-5, 5), pos[1]+random.randint(-5, 5))
-        controller.release("w")
-        time.sleep(0.02)
-    controller.release("`")
-
-def typeaboos():
-    global typeaboosr
-    controller.press("`")
-    while typeaboosr:
-        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
-        time.sleep(0.02)
-        pos = mouse.position
-        controller.press("z")
-        mouse.position = (pos[0]+random.randint(-20, 20), pos[1]+random.randint(-20, 20))
-        time.sleep(0.05)
-        controller.release("z")
-        time.sleep(0.02)
-    controller.release("`")
-
-def coloraboos():
-    global coloraboosr
-    controller.press("`")
-    while coloraboosr:
-        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
-        time.sleep(0.02)
-        pos = mouse.position
-        controller.press("c")
-        mouse.position = (pos[0]+random.randint(-20, 20), pos[1]+random.randint(-20, 20))
-        time.sleep(0.05)
-        controller.release("c")
-        time.sleep(0.02)
-    controller.release("`")
-
-def allaboos():
-    global allaboosr
-    controller.press("`")
-    while allaboosr:
+    while randomwall:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -606,35 +552,12 @@ def allaboos():
         time.sleep(0.05)
         controller.release("z")
         time.sleep(0.02)
-        pos = mouse.position
-        controller.press("c")
-        mouse.position = (pos[0]+random.randint(-20, 20), pos[1]+random.randint(-20, 20))
-        time.sleep(0.05)
-        controller.release("c")
-        time.sleep(0.02)
     controller.release("`")
 
-def inputlistener():
-    cmd = input("cmd > ")
-    if cmd[0:10] == "!copypasta":
-        start_copypasta(cmd[11:])
-    elif cmd[0:4] == "!bot":
-        start_bot()
-    else:
-        print("invalid command")
-
-def start_copypasta(id2):
-    print(id2)
-    global copypasta_thread
-    if copypasta_thread is None or not copypasta_thread.is_alive():
-        copypasta_thread = threading.Thread(target=copypasta, args=(id2,))
-        copypasta_thread.daemon = True
-        copypasta_thread.start()
-
-def start_arena_automation(atype):
+def start_arena_automation():
     global automation_thread
     if automation_thread is None or not automation_thread.is_alive():
-        automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay, atype))
+        automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay,))
         automation_thread.daemon = True
         automation_thread.start()
 
@@ -645,59 +568,29 @@ def start_brain_damage():
         braindamage_thread.daemon = True
         braindamage_thread.start()
 
-def start_tail():
-    global tail_thread
-    if tail_thread is None or not tail_thread.is_alive():
-        tail_thread = threading.Thread(target=tail)
-        tail_thread.daemon = True
-        tail_thread.start()
+def start_ball10x10():
+    global ball10x10_thread
+    if ball10x10_thread is None or not ball10x10_thread.is_alive():
+        ball10x10_thread = threading.Thread(target=ball10x10)
+        ball10x10_thread.daemon = True
+        ball10x10_thread.start()
 
-def start_dragaboos():
-    global dragaboos_thread
-    if dragaboos_thread is None or not dragaboos_thread.is_alive():
-        dragaboos_thread = threading.Thread(target=dragaboos)
-        dragaboos_thread.daemon = True
-        dragaboos_thread.start()
+def start_randomwall():
+    global randomwall_thread
+    if randomwall_thread is None or not randomwall_thread.is_alive():
+        randomwall_thread = threading.Thread(target=randomwall)
+        randomwall_thread.daemon = True
+        randomwall_thread.start()
 
-def start_typeaboos():
-    global typeaboos_thread
-    if typeaboos_thread is None or not typeaboos_thread.is_alive():
-        typeaboos_thread = threading.Thread(target=typeaboos)
-        typeaboos_thread.daemon = True
-        typeaboos_thread.start()
-
-def start_bot():
-    global bot_thread
-    if bot_thread is None or not bot_thread.is_alive():
-        bot_thread = threading.Thread(target=bot)
-        bot_thread.daemon = True
-        bot_thread.start()
-
-def start_coloraboos():
-    global coloraboos_thread
-    if coloraboos_thread is None or not coloraboos_thread.is_alive():
-        coloraboos_thread = threading.Thread(target=coloraboos)
-        coloraboos_thread.daemon = True
-        coloraboos_thread.start()
-
-def start_allaboos():
-    global allaboos_thread
-    if allaboos_thread is None or not allaboos_thread.is_alive():
-        allaboos_thread = threading.Thread(target=allaboos)
-        allaboos_thread.daemon = True
-        allaboos_thread.start()
-
-def start_inputlistener():
-    global inputlistener_thread
-    if inputlistener_thread is None or not inputlistener_thread.is_alive():
-        inputlistener_thread = threading.Thread(target=inputlistener)
-        inputlistener_thread.daemon = True
-        inputlistener_thread.start()
-
-start_inputlistener()
+def start_slowball():
+    global slowball_thread
+    if slowball_thread is None or not slowball_thread.is_alive():
+        slowball_thread = threading.Thread(target=slowball)
+        slowball_thread.daemon = True
+        slowball_thread.start()
 
 def on_press(key):
-    global size_automation, braindamage, ballcash, dragaboosr, typeaboosr, coloraboosr, allaboosr, copypastas
+    global size_automation, braindamage, ballcash, slowballs, randomwalld
     global ctrl6_last_time, ctrl6_armed
     try:
         if key == keyboard.Key.esc:
@@ -707,37 +600,24 @@ def on_press(key):
             else:
                 size_automation = False
                 braindamage = False
-                dragaboosr = False
-                boting = False
-                typeaboosr = False
-                coloraboosr = False
-                copypastas = False
-                allaboosr = False
+                randomwalld = False
+                slowballs = False
                 # stop all threads
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
-        elif key == keyboard.Key.up:
-            if 'ctrl' in pressed_keys:
-                mouse.position[1] -= 1
-        elif key == keyboard.Key.up:
-            if 'ctrl' in pressed_keys:
-                mouse.position[1] += 1
-        elif key == keyboard.Key.up:
-            if 'ctrl' in pressed_keys:
-                mouse.position[1] -= 1
-        elif key == keyboard.Key.up:
-            if 'ctrl' in pressed_keys:
-                mouse.position[0] += 1
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
-                atype = random.randint(1, 3)
                 size_automation = True
-                print("lol arena having a stroke")
-                start_arena_automation(atype)
+                print("Arena size automation is now ON.")
+                start_arena_automation()
+        elif hasattr(key, 'char') and key.char and key.char=='2':
+            if 'ctrl' in pressed_keys:
+                print("Conqueror quickstart initiated.")
+                conq_quickstart()
         elif hasattr(key, 'char') and key.char and key.char=='3':
             if 'ctrl' in pressed_keys:
                 braindamage = True
-                print("brain dmg")
+                print("Brain damage function called.")
                 start_brain_damage()
         elif hasattr(key, 'char') and key.char and key.char=='4':
             if 'ctrl' in pressed_keys:
@@ -745,7 +625,7 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='5':
             if 'ctrl' in pressed_keys:
                 print("ball square")
-                start_tail()
+                start_ball10x10()
         elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
                 now = time.time()
@@ -754,12 +634,12 @@ def on_press(key):
                     ballcrash()
                     ctrl6_armed = False
                 else:
-                    print("press ctrl 6 again fr")
+                    print("Press ctrl+6 again within 5 seconds to confirm death by ball.")
                     ctrl6_armed = True
                     ctrl6_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='7':
             if 'ctrl' in pressed_keys:
-                print("wall crash l l")
+                print("Wall crashing...")
                 wallcrash()
         elif hasattr(key, 'char') and key.char and key.char=='9':
             if 'ctrl' in pressed_keys:
@@ -784,26 +664,16 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='s':
             if 'ctrl' in pressed_keys:
                 slowwall()
-        elif hasattr(key, 'char') and key.char and key.char=='d':
-            if 'ctrl' in pressed_keys:
-                dragaboosr = True
-                print("drag aboos")
-                start_dragaboos()
-        elif hasattr(key, 'char') and key.char and key.char=='z':
-            if 'ctrl' in pressed_keys:
-                typeaboosr = True
-                print("type aboos")
-                start_typeaboos()
         elif hasattr(key, 'char') and key.char and key.char=='c':
             if 'ctrl' in pressed_keys:
-                coloraboosr = True
-                print("color aboos")
-                start_coloraboos()
+                print("slow balls")
+                slowballs = True
+                start_slowball()
         elif hasattr(key, 'char') and key.char and key.char=='a':
             if 'ctrl' in pressed_keys:
-                allaboosr = True
-                print("all aboos")
-                start_allaboos()
+                randomwalld = True
+                print("all abuse")
+                start_randomwall()
     except Exception as e:
         print(f"Error: {e}")
     
@@ -815,3 +685,4 @@ def on_release(key):
 
 with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
     listener.join()
+
