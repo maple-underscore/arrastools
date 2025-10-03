@@ -40,6 +40,7 @@ with open('bitmap.txt') as bitmap:
                         for x in xl:
                             for y in yl:
                                 bitmap.seek(pos + 1 + y)
+                                leng = bitmap.read(pos + 1 + y)
                                 for charpair in bitmap.read(pos + 1 + y):
                                     if charpair == "X":
                                         ball()
