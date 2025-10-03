@@ -17,8 +17,8 @@ filepaths = []
 s = 25 #ball spacing in px
 
 # dynamic filepaths
-for id2 in ids:
-    filepaths.append(f"vsc/copypastas/{id2}.txt")
+for idx in ids:
+    filepaths.append(f'/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')
 
 #defs
 copypastaing = False
@@ -599,8 +599,10 @@ def inputlistener():
     cmd = input("cmd > ")
     if cmd[0:10] == "!copypasta":
         start_copypasta(cmd[11:])
-    if cmd[0:4] == "!bot":
+    elif cmd[0:4] == "!bot":
         start_bot()
+    else:
+        print("unknown command")
 
 def start_copypasta(id2):
     global copypasta_thread

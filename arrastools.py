@@ -549,8 +549,10 @@ def inputlistener():
     cmd = input("cmd > ")
     if cmd[0:10] == "!copypasta":
         start_copypasta(cmd[11:])
-    if cmd[0:4] == "!bot":
+    elif cmd[0:4] == "!bot":
         start_bot()
+    else:
+        print("unknown command")
 
 def start_copypasta(id2):
     global copypasta_thread
