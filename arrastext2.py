@@ -1,0 +1,61 @@
+import random
+import time
+import threading
+from pynput import keyboard
+from pynput.keyboard import Controller as KeyboardController, Key
+from pynput.mouse import Controller as MouseController, Button
+import tkinter as tk
+
+controller = KeyboardController()
+mouse = MouseController()
+
+s = 12
+
+def ball(pos = mouse.position):
+    mouse.position = pos
+    controller.press("`")
+    for _ in range(3):
+        controller.tap("c")
+        controller.tap("h")
+    controller.release("`")
+
+
+
+with open('bitmap.txt', 'r+') as bitmap:
+    start = time.time()
+    for line in bitmap.readlines():
+        if len(line) < 7:
+            line = line.strip() + " " * (7 - len(line.strip())) + "\n"
+    print(f"bitmap formatted in {round((time.time() - start) * 1000, 3)}ms")
+    while True:
+        towrite = input("enter text > ")
+        towrite2 = ""
+        start = mouse.position
+        for char in towrite:
+            towrite2 += char.lower()
+        for char in towrite2:
+            try:
+                pos = 0
+                while pos < len(bitmap.readlines()):
+                    bitmap.seek(pos)
+                    if bitmap.read(pos)[0] == char:
+                        if len(bitmap.read(pos)) == 5:
+                            xl = range(bitmap.read(pos)[2:3])
+                            yl = range(bitmap.read(pos)[4:5])
+                        else:
+                            xl = 7
+                            yl = 7
+                        for x in xl:
+                            for y in yl:
+                                bitmap.seek(pos + 1 + y)
+                                leng = bitmap.read(pos + 1 + y)
+                                for charpair in bitmap.read(pos + 1 + y):
+                                    if charpair.lower() == "x":
+                                        ball()
+                            mouse.position = (start[0] + (x * s), start[1] + (y * s))
+                    else:
+                        pos += (bitmap.read(pos)[4:6] + 1)
+                mouse.position = (start[0] + (2 * s), start[1])
+            except Exception as e:
+                print(f"exception as {e}")
+        print(f"generated text {towrite2}")

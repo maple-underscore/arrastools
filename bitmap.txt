@@ -1,0 +1,447 @@
+a
+ xxxxx 
+x     x
+x     x
+xxxxxxx
+x     x
+x     x
+x     x
+b
+xxxxxx
+x     x
+x     x
+xxxxxx
+x     x
+x     x
+xxxxxx
+c
+ xxxxxx
+x
+x
+x
+x
+x
+ xxxxxx
+d
+xxxxxx
+x     x
+x     x
+x     x
+x     x
+x     x
+xxxxxx
+e
+xxxxxxx
+x
+x
+xxxxxxx
+x
+x
+xxxxxxx
+f
+xxxxxxx
+x
+x
+xxxxxxx
+x
+x
+x
+g
+ xxxxxx
+x
+x
+x  xxx
+x     x
+x     x
+ xxxxx
+h
+x     x
+x     x
+x     x
+xxxxxxx
+x     x
+x     x
+x     x
+i
+xxxxxxx
+   x
+   x
+   x
+   x
+   x
+xxxxxxx
+j
+xxxxxxx
+   x
+   x
+   x
+   x
+   x
+xxx
+k
+x     x
+x    x
+x   x
+xxxx
+x   x
+x    x
+x     x
+l
+x
+x
+x
+x
+x
+x
+xxxxxxx
+m
+x     x
+xx   xx
+x xxx x
+x  x  x
+x     x
+x     x
+x     x
+n
+x     x
+xx    x
+x x   x
+x  x  x
+x   x x
+x    xx
+x     x
+o
+ xxxxx 
+x     x
+x     x
+x     x
+x     x
+x     x
+ xxxxx 
+p
+xxxxxx
+x     x
+x     x
+xxxxxx
+x
+x
+x
+q
+ xxxxx 
+x     x
+x     x
+x     x
+x     x
+x    x
+ xxxx x
+r
+xxxxxx
+x     x
+x     x
+xxxxxx
+x     x
+x     x
+x     x
+s
+ xxxxxx
+x
+x
+ xxxxx
+      x
+      x
+xxxxxx
+t
+xxxxxxx
+   x
+   x
+   x
+   x
+   x
+   x
+u
+x     x
+x     x
+x     x
+x     x
+x     x
+x     x
+ xxxxx
+v
+x     x
+x     x
+x     x
+x     x
+ x   x
+  x x
+   x
+w
+x  x  x
+x  x  x
+x  x  x
+x  x  x
+x  x  x
+x  x  x
+ xx xx
+x
+x     x
+ x   x
+  x x
+   x
+  x x
+ x   x
+x     x
+y
+x     x
+ x   x
+  x x
+   x
+   x
+   x
+   x
+z
+xxxxxxx
+     x
+    x
+   x
+  x
+ x
+xxxxxxx
+1
+xxxx   
+   x
+   x
+   x
+   x
+   x
+xxxxxxx
+2
+xxxxxxx
+      x
+      x
+xxxxxxx
+x
+x
+xxxxxxx
+3
+xxxxxxx
+      x
+      x
+xxxxxxx
+      x
+      x
+xxxxxxx
+4
+x     x
+x     x
+x     x
+xxxxxxx
+      x
+      x
+      x
+5
+xxxxxxx
+x
+x
+xxxxxxx
+      x
+      x
+xxxxxxx
+6
+xxxxxxx
+x
+x
+xxxxxxx
+x     x
+x     x
+xxxxxxx
+7
+xxxxxxx
+      x
+      x
+      x
+      x
+      x
+      x
+8
+xxxxxxx
+x     x
+x     x
+xxxxxxx
+x     x
+x     x
+xxxxxxx
+9
+xxxxxxx
+x     x
+x     x
+xxxxxxx
+      x
+      x
+xxxxxxx
+0
+xxxxxxx
+x     x
+x     x
+x     x
+x     x
+x     x
+xxxxxxx
+- 3
+
+
+xxx
+
+
+
+_ 5
+
+
+
+
+
+
+xxxxx
++
+
+   x   
+   x   
+ xxxxx 
+   x
+   x
+
+= 5
+
+
+xxxxx
+
+xxxxx
+
+
+[ 3
+xxx
+x
+x
+x
+x
+x
+xxx
+] 3
+xxx
+  x
+  x
+  x
+  x
+  x
+xxx
+| 1
+x
+x
+x
+x
+x
+x
+x
+\
+x
+ x
+  x
+   x
+    x
+     x
+      x
+/
+      x
+     x
+    x
+   x
+  x
+ x
+x
+" 3 2
+x x
+x x
+' 1 2
+x
+x
+< 4
+   x
+  x
+ x
+x
+ x
+  x
+   x
+> 4
+x
+ x
+  x
+   x
+  x
+ x
+x
+, 1
+
+
+
+
+
+x
+x
+. 1
+
+
+
+
+
+
+x
+$ 5
+  x
+xxxxx
+x
+xxxxx
+    x
+xxxxx
+  x
+^ 3
+ x
+x x
+# 5
+
+ x x
+xxxxx
+ x x
+xxxxx
+ x x
+
+! 1
+x
+x
+x
+x
+x
+
+x
+~ 5
+
+
+xxx x
+x xxx
+
+
+
+: 1
+
+
+x
+
+x
+
+
+; 1
+
+
+x
+
+x
+x
