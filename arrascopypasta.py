@@ -3,7 +3,6 @@ from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 #each line should be 60 chars long
-
 global ids, copypastaing, controller, thread, filepaths
 sct = mss.mss()
 def get_pixel_rgb(x, y):
@@ -11,10 +10,10 @@ def get_pixel_rgb(x, y):
     img = sct.grab(bbox)
     pixel = np.array(img.pixel(0, 0))
     return tuple(int(v) for v in pixel[:3])
-ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast', 'random', 'icecream', 'rage', 'bag', 'cake'] #etc
+ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast', 'random', 'icecream', 'rage', 'bag', 'cake', 'char'] #etc
 filepaths = []
 for idx in ids:
-    exec(f"filepaths.append('/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')")
+    exec(f"filepaths.append('/Users/alexoh/Documents/GitHub/arrastools/copypastas/{idx}.txt')")
 print(filepaths)
 copypastaing = False
 thread = None
@@ -44,7 +43,7 @@ def copypasta(id):
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Filepath: > [.../{filepath[37:]}] < | Loaded > {leng} chars <")
+            controller.type(f"Filepath: > [.../{filepath[53:]}] < | Loaded > {leng} chars <")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
@@ -73,6 +72,7 @@ def copypasta(id):
                             time.sleep(3)
                             controller.tap(Key.enter)
                     else:
+                        time.sleep(0.5)
                         endf = True
                         controller.tap(Key.enter)
                         time.sleep(0.1)
@@ -93,4 +93,4 @@ def copypasta(id):
             time.sleep(0.1)
             controller.tap(Key.enter)
             time.sleep(0.1)
-copypasta('random')
+copypasta('char')

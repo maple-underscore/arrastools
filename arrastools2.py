@@ -116,7 +116,7 @@ def bot():
     start4 = time.time()-start4
 
     print("Creating log file")
-    filename = f"arrasbot_{timestamp()}.log"
+    filename = f"logs/arrasbot_{timestamp()}.log"
     with open(filename, "a") as log_file:
         print(f"Bot initialized at {timestamp()}")
         init = time.time()-init

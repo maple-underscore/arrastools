@@ -123,6 +123,16 @@ def ballcrash():
             controller.release("h")
     controller.release("`")
 
+def miniballcrash():
+    controller.press("`")
+    for _ in range(25):
+        for _ in range(100):
+            controller.press("c")
+            controller.release("c")
+            controller.press("h")
+            controller.release("h")
+    controller.release("`")
+
 def balls():
     controller.press("`")
     controller.type("ch"*210)
@@ -237,6 +247,24 @@ def score():
     controller.press("`")
     controller.type("n"*400)
     controller.release("`")
+
+def benchmark():
+    start = time.time()
+    balls()
+    elapsed = time.time() - start
+    print(f"200 balls in {round(elapsed*1000, 3)} ms")
+    controller.tap(Key.enter)
+    time.sleep(0.1)
+    controller.type(f"200 balls in > [{round(elapsed * 1000, 3)}ms] <")
+    time.sleep(0.1)
+    for _ in range(2):
+        controller.tap(Key.enter)
+        time.sleep(0.1)
+    bps = round(200 * (1 / elapsed), 3) if elapsed > 0 else 0
+    controller.type(f"BPS: [{bps}]")
+    time.sleep(0.1)
+    controller.tap(Key.enter)
+    time.sleep(0.1)
 
 def ball():
     controller.press("`")
@@ -385,11 +413,19 @@ def on_press(key):
                 print("slow balls")
                 slowballs = True
                 start_slowball()
+        elif hasattr(key, 'char') and key.char and key.char=='m':
+            if 'ctrl' in pressed_keys:
+                print("benchmarking...")
+                benchmark()
         elif hasattr(key, 'char') and key.char and key.char=='a':
             if 'ctrl' in pressed_keys:
                 randomwalld = True
                 print("all abuse")
                 start_randomwall()
+        elif hasattr(key, 'char') and key.char and key.char=='o':
+            if 'ctrl' in pressed_keys:
+                print("miniballcrash")
+                miniballcrash()
     except Exception as e:
         print(f"Error: {e}")
     
