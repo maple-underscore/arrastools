@@ -4,14 +4,12 @@ import threading
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
-from pynput.mouse import Listener as MouseListener
 import tkinter as tk
 
 length = 4
 
 # Function
-global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step
-step = 20
+global size_automation, controller, randomwalld, ballcash, mouse, slowball
 arena_size_delay=50
 s = 25 #ball spacing in px
 size_automation = False
@@ -28,8 +26,6 @@ slowball_thread = None
 randomwall_thread = None
 braindamage_thread = None  # Add this global variable
 ball10x10_thread = None  # Add this global variable
-controllednuke_points = []
-controllednuke_active = False
 
 # Add these globals near the top
 ctrl6_last_time = 0
@@ -109,27 +105,17 @@ def wallcrash():
 
 def nuke():
     controller.press("`")
-    controller.type("wk"*50)
+    controller.type("wk"*400)
     controller.release("`")
 
 def shape():
     controller.press("`")
-    controller.type("f"*100)
+    controller.type("f"*700)
     controller.release("`")
 
 def ballcrash():
     controller.press("`")
     for _ in range(100):
-        for _ in range(100):
-            controller.press("c")
-            controller.release("c")
-            controller.press("h")
-            controller.release("h")
-    controller.release("`")
-
-def miniballcrash():
-    controller.press("`")
-    for _ in range(25):
         for _ in range(100):
             controller.press("c")
             controller.release("c")
@@ -252,58 +238,6 @@ def score():
     controller.type("n"*400)
     controller.release("`")
 
-def benchmark():
-    from pynput.keyboard import Listener as KeyboardListener, Key
-
-    shift_pressed = threading.Event()
-
-    def on_press(key):
-        if key == Key.shift or key == Key.shift_r:
-            shift_pressed.set()
-            print("Benchmark stopped by Shift key press.")
-
-    # Start the benchmark
-    start = time.time()
-    balls()
-    print("Press any Shift key to stop the benchmark timer...")
-    # Start keyboard listener
-    with KeyboardListener(on_press=on_press) as listener:
-        shift_pressed.wait()  # Wait until Shift is pressed
-        listener.stop()
-    elapsed = time.time() - start
-    print(f"200 balls in {round(elapsed*1000, 3)} ms")
-    controller.tap(Key.enter)
-    time.sleep(0.15)
-    controller.type(f"200 balls in > [{round(elapsed * 1000, 3)}ms] <")
-    time.sleep(0.1)
-    for _ in range(2):
-        controller.tap(Key.enter)
-        time.sleep(0.1)
-    bps = round(200 * (1 / elapsed), 3) if elapsed > 0 else 0
-    controller.type(f"BPS: > [{bps}] <")
-    time.sleep(0.1)
-    controller.tap(Key.enter)
-    time.sleep(0.1)
-
-def engispam():
-    start = time.time()
-    while time.time()-start < 10:
-        controller.tap(",")
-        controller.tap("y")
-        controller.tap("i")
-        controller.press("`")
-        controller.press(".")
-        controller.press(".")
-        controller.press("a")
-        controller.press("c")
-        controller.release("`")
-        controller.press(Key.space)
-        time.sleep(0.25)
-        controller.release(Key.space)
-        controller.press("`")
-        controller.press("q")
-        controller.release("`")
-
 def ball():
     controller.press("`")
     controller.type("ch")
@@ -334,35 +268,6 @@ def randomwall():
         time.sleep(0.05)
         controller.release("z")
         time.sleep(0.02)
-    controller.release("`")
-
-def controllednuke():
-    global controllednuke_points, controllednuke_active, step
-    controllednuke_points = []
-    controllednuke_active = True
-    mouse = MouseController()
-    print(f"Controlled Nuke: You have 10 seconds to select two points.")
-    print(f"Click two points with the left mouse button. Step size: {step}")
-    start_time = time.time()
-    while len(controllednuke_points) < 2 and time.time() - start_time < 10:
-        time.sleep(0.01)
-    controllednuke_active = False  # Stop collecting more points
-    if len(controllednuke_points) < 2:
-        print("Timed out waiting for points.")
-        return
-    (x1, y1), (x2, y2) = controllednuke_points
-    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-    print(f"Controlled Nuke: Rectangle from ({x1}, {y1}) to ({x2}, {y2}) with step {step}")
-    controller.press("`")
-    time.sleep(2)
-    min_x, max_x = sorted([x1, x2])
-    min_y, max_y = sorted([y1, y2])
-    for x in range(min_x, max_x + 1, step):
-        for y in range(min_y, max_y + 1, step):
-            mouse.position = (x, y)
-            time.sleep(0.05)
-            controller.tap("k")
-    print("Controlled Nuke complete.")
     controller.release("`")
 
 def start_arena_automation():
@@ -400,15 +305,9 @@ def start_slowball():
         slowball_thread.daemon = True
         slowball_thread.start()
 
-def start_controllednuke():
-    thread = threading.Thread(target=controllednuke)
-    thread.daemon = True
-    thread.start()
-
 def on_press(key):
     global size_automation, braindamage, ballcash, slowballs, randomwalld
     global ctrl6_last_time, ctrl6_armed
-    global controllednuke_points, controllednuke_active
     try:
         if key == keyboard.Key.esc:
             if 'ctrl' in pressed_keys:
@@ -422,10 +321,6 @@ def on_press(key):
                 # stop all threads
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
-        elif hasattr(key, 'char') and key.char and key.char == 'y':
-            if 'ctrl' in pressed_keys:
-                print("Starting controlled nuke...")
-                start_controllednuke()
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
                 size_automation = True
@@ -490,23 +385,11 @@ def on_press(key):
                 print("slow balls")
                 slowballs = True
                 start_slowball()
-        elif hasattr(key, 'char') and key.char and key.char=='m':
-            if 'ctrl' in pressed_keys:
-                print("benchmarking...")
-                benchmark()
         elif hasattr(key, 'char') and key.char and key.char=='a':
             if 'ctrl' in pressed_keys:
                 randomwalld = True
                 print("all abuse")
                 start_randomwall()
-        elif hasattr(key, 'char') and key.char and key.char=='o':
-            if 'ctrl' in pressed_keys:
-                print("miniballcrash")
-                miniballcrash()
-        elif hasattr(key, 'char') and key.char and key.char=='e':
-            if 'ctrl' in pressed_keys:
-                print("engispam")
-                engispam()
     except Exception as e:
         print(f"Error: {e}")
     
@@ -515,17 +398,6 @@ def on_release(key):
         pressed_keys.discard('ctrl')
     elif key in pressed_keys:
         pressed_keys.remove(key)
-
-def on_click(x, y, button, pressed):
-    global controllednuke_points, controllednuke_active
-    if controllednuke_active and pressed and button == Button.left:
-        controllednuke_points.append((x, y))
-        print(f"ControlledNuke: Point {len(controllednuke_points)} selected at ({x}, {y})")
-
-# Start mouse listener globally (after your keyboard listener setup)
-mouse_listener = MouseListener(on_click=on_click)
-mouse_listener.daemon = True
-mouse_listener.start()
 
 with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
     listener.join()

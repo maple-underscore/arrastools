@@ -1,14 +1,9 @@
-import os
-
-filepath = "vsc/copypastas/longest.txt"
-
-print("Current working directory:", os.getcwd())
-print("File exists:", os.path.exists(filepath))
-
-if os.path.exists(filepath):
-    with open(filepath, 'r', encoding='utf-8') as file:
-        content = file.read()
-        print("File length:", len(content))
-        print("Preview:", repr(content[:100]))
-else:
-    print("File not found.")
+from pynput import keyboard
+from pynput import mouse
+from pynput.keyboard import Controller as KeyboardController, Key
+from pynput.mouse import Controller as MouseController, Button
+import threading, time
+controller = KeyboardController()
+time.sleep(2)
+controller.press("`")
+controller.press("k")

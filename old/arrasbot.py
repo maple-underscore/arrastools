@@ -3,17 +3,13 @@ from datetime import datetime
 from pynput import mouse
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
-import threading
-from threading import Thread
 from pathlib import Path
 from ping3 import ping
 
-global disconnected, banned, died, working
 init = time.time()
 start1 = time.time()
 print("Initializing variables")
 sct = mss.mss()
-working = True
 disconnected = True
 died = False
 banned = False
@@ -52,35 +48,6 @@ def take_screenshot(reason="periodic"):
     with open("arrasbot.log", "a") as log_file:
         log_file.write(f"Screenshot saved: {filename} at {timestamp()}\n")
         log_file.close()
-
-def inputlistener():
-    inp = input("cmd > ")
-    if inp.lower() == "stop":
-        global working
-        working = False
-        print("Stopping bot...")
-    elif inp.lower() == "screenshot":
-        take_screenshot("manual")
-    elif inp.lower() == "status":
-        print(f"Working: {working}, Disconnected: {disconnected}, Died: {died}, Banned: {banned}")
-    elif inp.lower() == "ping":
-        pingm = getping()
-        print(f"Ping to arras.io: {pingm*1000:.2f}ms")
-    elif inp.lower() == "forcedisconnect":
-        global disconnected
-        disconnected = True
-        print("Forcing disconnect state...")
-    elif inp.lower() == "forcedeath":
-        global died
-        died = True
-        print("Forcing death state...")
-    elif inp.lower() == "forcereconnect":
-        global disconnected, died
-        disconnected = False
-        died = False
-        print("Forcing reconnect state...")
-    threading.Thread(target=inputlistener, daemon=True).start()
-
 start3 = time.time()-start3
 
 start4 = time.time()
@@ -91,7 +58,7 @@ SCREENSHOT_DIR = os.path.join(HOME, "Desktop", "arrasbot", foldername)
 start4 = time.time()-start4
 
 print("Creating log file")
-filename = f"logs/arrasbot_{timestamp()}.log"
+filename = f"arrasbot_{timestamp()}.log"
 with open(filename, "a") as log_file:
     print(f"Bot initialized at {timestamp()}")
     init = time.time()-init
@@ -112,7 +79,7 @@ Bot initialized in {round(init, 3)} seconds
     lastscreenshot = time.time()
     lastdeath = time.time()
     lastdisconnect = time.time()
-    while working:
+    while True:
         if get_pixel_rgb(1021, 716) == (152, 232, 241):
             disconnected = True
             log_file.write(f"Backroom crashed at {timestamp()}\n")
@@ -195,18 +162,18 @@ Bot initialized in {round(init, 3)} seconds
                 pass
         elif rgb == (223, 116, 90) and (disconnected or died):
             if disconnected:
-                mouse.position = (4, 221)
-                time.sleep(0.2)
-                mouse.click(Button.left, 1)
-                time.sleep(1)
-                mouse.position = (250, 271)
-                for _ in range(5):
-                    mouse.click(Button.left, 1)
-                    time.sleep(0.1)
-                mouse.position = (250, 245)
-                for _ in range(5):
-                    mouse.click(Button.left, 1)
-                    time.sleep(0.1)
+               mouse.position = (4, 221)
+               time.sleep(0.2)
+               mouse.click(Button.left, 1)
+               time.sleep(1)
+               mouse.position = (250, 271)
+               for _ in range(5):
+                   mouse.click(Button.left, 1)
+                   time.sleep(0.1)
+               mouse.position = (250, 245)
+               for _ in range(5):
+                   mouse.click(Button.left, 1)
+                   time.sleep(0.1)
             take_screenshot("reconnected")
             log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")

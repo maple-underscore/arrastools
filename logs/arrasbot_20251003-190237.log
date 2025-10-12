@@ -1,0 +1,149 @@
+
+=============== DEBUG ===============
+Display size: 1710x1112
+Screenshot directory: /Users/alexoh/Desktop/arrasbot/arrasbot_20251003-190237
+Created variables in 0.021 seconds
+Created controllers in 0.013 seconds
+Defined functions in 0.0 seconds
+Created directories in 0.0 seconds
+Bot initialized in 0.034 seconds
+
+================ LOG ================
+Bot initialized at 20251003-190237
+[RECONNECTED] screenshot taken at 20251003-190238
+Successfully reconnected at 20251003-190238
+Checking death at 20251003-190243
+[DEATH] screenshot taken at 20251003-190246
+Died at 20251003-190246
+[RECONNECTED] screenshot taken at 20251003-190246
+Successfully reconnected at 20251003-190246
+[PERIODIC] screenshot taken at 20251003-190337
+Checking death at 20251003-190347
+[DEATH] screenshot taken at 20251003-190350
+Died at 20251003-190350
+[RECONNECTED] screenshot taken at 20251003-190350
+Successfully reconnected at 20251003-190350
+[PERIODIC] screenshot taken at 20251003-190437
+Checking death at 20251003-190452
+[DEATH] screenshot taken at 20251003-190455
+Died at 20251003-190455
+[RECONNECTED] screenshot taken at 20251003-190455
+Successfully reconnected at 20251003-190455
+[PERIODIC] screenshot taken at 20251003-190537
+Checking death at 20251003-190556
+[DEATH] screenshot taken at 20251003-190559
+Died at 20251003-190559
+[RECONNECTED] screenshot taken at 20251003-190559
+Successfully reconnected at 20251003-190559
+[PERIODIC] screenshot taken at 20251003-190637
+Checking death at 20251003-190700
+[DEATH] screenshot taken at 20251003-190703
+Died at 20251003-190703
+[RECONNECTED] screenshot taken at 20251003-190703
+Successfully reconnected at 20251003-190703
+[PERIODIC] screenshot taken at 20251003-190738
+Checking death at 20251003-190807
+[DEATH] screenshot taken at 20251003-190810
+Died at 20251003-190810
+[RECONNECTED] screenshot taken at 20251003-190811
+Successfully reconnected at 20251003-190811
+[PERIODIC] screenshot taken at 20251003-190838
+Checking death at 20251003-190912
+[DEATH] screenshot taken at 20251003-190915
+Died at 20251003-190915
+[RECONNECTED] screenshot taken at 20251003-190915
+Successfully reconnected at 20251003-190915
+[PERIODIC] screenshot taken at 20251003-190938
+Checking death at 20251003-191017
+[DEATH] screenshot taken at 20251003-191020
+Died at 20251003-191020
+Checking death at 20251003-191020
+[RECONNECTED] screenshot taken at 20251003-191023
+Successfully reconnected at 20251003-191023
+[PERIODIC] screenshot taken at 20251003-191038
+Checking death at 20251003-191122
+[DEATH] screenshot taken at 20251003-191125
+Died at 20251003-191125
+[RECONNECTED] screenshot taken at 20251003-191125
+Successfully reconnected at 20251003-191125
+[PERIODIC] screenshot taken at 20251003-191138
+Checking death at 20251003-191227
+[DEATH] screenshot taken at 20251003-191230
+Died at 20251003-191230
+[RECONNECTED] screenshot taken at 20251003-191230
+Successfully reconnected at 20251003-191230
+[PERIODIC] screenshot taken at 20251003-191239
+Checking death at 20251003-191332
+[DEATH] screenshot taken at 20251003-191335
+Died at 20251003-191335
+[RECONNECTED] screenshot taken at 20251003-191335
+Successfully reconnected at 20251003-191335
+[PERIODIC] screenshot taken at 20251003-191339
+Checking death at 20251003-191437
+[DEATH] screenshot taken at 20251003-191440
+Died at 20251003-191440
+[PERIODIC] screenshot taken at 20251003-191440
+[RECONNECTED] screenshot taken at 20251003-191440
+Successfully reconnected at 20251003-191440
+[PERIODIC] screenshot taken at 20251003-191540
+Checking death at 20251003-191542
+[DEATH] screenshot taken at 20251003-191545
+Died at 20251003-191545
+[RECONNECTED] screenshot taken at 20251003-191546
+Successfully reconnected at 20251003-191546
+[PERIODIC] screenshot taken at 20251003-191640
+Detected backroom crash at 20251003-191719
+[PERIODIC] screenshot taken at 20251003-191741
+[PERIODIC] screenshot taken at 20251003-191841
+[PERIODIC] screenshot taken at 20251003-191941
+Detected backroom crash at 20251003-192000
+[PERIODIC] screenshot taken at 20251003-192041
+Detected backroom crash at 20251003-192048
+Detected backroom crash at 20251003-192100
+Detected backroom crash at 20251003-192107
+Detected backroom crash at 20251003-192108
+Detected backroom crash at 20251003-192108
+Detected backroom crash at 20251003-192108
+[PERIODIC] screenshot taken at 20251003-192141
+Detected backroom crash at 20251003-192144
+Detected backroom crash at 20251003-192233
+Detected backroom crash at 20251003-192238
+[PERIODIC] screenshot taken at 20251003-192241
+[PERIODIC] screenshot taken at 20251003-192342
+[PERIODIC] screenshot taken at 20251003-192442
+[PERIODIC] screenshot taken at 20251003-192542
+[PERIODIC] screenshot taken at 20251003-192642
+[PERIODIC] screenshot taken at 20251003-192742
+[PERIODIC] screenshot taken at 20251003-192842
+Checking death at 20251003-192856
+[DEATH] screenshot taken at 20251003-192859
+Died at 20251003-192859
+[RECONNECTED] screenshot taken at 20251003-192900
+Successfully reconnected at 20251003-192900
+[PERIODIC] screenshot taken at 20251003-192942
+Checking death at 20251003-193000
+[DEATH] screenshot taken at 20251003-193003
+Died at 20251003-193003
+[DISCONNECTED] screenshot taken at 20251003-193003
+Disconnected at 20251003-193003
+Disconnected, attempting to reconnect at 20251003-193003
+Disconnected at 20251003-193004
+Disconnected at 20251003-193005
+[RECONNECTED] screenshot taken at 20251003-193009
+Successfully reconnected at 20251003-193009
+[PERIODIC] screenshot taken at 20251003-193043
+[PERIODIC] screenshot taken at 20251003-193143
+[PERIODIC] screenshot taken at 20251003-193243
+[PERIODIC] screenshot taken at 20251003-193343
+[PERIODIC] screenshot taken at 20251003-193443
+[PERIODIC] screenshot taken at 20251003-193543
+[PERIODIC] screenshot taken at 20251003-193644
+[PERIODIC] screenshot taken at 20251003-193744
+[PERIODIC] screenshot taken at 20251003-193844
+[PERIODIC] screenshot taken at 20251003-193944
+[PERIODIC] screenshot taken at 20251003-194044
+[DISCONNECTED] screenshot taken at 20251003-194110
+Disconnected at 20251003-194110
+Disconnected, attempting to reconnect at 20251003-194110
+[RECONNECTED] screenshot taken at 20251003-194111
+Successfully reconnected at 20251003-194111
