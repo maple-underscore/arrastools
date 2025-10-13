@@ -1,0 +1,55 @@
+
+=============== DEBUG ===============
+Display size: 1710x1112
+Screenshot directory: /Users/alexoh/Desktop/arrasbot/arrasbot_20251004-134111
+Created variables in 0.029 seconds
+Created controllers in 0.011 seconds
+Defined functions in 0.0 seconds
+Created directories in 0.0 seconds
+Bot initialized in 0.043 seconds
+
+================ LOG ================
+Bot initialized at 20251004-134111
+[RECONNECTED] screenshot taken at 20251004-134111
+Successfully reconnected at 20251004-134111
+Detected backroom crash at 20251004-134124
+[PERIODIC] screenshot taken at 20251004-134211
+[PERIODIC] screenshot taken at 20251004-134311
+[PERIODIC] screenshot taken at 20251004-134412
+Detected backroom crash at 20251004-134435
+[PERIODIC] screenshot taken at 20251004-134512
+[PERIODIC] screenshot taken at 20251004-134612
+[PERIODIC] screenshot taken at 20251004-134712
+[DISCONNECTED] screenshot taken at 20251004-134741
+Disconnected at 20251004-134741
+Disconnected, attempting to reconnect at 20251004-134741
+[RECONNECTED] screenshot taken at 20251004-134742
+Successfully reconnected at 20251004-134742
+[PERIODIC] screenshot taken at 20251004-134812
+Checking death at 20251004-134850
+[DEATH] screenshot taken at 20251004-134853
+Died at 20251004-134853
+[RECONNECTED] screenshot taken at 20251004-134853
+Successfully reconnected at 20251004-134853
+Checking death at 20251004-134902
+[DEATH] screenshot taken at 20251004-134905
+Died at 20251004-134905
+[RECONNECTED] screenshot taken at 20251004-134905
+Successfully reconnected at 20251004-134905
+Checking death at 20251004-134906
+[DEATH] screenshot taken at 20251004-134910
+Died at 20251004-134910
+[RECONNECTED] screenshot taken at 20251004-134910
+Successfully reconnected at 20251004-134910
+[PERIODIC] screenshot taken at 20251004-134912
+[PERIODIC] screenshot taken at 20251004-135012
+[PERIODIC] screenshot taken at 20251004-135112
+[PERIODIC] screenshot taken at 20251004-135212
+[PERIODIC] screenshot taken at 20251004-135312
+[PERIODIC] screenshot taken at 20251004-135412
+[PERIODIC] screenshot taken at 20251004-135512
+[PERIODIC] screenshot taken at 20251004-135613
+[PERIODIC] screenshot taken at 20251004-135713
+[PERIODIC] screenshot taken at 20251004-135813
+[PERIODIC] screenshot taken at 20251004-135913
+[PERIODIC] screenshot taken at 20251004-140013

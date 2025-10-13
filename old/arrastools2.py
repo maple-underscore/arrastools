@@ -17,8 +17,8 @@ filepaths = []
 s = 25 #ball spacing in px
 
 # dynamic filepaths
-for idx in ids:
-    filepaths.append(f'/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')
+for id2 in ids:
+    filepaths.append(f"/Users/alexoh/Desktop/vsc/copypastas/{id2}.txt")
 
 #defs
 copypastaing = False
@@ -116,7 +116,7 @@ def bot():
     start4 = time.time()-start4
 
     print("Creating log file")
-    filename = f"logs/arrasbot_{timestamp()}.log"
+    filename = f"arrasbot_{timestamp()}.log"
     with open(filename, "a") as log_file:
         print(f"Bot initialized at {timestamp()}")
         init = time.time()-init
@@ -554,23 +554,7 @@ def randomwall():
         time.sleep(0.02)
     controller.release("`")
 
-def inputlistener():
-    cmd = input("cmd > ")
-    if cmd[0:10] == "!copypasta":
-        start_copypasta(cmd[11:])
-    elif cmd[0:4] == "!bot":
-        start_bot()
-    else:
-        print("unknown command")
-
-def start_copypasta(id2):
-    global copypasta_thread
-    if copypasta_thread is None or not copypasta_thread.is_alive():
-        copypasta_thread = threading.Thread(target=copypasta, args=(id2))
-        copypasta_thread.daemon = True
-        copypasta_thread.start()
-
-def start_arena_automation(atype):
+def start_arena_automation():
     global automation_thread
     if automation_thread is None or not automation_thread.is_alive():
         automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay,))
