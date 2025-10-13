@@ -6,6 +6,9 @@ from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 import tkinter as tk
 
+controller = KeyboardController()
+mouse = MouseController()
+
 s = 12
 
 def ball(pos = mouse.position):
@@ -13,12 +16,15 @@ def ball(pos = mouse.position):
     controller.press("`")
     for _ in range(3):
         controller.tap("c")
-        controler.tap("h")
+        controller.tap("h")
     controller.release("`")
 
 
 
-with open('bitmap.txt') as bitmap:
+with open('bitmap.txt', 'r+') as bitmap:
+    for line in bitmap.readlines():
+        if len(line) < 7:
+            line = line.strip() + " " * (7 - len(line.strip())) + "\n"
     while True:
         towrite = input("enter text > ")
         towrite2 = ""
@@ -28,7 +34,7 @@ with open('bitmap.txt') as bitmap:
         for char in towrite2:
             try:
                 pos = 0
-                while pos < len(bitmap.readlines())
+                while pos < len(bitmap.readlines()):
                     bitmap.seek(pos)
                     if bitmap.read(pos)[0] == char:
                         if len(bitmap.read(pos)) == 5:
@@ -44,7 +50,7 @@ with open('bitmap.txt') as bitmap:
                                 for charpair in bitmap.read(pos + 1 + y):
                                     if charpair == "X":
                                         ball()
-                            mouse.position = (start[0] + (x * s), start[1] + (y * s)
+                            mouse.position = (start[0] + (x * s), start[1] + (y * s))
                     else:
                         pos += (bitmap.read(pos)[4:6] + 1)
             except Exception as e:
