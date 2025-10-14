@@ -53,7 +53,7 @@ def take_screenshot(reason="periodic"):
         log_file.write(f"Screenshot saved: {filename} at {timestamp()}\n")
         log_file.close()
 
-def inputlistener():
+def inputlistener2():
     inp = input("cmd > ")
     if inp.lower() == "stop":
         global working
