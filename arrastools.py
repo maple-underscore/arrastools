@@ -137,9 +137,9 @@ def miniballcrash():
             controller.release("h")
     controller.release("`")
 
-def balls():
+def balls(amt = 210):
     controller.press("`")
-    controller.type("ch"*210)
+    controller.type("ch"*amt)
     controller.release("`")
 
 def walls():
@@ -252,7 +252,7 @@ def score():
     controller.type("n"*400)
     controller.release("`")
 
-def benchmark():
+def benchmark(amt = 50):
     from pynput.keyboard import Listener as KeyboardListener, Key
 
     shift_pressed = threading.Event()
@@ -264,26 +264,31 @@ def benchmark():
 
     # Start the benchmark
     start = time.time()
-    balls()
+    balls(amt)
     print("Press any Shift key to stop the benchmark timer...")
     # Start keyboard listener
     with KeyboardListener(on_press=on_press) as listener:
         shift_pressed.wait()  # Wait until Shift is pressed
         listener.stop()
     elapsed = time.time() - start
-    print(f"200 balls in {round(elapsed*1000, 3)} ms")
+    print(f"{amt} balls in {round(elapsed*1000, 3)} ms")
     controller.tap(Key.enter)
     time.sleep(0.15)
-    controller.type(f"200 balls in > [{round(elapsed * 1000, 3)}ms] <")
+    controller.type(f"{amt} balls in > [{round(elapsed * 1000, 3)}ms] <")
     time.sleep(0.1)
     for _ in range(2):
         controller.tap(Key.enter)
         time.sleep(0.1)
-    bps = round(200 * (1 / elapsed), 3) if elapsed > 0 else 0
+    bps = round(20 * (1 / elapsed), 3) if elapsed > 0 else 0
     controller.type(f"BPS: > [{bps}] <")
     time.sleep(0.1)
     controller.tap(Key.enter)
     time.sleep(0.1)
+
+def score50m():
+    controller.press("`")
+    controller.type("f"*20)
+    controller.release("`")
 
 def engispam():
     start = time.time()
@@ -317,9 +322,9 @@ def slowwall():
     controller.release("`")
 
 def randomwall():
-    global randomwall
+    global randomwalld
     controller.press("`")
-    while randomwall:
+    while randomwalld:
         mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
         time.sleep(0.02)
         pos = mouse.position
@@ -335,6 +340,19 @@ def randomwall():
         controller.release("z")
         time.sleep(0.02)
     controller.release("`")
+
+def random_mouse_w():
+    global randomwalld
+    randomwalld = True
+    while randomwalld:
+        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
+        time.sleep(0.02)
+        pos = mouse.position
+        controller.press("w")
+        mouse.position = (pos[0]+random.randint(-5, 5), pos[1]+random.randint(-5, 5))
+        time.sleep(0.05)
+        controller.release("w")
+        time.sleep(0.02)
 
 def controllednuke():
     global controllednuke_points, controllednuke_active, step
@@ -405,6 +423,13 @@ def start_controllednuke():
     thread.daemon = True
     thread.start()
 
+def start_random_mouse_w():
+    global randomwall_thread
+    if randomwall_thread is None or not randomwall_thread.is_alive():
+        randomwall_thread = threading.Thread(target=random_mouse_w)
+        randomwall_thread.daemon = True
+        randomwall_thread.start()
+
 def on_press(key):
     global size_automation, braindamage, ballcash, slowballs, randomwalld
     global ctrl6_last_time, ctrl6_armed
@@ -470,6 +495,10 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("shape nuke")
                 shape() 
+        elif hasattr(key, 'char') and key.char and key.char=='d':
+            if 'ctrl' in pressed_keys:
+                print("Random mouse + w abuse started.")
+                start_random_mouse_w()
         elif hasattr(key, 'char') and key.char and key.char=='n':
             if 'ctrl' in pressed_keys:
                 print("score")
@@ -507,6 +536,10 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("engispam")
                 engispam()
+        elif hasattr(key, 'char') and key.char and key.char=='l':
+            if 'ctrl' in pressed_keys:
+                print("50m score")
+                score50m()
     except Exception as e:
         print(f"Error: {e}")
     

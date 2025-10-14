@@ -8,6 +8,8 @@ from threading import Thread
 from pathlib import Path
 from ping3 import ping
 
+time.sleep(2)
+
 global disconnected, banned, died, working
 init = time.time()
 start1 = time.time()
@@ -54,9 +56,9 @@ def take_screenshot(reason="periodic"):
         log_file.close()
 
 def inputlistener():
+    global working, disconnected, died, banned
     inp = input("cmd > ")
     if inp.lower() == "stop":
-        global working
         working = False
         print("Stopping bot...")
     elif inp.lower() == "screenshot":
@@ -67,15 +69,12 @@ def inputlistener():
         pingm = getping()
         print(f"Ping to arras.io: {pingm*1000:.2f}ms")
     elif inp.lower() == "forcedisconnect":
-        global disconnected
         disconnected = True
         print("Forcing disconnect state...")
     elif inp.lower() == "forcedeath":
-        global died
         died = True
         print("Forcing death state...")
     elif inp.lower() == "forcereconnect":
-        global disconnected, died
         disconnected = False
         died = False
         print("Forcing reconnect state...")
@@ -86,12 +85,12 @@ start3 = time.time()-start3
 start4 = time.time()
 print("Creating directories")
 HOME = str(Path.home())
-foldername = f"arrasbot_{timestamp()}"
-SCREENSHOT_DIR = os.path.join(HOME, "Desktop", "arrasbot", foldername)
+foldername = f"abss_{timestamp()}"
+SCREENSHOT_DIR = os.path.join(HOME, "Desktop", "abss", foldername)
 start4 = time.time()-start4
 
 print("Creating log file")
-filename = f"logs/arrasbot_{timestamp()}.log"
+filename = f"logs/abss_{timestamp()}.log"
 with open(filename, "a") as log_file:
     print(f"Bot initialized at {timestamp()}")
     init = time.time()-init
@@ -112,6 +111,21 @@ Bot initialized in {round(init, 3)} seconds
     lastscreenshot = time.time()
     lastdeath = time.time()
     lastdisconnect = time.time()
+    controller.tap(Key.enter)
+    time.sleep(0.1)
+    controller.type("Arras Bot [arrasbot.py] > v2.14.3 < loading...")
+    time.sleep(0.1)
+    for _ in range(2):
+        controller.tap(Key.enter)
+        time.sleep(0.1)
+    controller.type(f"SSD: > [.../arrasbot/{foldername}/] <")
+    time.sleep(0.1)
+    for _ in range(2):
+        controller.tap(Key.enter)
+        time.sleep(0.1)
+    controller.type(f"Bot initialized; started at > [{timestamp()}] <")
+    time.sleep(0.1)
+    controller.tap(Key.enter)
     while working:
         if get_pixel_rgb(1021, 716) == (152, 232, 241):
             disconnected = True
@@ -194,28 +208,15 @@ Bot initialized in {round(init, 3)} seconds
             else:
                 pass
         elif rgb == (223, 116, 90) and (disconnected or died):
-            if disconnected:
-                mouse.position = (4, 221)
-                time.sleep(0.2)
-                mouse.click(Button.left, 1)
-                time.sleep(1)
-                mouse.position = (250, 271)
-                for _ in range(5):
-                    mouse.click(Button.left, 1)
-                    time.sleep(0.1)
-                mouse.position = (250, 245)
-                for _ in range(5):
-                    mouse.click(Button.left, 1)
-                    time.sleep(0.1)
             take_screenshot("reconnected")
             log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")
             log_file.write(f"Successfully reconnected at {timestamp()}\n")
             disconnected = False
             died = False
-            controller.tap("j")
-            controller.tap("i")
-            controller.tap("y")
+            controller.tap("h")
+            controller.tap("u")
+            controller.tap("u")
             controller.tap("c")
             time.sleep(0.1)
             controller.press("`")
