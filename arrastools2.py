@@ -2,23 +2,22 @@ import random, time, threading, os, mss, numpy as np
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
+from pynput.mouse import Listener as MouseListener
+import tkinter as tk
 
-#globals
-global size_automation, controller, dragaboosr, typeaboosr, coloraboosr, allaboosr, ballcash, mouse
-controller = KeyboardController()
-mouse = MouseController()
-pressed_keys = set()
-
-#configs
 length = 4
+
+# Function
+global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step
+step = 20
 arena_size_delay=50
 ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast', 'rage', 'random'] #etc
 filepaths = []
 s = 25 #ball spacing in px
 
 # dynamic filepaths
-for id2 in ids:
-    filepaths.append(f"/Users/alexoh/Desktop/vsc/copypastas/{id2}.txt")
+for idx in ids:
+    filepaths.append(f'/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')
 
 #defs
 copypastaing = False
@@ -29,12 +28,8 @@ monitor = sct.monitors[1]
 
 #thread variables
 size_automation = False
-copypastas = False
-dragaboosr = False
-typeaboosr = False
-coloraboosr = False
-allaboosr = False
-boting = False
+randomwalld = False
+slowballs = False
 ballcash = False
 braindamage = False
 ballcash_thread = None
@@ -42,36 +37,56 @@ inputlistener_thread = None
 bot_thread = None
 copypasta_thread = None
 automation_thread = None
-dragaboos_thread = None
-typeaboos_thread = None
-coloraboos_thread = None
-allaboos_thread = None
-braindamage_thread = None
-tail_thread = None
+slowball_thread = None
+randomwall_thread = None
+braindamage_thread = None  # Add this global variable
+ball10x10_thread = None  # Add this global variable
+controllednuke_points = []
+controllednuke_active = False
 
-def get_pixel_rgb(x, y):
-    bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
-    img = sct.grab(bbox)
-    pixel = np.array(img.pixel(0, 0))
-    return tuple(int(v) for v in pixel[:3])
+# Add these globals near the top
+ctrl6_last_time = 0
+ctrl6_armed = False
+
+def create_number_input_window(title):
+    def handle_return(event=None):
+        try:
+            num = float(entry.get())
+            return num
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+    root = tk.Tk()
+    root.title(title)
+    
+    label = tk.Label(root, text="Please enter a number:")
+    label.pack(pady=10)
+
+    entry = tk.Entry(root)
+    entry.pack(pady=5)
+    entry.bind('<Return>', handle_return)
+    entry.focus()
+
+    root.mainloop()
 
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
 
 def bot():
-    import mss, time, numpy as np, os
     from datetime import datetime
-    from pynput import mouse
-    from pynput.keyboard import Controller as KeyboardController, Key
-    from pynput.mouse import Controller as MouseController, Button
     from pathlib import Path
     from ping3 import ping
 
+    global disconnected, banned, died, working
     init = time.time()
     start1 = time.time()
     print("Initializing variables")
+    sct = mss.mss()
+    working = True
     disconnected = True
     died = False
+    banned = False
+    monitor = sct.monitors[1]  # Primary monitor
     start1 = time.time()-start1
 
     start2 = time.time()
@@ -106,6 +121,35 @@ def bot():
         with open("arrasbot.log", "a") as log_file:
             log_file.write(f"Screenshot saved: {filename} at {timestamp()}\n")
             log_file.close()
+
+    def inputlistener2():
+        inp = input("cmd > ")
+        if inp.lower() == "stop":
+            global working
+            working = False
+            print("Stopping bot...")
+        elif inp.lower() == "screenshot":
+            take_screenshot("manual")
+        elif inp.lower() == "status":
+            print(f"Working: {working}, Disconnected: {disconnected}, Died: {died}, Banned: {banned}")
+        elif inp.lower() == "ping":
+            pingm = getping()
+            print(f"Ping to arras.io: {pingm*1000:.2f}ms")
+        elif inp.lower() == "forcedisconnect":
+            global disconnected
+            disconnected = True
+            print("Forcing disconnect state...")
+        elif inp.lower() == "forcedeath":
+            global died
+            died = True
+            print("Forcing death state...")
+        elif inp.lower() == "forcereconnect":
+            global disconnected, died
+            disconnected = False
+            died = False
+            print("Forcing reconnect state...")
+        threading.Thread(target=inputlistener, daemon=True).start()
+
     start3 = time.time()-start3
 
     start4 = time.time()
@@ -135,7 +179,9 @@ def bot():
         log_file.write(f"Bot initialized at {timestamp()}\n")
         lastmove = time.time()
         lastscreenshot = time.time()
-        while boting:
+        lastdeath = time.time()
+        lastdisconnect = time.time()
+        while working:
             if get_pixel_rgb(1021, 716) == (152, 232, 241):
                 disconnected = True
                 log_file.write(f"Backroom crashed at {timestamp()}\n")
@@ -275,22 +321,21 @@ def copypasta(id):
             end = time.time()
             controller.tap(Key.enter)
             time.sleep(0.1)
-            controller.type(f"Arras Copypasta Utility [ACU] > v1.5.1 < loading...")
+            controller.type(f"Loaded file from filepath > [{filepath[15:len(filepath)]}] <")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Filepath: > [.../{filepath[37:]}] < | Loaded > {leng} chars <")
+            controller.type(f"Loaded > {leng} characters < | > [{file_size_kb:.2f}KB] <")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Size: > [{file_size_kb:.2f}KB] < | Time taken > [{round((end-start)*1000, 3)}ms] <")
+            controller.type(f"Time taken > [{round((end-start)*1000, 3)}ms] < Waiting for chat delay...")
             time.sleep(0.1)
             controller.tap(Key.enter)
             time.sleep(10)
             endf = False
-            start = time.time()
             while copypastaing and not endf and copypastas:
                 for _ in range(3):
                     if pos+58 < leng-1:
@@ -310,26 +355,17 @@ def copypasta(id):
                             controller.tap(Key.enter)
                     else:
                         endf = True
-                        controller.tap(Key.enter)
-                        time.sleep(0.1)
                         controller.type(filer[pos:(leng-1)])
-                        time.sleep(0.1)
-                        controller.tap(Key.enter)
                         print("End of file")
-                    time.sleep(3.3)
+                    time.sleep(3.1)
             if copypastas:
-                print(f"Copypasta of > {leng} characters < finished")
                 controller.tap(Key.enter)
                 time.sleep(0.1)
                 controller.type(f"Copypasta of > {leng} characters < finished")
                 time.sleep(0.1)
-                for _ in range(2):
-                    controller.tap(Key.enter)
-                    time.sleep(0.1)
-                controller.type(f"Time taken: > {round(1000*(time.time()-start), 3)}ms <")
-                time.sleep(0.1)
                 controller.tap(Key.enter)
                 time.sleep(0.1)
+                print(f"Copypasta of > {leng} characters < finished")
             else:
                 controller.tap(Key.enter)
                 time.sleep(0.1)
@@ -339,21 +375,19 @@ def copypasta(id):
                 time.sleep(0.1)
                 print("copypasta_thread forced shutdown")
 
-def arena_size_automation(interval_ms=20):
+def arena_size_automation(interval_ms=20, atype = 1):
     global size_automation
-    try:
+    if atype == 1:
         while size_automation:
             x = generate_even()
             y = generate_even()
             print(f"Sending command: $arena size {x} {y}")
             command = f"$arena size {x} {y}"
-            controller.press(Key.enter)
-            controller.release(Key.enter)
+            controller.tap(Key.enter)
             time.sleep(0.05)
             controller.type(command)
             time.sleep(0.05)
-            controller.press(Key.enter)
-            controller.release(Key.enter)
+            controller.tap(Key.enter)
             time.sleep(interval_ms / 1000.0)
     except KeyboardInterrupt:
         pass
@@ -384,22 +418,32 @@ def conq_quickstart():
 
 def wallcrash():
     controller.press("`")
-    controller.type("x"*1800)
+    controller.type("x"*2000)
     controller.release("`")
 
 def nuke():
     controller.press("`")
-    controller.type("wk"*400)
+    controller.type("wk"*50)
     controller.release("`")
 
 def shape():
     controller.press("`")
-    controller.type("f"*700)
+    controller.type("f"*100)
     controller.release("`")
 
 def ballcrash():
     controller.press("`")
     for _ in range(100):
+        for _ in range(100):
+            controller.press("c")
+            controller.release("c")
+            controller.press("h")
+            controller.release("h")
+    controller.release("`")
+
+def miniballcrash():
+    controller.press("`")
+    for _ in range(25):
         for _ in range(100):
             controller.press("c")
             controller.release("c")
@@ -428,6 +472,7 @@ def slowball():
 
 def ball10x10():
     controller.press("`")
+    time.sleep(0.1)
     controller.tap("0")
     controller.tap("-")
     controller.tap("-")
@@ -515,12 +560,63 @@ def brain_damage():
     mouse = MouseController()
     while braindamage:
         mouse.position = (random.randint(0, 1710), random.randint(168, 1112))
-        time.sleep(0.02)  # Add a small delay to prevent locking up your systema
 
 def score():
     controller.press("`")
     controller.type("n"*400)
     controller.release("`")
+
+def benchmark():
+    from pynput.keyboard import Listener as KeyboardListener, Key
+
+    shift_pressed = threading.Event()
+
+    def on_press(key):
+        if key == Key.shift or key == Key.shift_r:
+            shift_pressed.set()
+            print("Benchmark stopped by Shift key press.")
+
+    # Start the benchmark
+    start = time.time()
+    balls()
+    print("Press any Shift key to stop the benchmark timer...")
+    # Start keyboard listener
+    with KeyboardListener(on_press=on_press) as listener:
+        shift_pressed.wait()  # Wait until Shift is pressed
+        listener.stop()
+    elapsed = time.time() - start
+    print(f"200 balls in {round(elapsed*1000, 3)} ms")
+    controller.tap(Key.enter)
+    time.sleep(0.15)
+    controller.type(f"200 balls in > [{round(elapsed * 1000, 3)}ms] <")
+    time.sleep(0.1)
+    for _ in range(2):
+        controller.tap(Key.enter)
+        time.sleep(0.1)
+    bps = round(200 * (1 / elapsed), 3) if elapsed > 0 else 0
+    controller.type(f"BPS: > [{bps}] <")
+    time.sleep(0.1)
+    controller.tap(Key.enter)
+    time.sleep(0.1)
+
+def engispam():
+    start = time.time()
+    while time.time()-start < 10:
+        controller.tap(",")
+        controller.tap("y")
+        controller.tap("i")
+        controller.press("`")
+        controller.press(".")
+        controller.press(".")
+        controller.press("a")
+        controller.press("c")
+        controller.release("`")
+        controller.press(Key.space)
+        time.sleep(0.25)
+        controller.release(Key.space)
+        controller.press("`")
+        controller.press("q")
+        controller.release("`")
 
 def ball():
     controller.press("`")
@@ -554,10 +650,55 @@ def randomwall():
         time.sleep(0.02)
     controller.release("`")
 
-def start_arena_automation():
+def controllednuke():
+    global controllednuke_points, controllednuke_active, step
+    controllednuke_points = []
+    controllednuke_active = True
+    mouse = MouseController()
+    print(f"Controlled Nuke: You have 10 seconds to select two points.")
+    print(f"Click two points with the left mouse button. Step size: {step}")
+    start_time = time.time()
+    while len(controllednuke_points) < 2 and time.time() - start_time < 10:
+        time.sleep(0.01)
+    controllednuke_active = False  # Stop collecting more points
+    if len(controllednuke_points) < 2:
+        print("Timed out waiting for points.")
+        return
+    (x1, y1), (x2, y2) = controllednuke_points
+    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+    print(f"Controlled Nuke: Rectangle from ({x1}, {y1}) to ({x2}, {y2}) with step {step}")
+    controller.press("`")
+    time.sleep(2)
+    min_x, max_x = sorted([x1, x2])
+    min_y, max_y = sorted([y1, y2])
+    for x in range(min_x, max_x + 1, step):
+        for y in range(min_y, max_y + 1, step):
+            mouse.position = (x, y)
+            time.sleep(0.05)
+            controller.tap("k")
+    print("Controlled Nuke complete.")
+    controller.release("`")
+
+def inputlistener():
+    cmd = input("cmd > ")
+    if cmd[0:10] == "!copypasta":
+        start_copypasta(cmd[11:])
+    elif cmd[0:4] == "!bot":
+        start_bot()
+    else:
+        print("unknown command")
+
+def start_copypasta(id2):
+    global copypasta_thread
+    if copypasta_thread is None or not copypasta_thread.is_alive():
+        copypasta_thread = threading.Thread(target=copypasta, args=(id2))
+        copypasta_thread.daemon = True
+        copypasta_thread.start()
+
+def start_arena_automation(atype):
     global automation_thread
     if automation_thread is None or not automation_thread.is_alive():
-        automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay,))
+        automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay, atype))
         automation_thread.daemon = True
         automation_thread.start()
 
@@ -568,12 +709,12 @@ def start_brain_damage():
         braindamage_thread.daemon = True
         braindamage_thread.start()
 
-def start_ball10x10():
-    global ball10x10_thread
-    if ball10x10_thread is None or not ball10x10_thread.is_alive():
-        ball10x10_thread = threading.Thread(target=ball10x10)
-        ball10x10_thread.daemon = True
-        ball10x10_thread.start()
+def start_tail():
+    global tail_thread
+    if tail_thread is None or not tail_thread.is_alive():
+        tail_thread = threading.Thread(target=tail)
+        tail_thread.daemon = True
+        tail_thread.start()
 
 def start_randomwall():
     global randomwall_thread
@@ -589,9 +730,15 @@ def start_slowball():
         slowball_thread.daemon = True
         slowball_thread.start()
 
+def start_controllednuke():
+    thread = threading.Thread(target=controllednuke)
+    thread.daemon = True
+    thread.start()
+
 def on_press(key):
     global size_automation, braindamage, ballcash, slowballs, randomwalld
     global ctrl6_last_time, ctrl6_armed
+    global controllednuke_points, controllednuke_active
     try:
         if key == keyboard.Key.esc:
             if 'ctrl' in pressed_keys:
@@ -605,8 +752,13 @@ def on_press(key):
                 # stop all threads
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
+        elif hasattr(key, 'char') and key.char and key.char == 'y':
+            if 'ctrl' in pressed_keys:
+                print("Starting controlled nuke...")
+                start_controllednuke()
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
+                atype = random.randint(1, 3)
                 size_automation = True
                 print("Arena size automation is now ON.")
                 start_arena_automation()
@@ -625,7 +777,7 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='5':
             if 'ctrl' in pressed_keys:
                 print("ball square")
-                start_ball10x10()
+                start_tail()
         elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
                 now = time.time()
@@ -669,11 +821,23 @@ def on_press(key):
                 print("slow balls")
                 slowballs = True
                 start_slowball()
+        elif hasattr(key, 'char') and key.char and key.char=='m':
+            if 'ctrl' in pressed_keys:
+                print("benchmarking...")
+                benchmark()
         elif hasattr(key, 'char') and key.char and key.char=='a':
             if 'ctrl' in pressed_keys:
                 randomwalld = True
                 print("all abuse")
                 start_randomwall()
+        elif hasattr(key, 'char') and key.char and key.char=='o':
+            if 'ctrl' in pressed_keys:
+                print("miniballcrash")
+                miniballcrash()
+        elif hasattr(key, 'char') and key.char and key.char=='e':
+            if 'ctrl' in pressed_keys:
+                print("engispam")
+                engispam()
     except Exception as e:
         print(f"Error: {e}")
     
@@ -683,6 +847,16 @@ def on_release(key):
     elif key in pressed_keys:
         pressed_keys.remove(key)
 
+def on_click(x, y, button, pressed):
+    global controllednuke_points, controllednuke_active
+    if controllednuke_active and pressed and button == Button.left:
+        controllednuke_points.append((x, y))
+        print(f"ControlledNuke: Point {len(controllednuke_points)} selected at ({x}, {y})")
+
+# Start mouse listener globally (after your keyboard listener setup)
+mouse_listener = MouseListener(on_click=on_click)
+mouse_listener.daemon = True
+mouse_listener.start()
+
 with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
     listener.join()
-
