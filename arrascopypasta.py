@@ -2,6 +2,7 @@ import time, threading, os, mss, numpy as np
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
+import re
 #each line should be 60 chars long
 global ids, copypastaing, controller, thread, filepaths, current_chars, current_percent
 sct = mss.mss()
@@ -10,10 +11,14 @@ def get_pixel_rgb(x, y):
     img = sct.grab(bbox)
     pixel = np.array(img.pixel(0, 0))
     return tuple(int(v) for v in pixel[:3])
-ids = ['pi', 'discord', 'punctuation', 'SIX SEVEN 2', 'SIX SEVEN', 'longest', 'long', 'mcdonalds', 'constitution', 'roast', 'random', 'icecream', 'rage', 'bag', 'cake', 'char'] #etc
+copypasta_dir = '/Users/alexoh/Documents/GitHub/arrastools/copypastas/'
+ids = []
 filepaths = []
-for idx in ids:
-    exec(f"filepaths.append('/Users/alexoh/Documents/GitHub/arrastools/copypastas/{idx}.txt')")
+for fname in os.listdir(copypasta_dir):
+    fpath = os.path.join(copypasta_dir, fname)
+    if os.path.isfile(fpath) and fname.endswith('.txt'):
+        ids.append(fname[:-4])  # Remove '.txt' extension for id
+        filepaths.append(fpath)
 copypastaing = False
 thread = None
 controller = KeyboardController()
@@ -32,25 +37,22 @@ def split_sentences(filepath, max_length=60, disable_space_breaking=False):
     sentences = []
     with open(filepath) as file:
         lines = file.readlines()
-        buffer = ""
         for line in lines:
             line = line.rstrip()
             if not line.strip():
                 continue  # skip empty or whitespace-only lines
             if disable_space_breaking:
-                # Add the whole line to buffer, break only at max_length
-                if buffer:
-                    buffer += " " + line
-                else:
-                    buffer = line
+                # Break only at max_length, not at spaces
+                buffer = line
                 while len(buffer) > max_length:
                     sentences.append(buffer[:max_length])
                     buffer = buffer[max_length:]
-                # Break at newline
-                sentences.append(buffer)
-                buffer = ""
+                if buffer:
+                    sentences.append(buffer)
             else:
+                # Break at spaces, but always start a new sentence at each line
                 words = line.split()
+                buffer = ""
                 for word in words:
                     if buffer:
                         if len(buffer) + 1 + len(word) > max_length:
@@ -64,14 +66,34 @@ def split_sentences(filepath, max_length=60, disable_space_breaking=False):
                             buffer = word[max_length:]
                         else:
                             buffer = word
-        if buffer:
-            sentences.append(buffer)
+                if buffer:
+                    sentences.append(buffer)
     return sentences
 
 pause_event = threading.Event()
 pause_event.set()  # Start as running
 
-def copypasta(id, prepare=False, disable_space_breaking=False):
+def replace_emojis(text):
+    # Emoji unicode ranges
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F700-\U0001F77F"  # alchemical symbols
+        "\U0001F780-\U0001F7FF"  # geometric shapes extended
+        "\U0001F800-\U0001F8FF"  # supplemental arrows-c
+        "\U0001F900-\U0001F9FF"  # supplemental symbols & pictographs
+        "\U0001FA00-\U0001FA6F"  # chess symbols
+        "\U0001FA70-\U0001FAFF"  # symbols & pictographs extended-a
+        "\U00002702-\U000027B0"  # dingbats
+        "\U000024C2-\U0001F251"  # enclosed characters
+        "]+",
+        flags=re.UNICODE
+    )
+    return emoji_pattern.sub(':e:', text)
+
+def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_text=False):
     time.sleep(2)
     global ids, copypastaing, filepaths, controller, pause_event, current_chars, current_percent
     if id in ids:
@@ -83,7 +105,7 @@ def copypasta(id, prepare=False, disable_space_breaking=False):
             print(f"File not found: {filepath}")
             return
         sentences = split_sentences(filepath, disable_space_breaking=disable_space_breaking)
-        leng = sum(len(s) for s in sentences)
+        leng = sum(len(replace_emojis(s)) for s in sentences)
         pos = 0
         if prepare:
             file_size_bytes = os.path.getsize(filepath)
@@ -112,10 +134,11 @@ def copypasta(id, prepare=False, disable_space_breaking=False):
             pause_event.wait()  # Wait here if paused
             controller.tap(Key.enter)
             interruptible_sleep(0.1)
-            controller.type(sentence)
+            sentence_no_emoji = replace_emojis(sentence)
+            controller.type(sentence_no_emoji)
             interruptible_sleep(0.1)
             controller.tap(Key.enter)
-            pos += len(sentence)
+            pos += len(sentence_no_emoji)
             current_chars = pos
             current_percent = (current_chars / leng) * 100 if leng > 0 else 0
             interruptible_sleep(3.3)  # replaces time.sleep(3.3)
@@ -130,66 +153,76 @@ def copypasta(id, prepare=False, disable_space_breaking=False):
             controller.type(f"Forced stop at > [{chars_typed}] characters [{percent_typed:.2f}%]")
             interruptible_sleep(0.1)
         else:
-            print(f"Copypasta of > [{leng}] characters < finished")
+            if not disable_finish_text:
+                print(f"Copypasta of > [{leng}] characters < finished")
+                controller.tap(Key.enter)
+                interruptible_sleep(0.1)
+                controller.type(f"Copypasta of > [{leng}] characters < finished")
+                interruptible_sleep(0.1)
+            else:
+                print(f"Copypasta of > [{leng}] characters < finished (without finish text)")
+        if not disable_finish_text:
             controller.tap(Key.enter)
             interruptible_sleep(0.1)
-            controller.type(f"Copypasta of > [{leng}] characters < finished")
+            time.sleep(3.5)
+            controller.tap(Key.enter)
             interruptible_sleep(0.1)
-        controller.tap(Key.enter)
-        interruptible_sleep(0.1)
-        time.sleep(3.3)
-        controller.tap(Key.enter)
-        interruptible_sleep(0.1)
-        print(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
-        controller.type(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
-        interruptible_sleep(0.1)
-        controller.tap(Key.enter)
-        interruptible_sleep(0.1)
+            print(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
+            controller.type(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
+            interruptible_sleep(0.1)
+            controller.tap(Key.enter)
+            interruptible_sleep(0.1)
         # Do not exit here; let the thread finish
     copypastaing = False
 
 def on_press(key):
     global copypastaing, pause_event, current_chars, current_percent, controller
-    if key == keyboard.Key.esc:
-        copypastaing = False
-    elif hasattr(key, 'char') and key.char == 'p' and copypastaing:
-        if pause_event.is_set():
-            pause_event.clear()
-            time.sleep(3.3)
-            print(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-            controller.tap(Key.enter)
-            interruptible_sleep(0.1)
-            controller.type(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-            interruptible_sleep(0.1)
-            controller.tap(Key.enter)
-            interruptible_sleep(0.1)
-        else:
-            pause_event.set()
-            print(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-            controller.tap(Key.enter)
-            interruptible_sleep(0.1)
-            controller.type(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-            interruptible_sleep(0.1)
-            controller.tap(Key.enter)
-            interruptible_sleep(0.1)
+    try:
+        if key == keyboard.Key.esc:
+            copypastaing = False
+        elif hasattr(key, 'char') and key.char == 'p' and copypastaing:
+            if pause_event.is_set():
+                pause_event.clear()
+                time.sleep(3.3)
+                print(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                controller.tap(Key.enter)
+                interruptible_sleep(0.1)
+                controller.type(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                interruptible_sleep(0.1)
+                controller.tap(Key.enter)
+                interruptible_sleep(0.1)
+            else:
+                pause_event.set()
+                time.sleep(3.3)
+                print(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                controller.tap(Key.enter)
+                interruptible_sleep(0.1)
+                controller.type(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                interruptible_sleep(0.1)
+                controller.tap(Key.enter)
+                interruptible_sleep(0.1)
+    except UnicodeDecodeError:
+        print("UnicodeDecodeError: Non-standard key (emoji?) pressed. Ignored.")
 
 listener = keyboard.Listener(on_press=on_press)
 listener.daemon = True
 listener.start()
 
 while True:
-    towrite = input("enter copypasta id > ")
-    time.sleep(2)
-    # Parse input for id, prepare, and disable_space_breaking
-    parts = [p.strip() for p in towrite.split(',')]
-    id_input = parts[0] if len(parts) > 0 else ""
-    prepare = parts[1].lower() == 'true' if len(parts) > 1 else False
-    disable_space_breaking = parts[2].lower() == 'true' if len(parts) > 2 else False
+    id_input = input("Enter copypasta id > ").strip()
+    prepare_input = input("Prepare mode? (true/false) > ").strip().lower()
+    disable_space_breaking_input = input("Disable space breaking? (true/false) > ").strip().lower()
+    disable_finish_text_input = input("Disable finish text? (true/false) > ").strip().lower()
+
+    prepare = prepare_input == 'true'
+    disable_space_breaking = disable_space_breaking_input == 'true'
+    disable_finish_text = disable_finish_text_input == 'true'
+
     if id_input in ids:
         if copypastaing:
             print("Already copypastaing, wait until finished or press Escape to stop")
         else:
-            thread = threading.Thread(target=copypasta, args=(id_input, prepare, disable_space_breaking))
+            thread = threading.Thread(target=copypasta, args=(id_input, prepare, disable_space_breaking, disable_finish_text))
             thread.start()
     else:
         print("Invalid id, available ids are:")
@@ -198,7 +231,7 @@ while True:
         if copypastaing:
             print("Already copypastaing, wait until finished or press Escape to stop")
         else:
-            thread = threading.Thread(target=copypasta, args=('char', prepare, disable_space_breaking))
+            thread = threading.Thread(target=copypasta, args=('char', prepare, disable_space_breaking, disable_finish_text))
             thread.start()
     done = False
     while not done:

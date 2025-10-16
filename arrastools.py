@@ -109,7 +109,10 @@ def wallcrash():
 
 def nuke():
     controller.press("`")
-    controller.type("wk"*50)
+    for _ in range(50):
+        time.sleep(0.03)
+        controller.tap("w")
+        controller.tap("k")
     controller.release("`")
 
 def shape():
@@ -274,13 +277,13 @@ def benchmark(amt = 50):
     print(f"{amt} balls in {round(elapsed*1000, 3)} ms")
     controller.tap(Key.enter)
     time.sleep(0.15)
-    controller.type(f"{amt} balls in > [{round(elapsed * 1000, 3)}ms] <")
+    controller.type(f"> [{round(elapsed * 1000, 3)}ms] <")
     time.sleep(0.1)
     for _ in range(2):
         controller.tap(Key.enter)
         time.sleep(0.1)
-    bps = round(20 * (1 / elapsed), 3) if elapsed > 0 else 0
-    controller.type(f"BPS: > [{bps}] <")
+    bps = round(amt * (1 / elapsed), 3) if elapsed > 0 else 0
+    controller.type(f"> [{bps}] <")
     time.sleep(0.1)
     controller.tap(Key.enter)
     time.sleep(0.1)
@@ -353,6 +356,27 @@ def random_mouse_w():
         time.sleep(0.05)
         controller.release("w")
         time.sleep(0.02)
+
+def simpletail(amt=20):
+    controller.press("`")
+    delay = 0.04
+    time.sleep(delay)
+    for _ in range(amt):
+        for _ in range(3):
+            ball()
+        mouse.position = (mouse.position[0] + s, mouse.position[1])
+        time.sleep(delay)
+    mouse.position = (mouse.position[0] + 2 * s, mouse.position[1])
+    time.sleep(2)
+    mouse.position = (mouse.position[0] - 2 * s, mouse.position[1])
+    for _ in range(19):
+        controller.press("j")
+        time.sleep(delay)
+        mouse.position = (mouse.position[0] - s, mouse.position[1])
+        time.sleep(delay)
+        controller.release("j")
+        time.sleep(delay)
+    controller.release("`")
 
 def controllednuke():
     global controllednuke_points, controllednuke_active, step
@@ -487,6 +511,10 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("Wall crashing...")
                 wallcrash()
+        elif hasattr(key, 'char') and key.char and key.char=='8':
+            if 'ctrl' in pressed_keys:
+                print("simple tail")
+                simpletail()
         elif hasattr(key, 'char') and key.char and key.char=='9':
             if 'ctrl' in pressed_keys:
                 print("NUKE GO BRRRRRRRRRR")
