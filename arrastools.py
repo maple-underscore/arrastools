@@ -1,4 +1,6 @@
-import random, time, threading, os, mss, numpy as np
+import random
+import time
+import threading
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
@@ -11,31 +13,18 @@ length = 4
 global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step
 step = 20
 arena_size_delay=50
-ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast', 'rage', 'random'] #etc
-filepaths = []
 s = 25 #ball spacing in px
-
-# dynamic filepaths
-for idx in ids:
-    filepaths.append(f'/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')
-
-#defs
-copypastaing = False
-ctrl6_last_time = 0
-ctrl6_armed = False
-sct = mss.mss()
-monitor = sct.monitors[1]
-
-#thread variables
 size_automation = False
+engispamming = False
+engispam_thread = None
 randomwalld = False
 slowballs = False
 ballcash = False
+ballcrash_thread = None
 braindamage = False
-ballcash_thread = None
-inputlistener_thread = None
-bot_thread = None
-copypasta_thread = None
+controller = KeyboardController()
+mouse = MouseController()
+pressed_keys = set()
 automation_thread = None
 slowball_thread = None
 randomwall_thread = None
@@ -72,231 +61,21 @@ def create_number_input_window(title):
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
 
-def bot():
-    import mss, time, numpy as np, os
-    from datetime import datetime
-    from pynput import mouse
-    from pynput.keyboard import Controller as KeyboardController, Key
-    from pynput.mouse import Controller as MouseController, Button
-    from pathlib import Path
-    from ping3 import ping
-
-    init = time.time()
-    start1 = time.time()
-    print("Initializing variables")
-    disconnected = True
-    died = False
-    start1 = time.time()-start1
-
-    start2 = time.time()
-    print("Initializing controllers")
-    controller = KeyboardController()
-    mouse = MouseController()
-    start2 = time.time()-start2
-
-    start3 = time.time()
-    print("Defining functions")
-    def getping():
-        target = "arras.io"
-        return ping(target)
-
-    def get_pixel_rgb(x, y):
-        bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
-        img = sct.grab(bbox)
-        pixel = np.array(img.pixel(0, 0))
-        return tuple(int(v) for v in pixel[:3])
-
-    def timestamp():
-        return datetime.now().strftime("%Y%m%d-%H%M%S")
-
-    def take_screenshot(reason="periodic"):
-        if not os.path.exists(SCREENSHOT_DIR):
-            os.makedirs(SCREENSHOT_DIR)
-        current_time = timestamp()
-        filename = os.path.join(SCREENSHOT_DIR, f"{current_time}_{reason}.png")
-        screenshot = sct.grab(monitor)
-        mss.tools.to_png(screenshot.rgb, screenshot.size, output=filename)
-        print(f"Screenshot saved: {filename} at {timestamp()}")
-        with open("arrasbot.log", "a") as log_file:
-            log_file.write(f"Screenshot saved: {filename} at {timestamp()}\n")
-            log_file.close()
-    start3 = time.time()-start3
-
-    start4 = time.time()
-    print("Creating directories")
-    HOME = str(Path.home())
-    foldername = f"arrasbot_{timestamp()}"
-    SCREENSHOT_DIR = os.path.join(HOME, "Desktop", "arrasbot", foldername)
-    start4 = time.time()-start4
-
-    print("Creating log file")
-    filename = f"arrasbot_{timestamp()}.log"
-    with open(filename, "a") as log_file:
-        print(f"Bot initialized at {timestamp()}")
-        init = time.time()-init
-        log_file.write(f"""
-    =============== DEBUG ===============
-    Display size: {monitor['width']}x{monitor['height']}
-    Screenshot directory: {SCREENSHOT_DIR}
-    Created variables in {round(start1, 3)} seconds
-    Created controllers in {round(start2, 3)} seconds
-    Defined functions in {round(start3, 3)} seconds
-    Created directories in {round(start4, 3)} seconds
-    Bot initialized in {round(init, 3)} seconds
-
-    ================ LOG ================
-    """)
-        log_file.write(f"Bot initialized at {timestamp()}\n")
-        lastmove = time.time()
-        lastscreenshot = time.time()
-        while boting:
-            rgb = get_pixel_rgb(27, 930)
-            if (rgb == (167, 81, 68) or rgb == (138, 27, 34) or rgb == (201, 92, 75)):
-                if not disconnected:
-                    take_screenshot("disconnected")
-                    log_file.write(f"[DISCONNECTED] screenshot taken at {timestamp()}\n")
-                print(f"Disconnected at {timestamp()}")
-                log_file.write(f"Disconnected at {timestamp()}\n")
-                controller.release("w")
-                controller.release("a")
-                if not disconnected:
-                    print(f"Disconnected, attempting to reconnect at {timestamp()}")
-                    log_file.write(f"Disconnected, attempting to reconnect at {timestamp()}\n")
-                disconnected = True
-                mouse.position = (922, 767)
-                pingm = getping()
-                for _ in range(200):
-                    mouse.click(Button.left, 1)
-                    time.sleep(pingm/1000)
-            elif rgb == (176, 100, 81) and not disconnected and not died:
-                print(f"Checking death at {timestamp()}")
-                log_file.write(f"Checking death at {timestamp()}\n")
-                time.sleep(3)
-                if rgb == (176, 100, 81) and not disconnected and not died:
-                    take_screenshot("died")
-                    log_file.write(f"[DEATH] screenshot taken at {timestamp()}\n")
-                    print(f"Died at {timestamp()}")
-                    log_file.write(f"Died at {timestamp()}\n")
-                    died = True
-                    controller.tap(Key.enter)
-                else:
-                    pass
-            elif rgb == (223, 116, 90) and (disconnected or died):
-                take_screenshot("reconnected")
-                log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
-                print(f"Successfully reconnected at {timestamp()}")
-                log_file.write(f"Successfully reconnected at {timestamp()}\n")
-                
-                disconnected = False
-                died = False
-                controller.tap("h")
-                controller.tap("u")
-                controller.tap("u")
-                controller.tap("c")
-                time.sleep(0.1)
-                controller.press("`")
-                time.sleep(0.1)
-                controller.tap("i")
-                time.sleep(0.1)
-                controller.release("`")
-            if time.time() - lastscreenshot > 60:
-                take_screenshot()
-                log_file.write(f"[PERIODIC] screenshot taken at {timestamp()}\n")
-                lastscreenshot = time.time()
-            if time.time() - lastmove > 30:
-                mouse.position = (mouse.position[0]+1, mouse.position[1])
-                time.sleep(0.1)
-                mouse.position = (mouse.position[0]-1, mouse.position[1])
-                controller.tap("a")
-                controller.tap("d")
-                lastmove = time.time()
-
-def copypasta(id):
-    global ids, copypastaing, filepaths, controller
-    if id in ids:
-        index = ids.index(id)
-        filepath = filepaths[index]
-        pos = 0
-        copypastaing = True
-        start = time.time()
-        if not os.path.exists(filepath):
-            print(f"File not found: {filepath}")
-            return
-        with open(filepath) as file:
-            filer = file.read().replace('\n', r' [newline] ')
-            leng = len(filer)
-            file_size_bytes = os.path.getsize(filepath)
-            file_size_kb = file_size_bytes / 1024
-            end = time.time()
-            controller.tap(Key.enter)
-            time.sleep(0.1)
-            controller.type(f"Loaded file from filepath > [{filepath[15:len(filepath)]}] <")
-            time.sleep(0.1)
-            for _ in range(2):
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-            controller.type(f"Loaded > {leng} characters < | > [{file_size_kb:.2f}KB] <")
-            time.sleep(0.1)
-            for _ in range(2):
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-            controller.type(f"Time taken > [{round((end-start)*1000, 3)}ms] < Waiting for chat delay...")
-            time.sleep(0.1)
-            controller.tap(Key.enter)
-            time.sleep(10)
-            endf = False
-            while copypastaing and not endf and copypastas:
-                for _ in range(3):
-                    if pos+58 < leng-1:
-                        rgb = get_pixel_rgb(27, 930)
-                        if rgb == (176, 100, 81):
-                            time.sleep(3)
-                            controller.tap(Key.enter)
-                        controller.tap(Key.enter)
-                        time.sleep(0.1)
-                        controller.type(filer[pos:pos+58])
-                        time.sleep(0.1)
-                        controller.tap(Key.enter)
-                        pos+=58
-                        rgb = get_pixel_rgb(27, 930)
-                        if rgb == (176, 100, 81):
-                            time.sleep(3)
-                            controller.tap(Key.enter)
-                    else:
-                        endf = True
-                        controller.type(filer[pos:(leng-1)])
-                        print("End of file")
-                    time.sleep(3.1)
-            if copypastas:
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                controller.type(f"Copypasta of > {leng} characters < finished")
-                time.sleep(0.1)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                print(f"Copypasta of > {leng} characters < finished")
-            else:
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                controller.type("copypasta_thread forced shutdown")
-                time.sleep(0.1)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                print("copypasta_thread forced shutdown")
-
-def arena_size_automation(interval_ms=20, atype = 1):
+def arena_size_automation(interval_ms=20):
     global size_automation
-    if atype == 1:
+    try:
         while size_automation:
             x = generate_even()
             y = generate_even()
             print(f"Sending command: $arena size {x} {y}")
             command = f"$arena size {x} {y}"
-            controller.tap(Key.enter)
+            controller.press(Key.enter)
+            controller.release(Key.enter)
             time.sleep(0.05)
             controller.type(command)
             time.sleep(0.05)
-            controller.tap(Key.enter)
+            controller.press(Key.enter)
+            controller.release(Key.enter)
             time.sleep(interval_ms / 1000.0)
     except KeyboardInterrupt:
         pass
@@ -314,6 +93,7 @@ def click_positions(pos_list, delay=0.5):
 def conq_quickstart():
     controller.type("kyyv")
     mouse = MouseController()
+    pos = mouse.position
     click_positions([
         (53.58203125, 948.08984375),
         (167.4765625, 965.703125),
@@ -323,19 +103,16 @@ def conq_quickstart():
         (166.71875, 1031.28125),
         (92.51953125, 1049.71875)
     ], 0)
-    mouse.position=(856, 638)
+    mouse.position=pos
 
 def wallcrash():
     controller.press("`")
-    controller.type("x"*2000)
+    controller.type("x"*1800)
     controller.release("`")
 
 def nuke():
     controller.press("`")
-    for _ in range(50):
-        time.sleep(0.03)
-        controller.tap("w")
-        controller.tap("k")
+    controller.type("wk"*200)
     controller.release("`")
 
 def shape():
@@ -384,7 +161,6 @@ def slowball():
 
 def ball10x10():
     controller.press("`")
-    time.sleep(0.1)
     controller.tap("0")
     controller.tap("-")
     controller.tap("-")
@@ -472,13 +248,14 @@ def brain_damage():
     mouse = MouseController()
     while braindamage:
         mouse.position = (random.randint(0, 1710), random.randint(168, 1112))
+        time.sleep(0.02)  # Add a small delay to prevent locking up your systema
 
 def score():
     controller.press("`")
     controller.type("n"*400)
     controller.release("`")
 
-def benchmark(amt = 50):
+def benchmark(amt = 5000):
     from pynput.keyboard import Listener as KeyboardListener, Key
 
     shift_pressed = threading.Event()
@@ -517,14 +294,12 @@ def score50m():
     controller.release("`")
 
 def engispam():
-    start = time.time()
-    while time.time()-start < 10:
+    global engispamming
+    while engispamming:
         controller.tap(",")
         controller.tap("y")
         controller.tap("i")
         controller.press("`")
-        controller.press(".")
-        controller.press(".")
         controller.press("a")
         controller.press("c")
         controller.release("`")
@@ -583,19 +358,28 @@ def random_mouse_w():
 def simpletail(amt=20):
     controller.press("`")
     delay = 0.04
+    s2 = 25
     time.sleep(delay)
     for _ in range(amt):
         for _ in range(3):
             ball()
-        mouse.position = (mouse.position[0] + s, mouse.position[1])
+        controller.press("`")
         time.sleep(delay)
-    mouse.position = (mouse.position[0] + 2 * s, mouse.position[1])
+        controller.press("c")
+        time.sleep(delay*3)
+        controller.release("c")
+        mouse.position = (mouse.position[0] + s2, mouse.position[1])
+        time.sleep(delay * 2.5)
+    mouse.position = (mouse.position[0] + 2 * s2, mouse.position[1])
+    pos = mouse.position
+    mouse.position = (pos[0] + 30, pos[1])
+    controller.press("`")
     time.sleep(2)
-    mouse.position = (mouse.position[0] - 2 * s, mouse.position[1])
-    for _ in range(19):
+    mouse.position = (pos[0] - s2, pos[1])
+    for _ in range(amt - 2):
         controller.press("j")
         time.sleep(delay)
-        mouse.position = (mouse.position[0] - s, mouse.position[1])
+        mouse.position = (mouse.position[0] - s2, mouse.position[1])
         time.sleep(delay)
         controller.release("j")
         time.sleep(delay)
@@ -630,28 +414,19 @@ def controllednuke():
     print("Controlled Nuke complete.")
     controller.release("`")
 
-def inputlistener():
-    cmd = input("cmd > ")
-    if cmd[0:10] == "!copypasta":
-        start_copypasta(cmd[11:])
-    elif cmd[0:4] == "!bot":
-        start_bot()
-    else:
-        print("unknown command")
-
-def start_copypasta(id2):
-    global copypasta_thread
-    if copypasta_thread is None or not copypasta_thread.is_alive():
-        copypasta_thread = threading.Thread(target=copypasta, args=(id2))
-        copypasta_thread.daemon = True
-        copypasta_thread.start()
-
-def start_arena_automation(atype):
+def start_arena_automation():
     global automation_thread
     if automation_thread is None or not automation_thread.is_alive():
-        automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay, atype))
+        automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay,))
         automation_thread.daemon = True
         automation_thread.start()
+
+def start_engispam():
+    global engispam_thread
+    if engispam_thread is None or not engispam_thread.is_alive():
+        engispam_thread = threading.Thread(target=engispam)
+        engispam_thread.daemon = True
+        engispam_thread.start()
 
 def start_brain_damage():
     global braindamage_thread
@@ -660,12 +435,12 @@ def start_brain_damage():
         braindamage_thread.daemon = True
         braindamage_thread.start()
 
-def start_tail():
-    global tail_thread
-    if tail_thread is None or not tail_thread.is_alive():
-        tail_thread = threading.Thread(target=tail)
-        tail_thread.daemon = True
-        tail_thread.start()
+def start_ball10x10():
+    global ball10x10_thread
+    if ball10x10_thread is None or not ball10x10_thread.is_alive():
+        ball10x10_thread = threading.Thread(target=ball10x10)
+        ball10x10_thread.daemon = True
+        ball10x10_thread.start()
 
 def start_randomwall():
     global randomwall_thread
@@ -694,7 +469,7 @@ def start_random_mouse_w():
         randomwall_thread.start()
 
 def on_press(key):
-    global size_automation, braindamage, ballcash, slowballs, randomwalld
+    global size_automation, braindamage, ballcash, slowballs, randomwalld, engispamming
     global ctrl6_last_time, ctrl6_armed
     global controllednuke_points, controllednuke_active
     try:
@@ -707,6 +482,7 @@ def on_press(key):
                 braindamage = False
                 randomwalld = False
                 slowballs = False
+                engispamming = False
                 # stop all threads
         elif key == keyboard.Key.ctrl_l:
             pressed_keys.add('ctrl')
@@ -716,7 +492,6 @@ def on_press(key):
                 start_controllednuke()
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
-                atype = random.randint(1, 3)
                 size_automation = True
                 print("Arena size automation is now ON.")
                 start_arena_automation()
@@ -735,7 +510,7 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='5':
             if 'ctrl' in pressed_keys:
                 print("ball square")
-                start_tail()
+                start_ball10x10()
         elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
                 now = time.time()
@@ -803,11 +578,24 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='e':
             if 'ctrl' in pressed_keys:
                 print("engispam")
-                engispam()
+                engispamming = True
+                start_engispam()
         elif hasattr(key, 'char') and key.char and key.char=='l':
             if 'ctrl' in pressed_keys:
                 print("50m score")
                 score50m()
+        elif hasattr(key, 'char') and key.char and key.char=='h':
+            if 'ctrl' in pressed_keys:
+                controller.press("`")
+                for _ in range(3000):
+                    controller.tap("h")
+                controller.release("`")
+        elif hasattr(key, 'char') and key.char and key.char=='r':
+            if 'ctrl' in pressed_keys:
+                for _ in range(200):
+                    controller.tap(Key.enter)
+                    controller.type("$arena close")
+                    controller.tap(Key.enter)
     except Exception as e:
         print(f"Error: {e}")
     
@@ -830,3 +618,4 @@ mouse_listener.start()
 
 with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
     listener.join()
+

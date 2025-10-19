@@ -1,4 +1,4 @@
-import random, time, threading, os, mss, numpy as np
+import random, time, threading, os, mss, numpy as np, re
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
@@ -6,6 +6,7 @@ from pynput.mouse import Listener as MouseListener
 import tkinter as tk
 
 length = 4
+pressed_keys = set()
 
 # Function
 global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step
@@ -121,34 +122,6 @@ def bot():
         with open("arrasbot.log", "a") as log_file:
             log_file.write(f"Screenshot saved: {filename} at {timestamp()}\n")
             log_file.close()
-
-    def inputlistener2():
-        inp = input("cmd > ")
-        if inp.lower() == "stop":
-            global working
-            working = False
-            print("Stopping bot...")
-        elif inp.lower() == "screenshot":
-            take_screenshot("manual")
-        elif inp.lower() == "status":
-            print(f"Working: {working}, Disconnected: {disconnected}, Died: {died}, Banned: {banned}")
-        elif inp.lower() == "ping":
-            pingm = getping()
-            print(f"Ping to arras.io: {pingm*1000:.2f}ms")
-        elif inp.lower() == "forcedisconnect":
-            global disconnected
-            disconnected = True
-            print("Forcing disconnect state...")
-        elif inp.lower() == "forcedeath":
-            global died
-            died = True
-            print("Forcing death state...")
-        elif inp.lower() == "forcereconnect":
-            global disconnected, died
-            disconnected = False
-            died = False
-            print("Forcing reconnect state...")
-        threading.Thread(target=inputlistener, daemon=True).start()
 
     start3 = time.time()-start3
 
@@ -302,78 +275,228 @@ def bot():
                 mouse.position = (mouse.position[0]-1, mouse.position[1])
                 lastmove = time.time()
 
-def copypasta(id):
-    global ids, copypastaing, filepaths, controller
+def replace_emojis(text):
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"
+        "\U0001F300-\U0001F5FF"
+        "\U0001F680-\U0001F6FF"
+        "\U0001F700-\U0001F77F"
+        "\U0001F780-\U0001F7FF"
+        "\U0001F800-\U0001F8FF"
+        "\U0001F900-\U0001F9FF"
+        "\U0001FA00-\U0001FA6F"
+        "\U0001FA70-\U0001FAFF"
+        "\U00002702-\U000027B0"
+        "\U000024C2-\U0001F251"
+        "]+",
+        flags=re.UNICODE
+    )
+    return emoji_pattern.sub(':e:', text)
+
+def split_sentences(filepath, max_length=60, disable_space_breaking=False):
+    sentences = []
+    with open(filepath) as file:
+        lines = file.readlines()
+        for line in lines:
+            line = line.rstrip()
+            if not line.strip():
+                continue
+            if disable_space_breaking:
+                buffer = line
+                while len(buffer) > max_length:
+                    sentences.append(buffer[:max_length])
+                    buffer = buffer[max_length:]
+                if buffer:
+                    sentences.append(buffer)
+            else:
+                words = line.split()
+                buffer = ""
+                for word in words:
+                    if buffer:
+                        if len(buffer) + 1 + len(word) > max_length:
+                            sentences.append(buffer)
+                            buffer = word
+                        else:
+                            buffer += " " + word
+                    else:
+                        if len(word) > max_length:
+                            sentences.append(word[:max_length])
+                            buffer = word[max_length:]
+                        else:
+                            buffer = word
+                if buffer:
+                    sentences.append(buffer)
+    return sentences
+
+# --- Copypasta and Bot Logic ---
+
+copypasta_dir = '/Users/alexoh/Documents/GitHub/arrastools/copypastas/'
+ids = []
+filepaths = []
+for fname in os.listdir(copypasta_dir):
+    fpath = os.path.join(copypasta_dir, fname)
+    if os.path.isfile(fpath) and fname.endswith('.txt'):
+        ids.append(fname[:-4])
+        filepaths.append(fpath)
+
+copypastaing = False
+thread = None
+controller = KeyboardController()
+current_chars = 0
+current_percent = 0
+pause_event = threading.Event()
+pause_event.set()
+
+# Bot state
+working = False
+disconnected = False
+died = False
+banned = False
+
+def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_text=False):
+    time.sleep(2)
+    global ids, copypastaing, filepaths, controller, pause_event, current_chars, current_percent
     if id in ids:
         index = ids.index(id)
         filepath = filepaths[index]
-        pos = 0
         copypastaing = True
         start = time.time()
         if not os.path.exists(filepath):
             print(f"File not found: {filepath}")
             return
-        with open(filepath) as file:
-            filer = file.read().replace('\n', r' [newline] ')
-            leng = len(filer)
+        sentences = split_sentences(filepath, disable_space_breaking=disable_space_breaking)
+        leng = sum(len(replace_emojis(s)) for s in sentences)
+        pos = 0
+        if prepare:
             file_size_bytes = os.path.getsize(filepath)
             file_size_kb = file_size_bytes / 1024
             end = time.time()
             controller.tap(Key.enter)
             time.sleep(0.1)
-            controller.type(f"Loaded file from filepath > [{filepath[15:len(filepath)]}] <")
+            controller.type(f"Arras Copypasta Utility [ACU] > v1.5.1 < loading...")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Loaded > {leng} characters < | > [{file_size_kb:.2f}KB] <")
+            controller.type(f"Filepath: > [.../{filepath[53:]}] < | Loaded > {leng} chars <")
             time.sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-            controller.type(f"Time taken > [{round((end-start)*1000, 3)}ms] < Waiting for chat delay...")
+            controller.type(f"Size: > [{file_size_kb:.2f}KB] < | Time taken > [{round((end-start)*1000, 3)}ms] <")
             time.sleep(0.1)
             controller.tap(Key.enter)
             time.sleep(10)
-            endf = False
-            while copypastaing and not endf and copypastas:
-                for _ in range(3):
-                    if pos+58 < leng-1:
-                        rgb = get_pixel_rgb(27, 930)
-                        if rgb == (176, 100, 81):
-                            time.sleep(3)
-                            controller.tap(Key.enter)
-                        controller.tap(Key.enter)
-                        time.sleep(0.1)
-                        controller.type(filer[pos:pos+58])
-                        time.sleep(0.1)
-                        controller.tap(Key.enter)
-                        pos+=58
-                        rgb = get_pixel_rgb(27, 930)
-                        if rgb == (176, 100, 81):
-                            time.sleep(3)
-                            controller.tap(Key.enter)
-                    else:
-                        endf = True
-                        controller.type(filer[pos:(leng-1)])
-                        print("End of file")
-                    time.sleep(3.1)
-            if copypastas:
+        endf = False
+        for sentence in sentences:
+            if not copypastaing:
+                break
+            pause_event.wait()
+            controller.tap(Key.enter)
+            time.sleep(0.1)
+            sentence_no_emoji = replace_emojis(sentence)
+            controller.type(sentence_no_emoji)
+            time.sleep(0.1)
+            controller.tap(Key.enter)
+            pos += len(sentence_no_emoji)
+            current_chars = pos
+            current_percent = (current_chars / leng) * 100 if leng > 0 else 0
+            time.sleep(3.3)
+            endf = True
+        chars_typed = pos if pos < leng else leng
+        percent_typed = (chars_typed / leng) * 100 if leng > 0 else 0
+        if not endf:
+            print(f"Forced stop at > [{chars_typed}] characters [{percent_typed:.2f}%]")
+            controller.tap(Key.enter)
+            time.sleep(0.1)
+            controller.type(f"Forced stop at > [{chars_typed}] characters [{percent_typed:.2f}%]")
+            time.sleep(0.1)
+        else:
+            if not disable_finish_text:
+                print(f"Copypasta of > [{leng}] characters < finished")
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-                controller.type(f"Copypasta of > {leng} characters < finished")
+                controller.type(f"Copypasta of > [{leng}] characters < finished")
                 time.sleep(0.1)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                print(f"Copypasta of > {leng} characters < finished")
             else:
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                controller.type("copypasta_thread forced shutdown")
-                time.sleep(0.1)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                print("copypasta_thread forced shutdown")
+                print(f"Copypasta of > [{leng}] characters < finished (without finish text)")
+        if not disable_finish_text:
+            controller.tap(Key.enter)
+            time.sleep(0.1)
+            time.sleep(3.5)
+            controller.tap(Key.enter)
+            time.sleep(0.1)
+            print(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
+            controller.type(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
+            time.sleep(0.1)
+            controller.tap(Key.enter)
+            time.sleep(0.1)
+        copypastaing = False
+
+def bot_command(cmd):
+    global working, disconnected, died, banned
+    if cmd == "start":
+        if not working:
+            working = True
+            print("Bot started.")
+            bot_thread = threading.Thread(target=bot, daemon=True)
+            bot_thread.start()
+        else:
+            print("Bot already running.")
+    elif cmd == "forcedisconnect":
+        disconnected = True
+        print("Forcing disconnect state...")
+    elif cmd == "forcedeath":
+        died = True
+        print("Forcing death state...")
+    elif cmd == "forcereconnect":
+        disconnected = False
+        died = False
+        print("Forcing reconnect state...")
+    elif cmd == "status":
+        print(f"Working: {working}, Disconnected: {disconnected}, Died: {died}, Banned: {banned}")
+    elif cmd == "stop":
+        working = False
+        print("Bot stopped.")
+        bot_thread.kill()
+        bot_thread = None
+    else:
+        print("Unknown bot command.")
+
+def inputlistener():
+    while True:
+        cmd = input("cmd > ").strip()
+        if cmd.startswith("!copypasta"):
+            id_input = cmd[11:].strip()
+            prepare_input = input("Prepare mode? (true/false) > ").strip().lower()
+            disable_space_breaking_input = input("Disable space breaking? (true/false) > ").strip().lower()
+            disable_finish_text_input = input("Disable finish text? (true/false) > ").strip().lower()
+
+            prepare = prepare_input == 'true'
+            disable_space_breaking = disable_space_breaking_input == 'true'
+            disable_finish_text = disable_finish_text_input == 'true'
+
+            if id_input in ids:
+                if copypastaing:
+                    print("Already copypastaing, wait until finished or press Escape to stop")
+                else:
+                    thread = threading.Thread(target=copypasta, args=(id_input, prepare, disable_space_breaking, disable_finish_text))
+                    thread.start()
+            else:
+                print("Invalid id, available ids are:")
+                print(ids)
+                print("Using 'char' as default id for testing purposes")
+                if copypastaing:
+                    print("Already copypastaing, wait until finished or press Escape to stop")
+                else:
+                    thread = threading.Thread(target=copypasta, args=('char', prepare, disable_space_breaking, disable_finish_text))
+                    thread.start()
+        elif cmd.startswith("!bot"):
+            subcmd = cmd[5:].strip().lower()
+            bot_command(subcmd)
+        else:
+            print("Unknown command. Use !copypasta <id> or !bot <subcommand>.")
 
 def arena_size_automation(interval_ms=20, atype = 1):
     global size_automation
@@ -389,8 +512,6 @@ def arena_size_automation(interval_ms=20, atype = 1):
             time.sleep(0.05)
             controller.tap(Key.enter)
             time.sleep(interval_ms / 1000.0)
-    except KeyboardInterrupt:
-        pass
 
 
 def click_positions(pos_list, delay=0.5):
@@ -470,7 +591,7 @@ def slowball():
         time.sleep(0.04)
     controller.release("`")
 
-def ball10x10():
+def tail():
     controller.press("`")
     time.sleep(0.1)
     controller.tap("0")
@@ -630,6 +751,19 @@ def slowwall():
         time.sleep(0.08)
     controller.release("`")
 
+def random_mouse_w():
+    global randomwalld
+    randomwalld = True
+    while randomwalld:
+        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
+        time.sleep(0.02)
+        pos = mouse.position
+        controller.press("w")
+        mouse.position = (pos[0]+random.randint(-5, 5), pos[1]+random.randint(-5, 5))
+        time.sleep(0.05)
+        controller.release("w")
+        time.sleep(0.02)
+
 def randomwall():
     global randomwall
     controller.press("`")
@@ -679,14 +813,28 @@ def controllednuke():
     print("Controlled Nuke complete.")
     controller.release("`")
 
-def inputlistener():
-    cmd = input("cmd > ")
-    if cmd[0:10] == "!copypasta":
-        start_copypasta(cmd[11:])
-    elif cmd[0:4] == "!bot":
-        start_bot()
-    else:
-        print("unknown command")
+def simpletail(amt=20):
+    controller.press("`")
+    delay = 0.04
+    time.sleep(delay)
+    for _ in range(amt):
+        for _ in range(3):
+            ball()
+        mouse.position = (mouse.position[0] + s, mouse.position[1])
+        time.sleep(delay)
+    mouse.position = (mouse.position[0] + 2 * s, mouse.position[1])
+    time.sleep(2)
+    mouse.position = (mouse.position[0] - 2 * s, mouse.position[1])
+    for _ in range(19):
+        controller.press("j")
+        time.sleep(delay)
+        mouse.position = (mouse.position[0] - s, mouse.position[1])
+        time.sleep(delay)
+        controller.release("j")
+        time.sleep(delay)
+    controller.release("`")
+
+
 
 def start_copypasta(id2):
     global copypasta_thread
@@ -695,7 +843,7 @@ def start_copypasta(id2):
         copypasta_thread.daemon = True
         copypasta_thread.start()
 
-def start_arena_automation(atype):
+def start_arena_automation(atype = 1):
     global automation_thread
     if automation_thread is None or not automation_thread.is_alive():
         automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay, atype))
@@ -734,6 +882,13 @@ def start_controllednuke():
     thread = threading.Thread(target=controllednuke)
     thread.daemon = True
     thread.start()
+
+def start_random_mouse_w():
+    global randomwall_thread
+    if randomwall_thread is None or not randomwall_thread.is_alive():
+        randomwall_thread = threading.Thread(target=random_mouse_w)
+        randomwall_thread.daemon = True
+        randomwall_thread.start()
 
 def on_press(key):
     global size_automation, braindamage, ballcash, slowballs, randomwalld
@@ -793,6 +948,10 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("Wall crashing...")
                 wallcrash()
+        elif hasattr(key, 'char') and key.char and key.char=='8':
+            if 'ctrl' in pressed_keys:
+                print("simple tail")
+                simpletail()
         elif hasattr(key, 'char') and key.char and key.char=='9':
             if 'ctrl' in pressed_keys:
                 print("NUKE GO BRRRRRRRRRR")
