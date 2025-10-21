@@ -12,7 +12,6 @@ length = 4
 # Function
 global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step
 step = 20
-arena_size_delay=50
 s = 25 #ball spacing in px
 size_automation = False
 engispamming = False
@@ -36,6 +35,11 @@ controllednuke_active = False
 # Add these globals near the top
 ctrl6_last_time = 0
 ctrl6_armed = False
+
+# new ctrl+1 multi-press globals
+ctrl1_count = 0
+ctrl1_first_time = 0.0
+ctrl1_thread = None
 
 def create_number_input_window(title):
     def handle_return(event=None):
@@ -61,26 +65,59 @@ def create_number_input_window(title):
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
 
-def arena_size_automation(interval_ms=20):
+def arena_size_automation(atype = 1):
+    time.sleep(2)
     global size_automation
-    try:
+    if atype == 1:
         while size_automation:
             x = generate_even()
             y = generate_even()
             print(f"Sending command: $arena size {x} {y}")
             command = f"$arena size {x} {y}"
-            controller.press(Key.enter)
-            controller.release(Key.enter)
-            time.sleep(0.05)
+            controller.tap(Key.enter)
             controller.type(command)
-            time.sleep(0.05)
-            controller.press(Key.enter)
-            controller.release(Key.enter)
-            time.sleep(interval_ms / 1000.0)
-    except KeyboardInterrupt:
-        pass
-
-
+            controller.tap(Key.enter)
+    elif atype == 2:
+        while size_automation:
+        # x and y go from 2 to 1024 in steps of 2
+            x = 2
+            y = 2
+            direction_x = 2
+            direction_y = 2
+            while size_automation:
+                print(f"Sending command: $arena size {x} {y}")
+                command = f"$arena size {x} {y}"
+                controller.tap(Key.enter)
+                controller.type(command)
+                controller.tap(Key.enter)
+                x += direction_x
+                y += direction_y
+                if x >= 1024 or x <= 2:
+                    direction_x *= -1
+                if y >= 1024 or y <= 2:
+                    direction_y *= -1
+    elif atype == 3:
+        while size_automation:
+            #x goes from 2 to 1024, y goes from 1024 to 2
+            x = 2
+            y = 1024
+            direction_x = 2
+            direction_y = -2
+            while size_automation:
+                print(f"Sending command: $arena size {x} {y}")
+                command = f"$arena size {x} {y}"
+                controller.tap(Key.enter)
+                controller.type(command)
+                controller.tap(Key.enter)
+                x += direction_x
+                y += direction_y
+                if x >= 1024 or x <= 2:
+                    direction_x *= -1
+                if y >= 1024 or y <= 2:
+                    direction_y *= -1
+    else:
+        print(f"Unknown arena automation type: {atype}")
+        
 def click_positions(pos_list, delay=0.5):
     mouse = MouseController()
     for x, y in pos_list:
@@ -112,7 +149,7 @@ def wallcrash():
 
 def nuke():
     controller.press("`")
-    controller.type("wk"*200)
+    controller.type("wk"*400)
     controller.release("`")
 
 def shape():
@@ -124,20 +161,16 @@ def ballcrash():
     controller.press("`")
     for _ in range(100):
         for _ in range(100):
-            controller.press("c")
-            controller.release("c")
-            controller.press("h")
-            controller.release("h")
+            controller.tap("c")
+            controller.tap("h")
     controller.release("`")
 
 def miniballcrash():
     controller.press("`")
     for _ in range(25):
         for _ in range(100):
-            controller.press("c")
-            controller.release("c")
-            controller.press("h")
-            controller.release("h")
+            controller.tap("c")
+            controller.tap("h")
     controller.release("`")
 
 def balls(amt = 210):
@@ -252,7 +285,7 @@ def brain_damage():
 
 def score():
     controller.press("`")
-    controller.type("n"*400)
+    controller.type("n"*20000)
     controller.release("`")
 
 def benchmark(amt = 5000):
@@ -414,10 +447,12 @@ def controllednuke():
     print("Controlled Nuke complete.")
     controller.release("`")
 
-def start_arena_automation():
-    global automation_thread
+def start_arena_automation(atype = 1):
+    global automation_thread, size_automation
+    # ensure the running flag is set before starting the thread
+    size_automation = True
     if automation_thread is None or not automation_thread.is_alive():
-        automation_thread = threading.Thread(target=arena_size_automation, args=(arena_size_delay,))
+        automation_thread = threading.Thread(target=arena_size_automation, args=(atype,))
         automation_thread.daemon = True
         automation_thread.start()
 
@@ -468,10 +503,25 @@ def start_random_mouse_w():
         randomwall_thread.daemon = True
         randomwall_thread.start()
 
+def _ctrl1_waiter():
+    global ctrl1_count, ctrl1_first_time, ctrl1_thread
+    # wait 2 seconds from first press, then act on count
+    first = ctrl1_first_time
+    time.sleep(2.0)
+    # ensure no newer sequence started
+    if time.time() - first >= 2.0:
+        atype = min(max(ctrl1_count, 1), 3)  # clamp 1..3
+        print(f"Detected {ctrl1_count} ctrl+1 presses -> starting arena automation type {atype}")
+        start_arena_automation(int(atype))
+        ctrl1_count = 0
+        ctrl1_first_time = 0.0
+        ctrl1_thread = None
+
 def on_press(key):
     global size_automation, braindamage, ballcash, slowballs, randomwalld, engispamming
     global ctrl6_last_time, ctrl6_armed
     global controllednuke_points, controllednuke_active
+    global ctrl1_count, ctrl1_first_time, ctrl1_thread
     try:
         if key == keyboard.Key.esc:
             if 'ctrl' in pressed_keys:
@@ -484,7 +534,7 @@ def on_press(key):
                 slowballs = False
                 engispamming = False
                 # stop all threads
-        elif key == keyboard.Key.ctrl_l:
+        elif key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
             pressed_keys.add('ctrl')
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
@@ -492,9 +542,31 @@ def on_press(key):
                 start_controllednuke()
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
-                size_automation = True
-                print("Arena size automation is now ON.")
-                start_arena_automation()
+                # count ctrl+1 presses within 2 seconds to select atype 1/2/3
+                now = time.time()
+                if ctrl1_count == 0:
+                    ctrl1_first_time = now
+                    ctrl1_count = 1
+                    # spawn waiter thread
+                    ctrl1_thread = threading.Thread(target=_ctrl1_waiter)
+                    ctrl1_thread.daemon = True
+                    ctrl1_thread.start()
+                    print("ctrl+1 detected (1) — press again within 2s to change mode")
+                else:
+                    # if within 2s of first press, increment count (cap at 3)
+                    if now - ctrl1_first_time <= 2.0:
+                        ctrl1_count = min(ctrl1_count + 1, 3)
+                        print(f"ctrl+1 detected ({ctrl1_count})")
+                    else:
+                        # too late, start new sequence
+                        ctrl1_first_time = now
+                        ctrl1_count = 1
+                        # restart waiter thread if previous finished
+                        if ctrl1_thread is None or not ctrl1_thread.is_alive():
+                            ctrl1_thread = threading.Thread(target=_ctrl1_waiter)
+                            ctrl1_thread.daemon = True
+                            ctrl1_thread.start()
+                        print("ctrl+1 detected (1) — press again within 2s to change mode")
         elif hasattr(key, 'char') and key.char and key.char=='2':
             if 'ctrl' in pressed_keys:
                 print("Conqueror quickstart initiated.")
@@ -600,7 +672,7 @@ def on_press(key):
         print(f"Error: {e}")
     
 def on_release(key):
-    if key == keyboard.Key.ctrl_l:
+    if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
         pressed_keys.discard('ctrl')
     elif key in pressed_keys:
         pressed_keys.remove(key)

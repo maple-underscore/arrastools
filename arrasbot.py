@@ -38,17 +38,10 @@ def getping():
     return ping(target)
 
 def get_pixel_rgb(x, y):
-    """
-    Read a pixel using coordinates relative to the selected monitor (top-left = 0,0),
-    adjusted for Retina scale, and offset by that monitor's global left/top.
-    """
-    mon = sct.monitors[MONITOR_INDEX]
-    gx = int(mon["left"] + x * SCALE)
-    gy = int(mon["top"] + y * SCALE)
-    bbox = {"top": gy, "left": gx, "width": 1, "height": 1}
-    shot = sct.grab(bbox)
-    r, g, b = shot.rgb[0], shot.rgb[1], shot.rgb[2]
-    return (int(r), int(g), int(b))
+    bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
+    img = sct.grab(bbox)
+    pixel = np.array(img.pixel(0, 0))
+    return tuple(int(v) for v in pixel[:3])
 
 def color_close(c1, c2, tol=6):
     # tolerant RGB compare
