@@ -154,7 +154,7 @@ def nuke():
 
 def shape():
     controller.press("`")
-    controller.type("f"*100)
+    controller.type("f"*1000)
     controller.release("`")
 
 def ballcrash():
@@ -626,7 +626,7 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("200 walls")
                 walls()
-        elif hasattr(key, 'char') and key.char and key.char=='s':
+        elif hasattr(key, 'char') and key.char and key.char=='z':
             if 'ctrl' in pressed_keys:
                 slowwall()
         elif hasattr(key, 'char') and key.char and key.char=='c':
@@ -668,6 +668,30 @@ def on_press(key):
                     controller.tap(Key.enter)
                     controller.type("$arena close")
                     controller.tap(Key.enter)
+        elif hasattr(key, 'char') and key.char and key.char=='s':
+            if 'ctrl' in pressed_keys:
+                time.sleep(0.5)
+                print("quicksetup")
+                controller.press("`")
+                time.sleep(0.05)
+                controller.tap("i")
+                controller.press("s")
+                for _ in range(20):
+                    controller.tap("h")
+                time.sleep(0.05)
+                controller.tap("m")
+                controller.release("s")
+                controller.tap("s")
+                time.sleep(0.05)
+                controller.press("a")
+                time.sleep(0.05)
+                controller.tap("c")
+                controller.tap("w")
+                controller.tap("e")
+                controller.tap("t")
+                controller.tap("o")
+                controller.release("a")
+                controller.release("`")
     except Exception as e:
         print(f"Error: {e}")
     
