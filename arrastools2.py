@@ -1,9 +1,20 @@
 import random, time, threading, os, mss, numpy as np, re
+import platform
+from pathlib import Path
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 from pynput.mouse import Listener as MouseListener
 import tkinter as tk
+
+# Detect platform
+PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
+print(f"Arrastools2 running on: {PLATFORM}")
+
+# Platform notes
+if PLATFORM not in ('darwin', 'linux', 'windows'):
+    print(f"Warning: Platform '{PLATFORM}' may have limited support.")
+    print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
 
 length = 4
 pressed_keys = set()
@@ -16,9 +27,13 @@ ids = ['longest', 'long', 'mcdonalds', 'constitution', 'roast', 'rage', 'random'
 filepaths = []
 s = 25 #ball spacing in px
 
-# dynamic filepaths
+# Use pathlib for cross-platform file paths
+script_dir = Path(__file__).parent
+copypasta_dir = script_dir / 'copypastas'
+
+# Build filepaths dynamically and platform-agnostic
 for idx in ids:
-    filepaths.append(f'/Users/alexoh/Desktop/vsc/copypastas/{idx}.txt')
+    filepaths.append(str(copypasta_dir / f'{idx}.txt'))
 
 #defs
 copypastaing = False
@@ -890,6 +905,23 @@ def start_random_mouse_w():
         randomwall_thread.daemon = True
         randomwall_thread.start()
 
+# Normalize modifier detection across platforms
+def is_ctrl(k):
+    return k in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r)
+
+def is_alt(k):
+    # On macOS, Option is alt; on other platforms, Alt is alt
+    return k in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r)
+
+def is_modifier_for_arrow_nudge(k):
+    """Return True if this key should trigger 1px arrow nudges.
+    
+    Platform-specific:
+    - macOS: Option (alt)
+    - Windows/Linux: Alt
+    """
+    return is_alt(k)
+
 def on_press(key):
     global size_automation, braindamage, ballcash, slowballs, randomwalld
     global ctrl6_last_time, ctrl6_armed
@@ -905,8 +937,22 @@ def on_press(key):
                 randomwalld = False
                 slowballs = False
                 # stop all threads
-        elif key == keyboard.Key.ctrl_l:
+        elif is_ctrl(key):
             pressed_keys.add('ctrl')
+        elif is_alt(key):
+            pressed_keys.add('alt')
+        elif key in (keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right):
+            if 'alt' in pressed_keys:
+                x, y = mouse.position
+                if key == keyboard.Key.up:
+                    mouse.position = (x, y - 1)
+                elif key == keyboard.Key.down:
+                    mouse.position = (x, y + 1)
+                elif key == keyboard.Key.left:
+                    mouse.position = (x - 1, y)
+                elif key == keyboard.Key.right:
+                    mouse.position = (x + 1, y)
+                return
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
                 print("Starting controlled nuke...")
@@ -1001,8 +1047,10 @@ def on_press(key):
         print(f"Error: {e}")
     
 def on_release(key):
-    if key == keyboard.Key.ctrl_l:
+    if is_ctrl(key):
         pressed_keys.discard('ctrl')
+    elif is_alt(key):
+        pressed_keys.discard('alt')
     elif key in pressed_keys:
         pressed_keys.remove(key)
 

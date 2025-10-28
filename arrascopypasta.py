@@ -1,8 +1,20 @@
 import time, threading, os, mss, numpy as np
+import platform
+from pathlib import Path
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 import re
+
+# Detect platform
+PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
+print(f"Arras Copypasta running on: {PLATFORM}")
+
+# Platform notes
+if PLATFORM not in ('darwin', 'linux', 'windows'):
+    print(f"Warning: Platform '{PLATFORM}' may have limited support.")
+    print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
+
 #each line should be 60 chars long
 global ids, copypastaing, controller, thread, filepaths, current_chars, current_percent
 sct = mss.mss()
@@ -11,14 +23,24 @@ def get_pixel_rgb(x, y):
     img = sct.grab(bbox)
     pixel = np.array(img.pixel(0, 0))
     return tuple(int(v) for v in pixel[:3])
-copypasta_dir = '/Users/alexoh/Documents/GitHub/arrastools/copypastas/'
+
+# Use pathlib for cross-platform file paths
+# Get script directory and locate copypastas folder relative to it
+script_dir = Path(__file__).parent
+copypasta_dir = script_dir / 'copypastas'
+
+# Ensure copypastas directory exists
+if not copypasta_dir.exists():
+    print(f"Warning: copypastas directory not found at {copypasta_dir}")
+    print("Creating directory...")
+    copypasta_dir.mkdir(parents=True, exist_ok=True)
+
 ids = []
 filepaths = []
-for fname in os.listdir(copypasta_dir):
-    fpath = os.path.join(copypasta_dir, fname)
-    if os.path.isfile(fpath) and fname.endswith('.txt'):
-        ids.append(fname[:-4])  # Remove '.txt' extension for id
-        filepaths.append(fpath)
+for fpath in copypasta_dir.glob('*.txt'):
+    if fpath.is_file():
+        ids.append(fpath.stem)  # Get filename without extension
+        filepaths.append(str(fpath))  # Convert Path to string for compatibility
 copypastaing = False
 thread = None
 controller = KeyboardController()

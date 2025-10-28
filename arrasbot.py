@@ -1,5 +1,6 @@
 import mss, time, numpy as np, os
 import mss.tools
+import platform
 from datetime import datetime
 from pynput import mouse
 from pynput.keyboard import Controller as KeyboardController, Key
@@ -8,6 +9,15 @@ import threading
 from threading import Thread
 from pathlib import Path
 from ping3 import ping
+
+# Detect platform
+PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
+print(f"Arrasbot running on: {PLATFORM}")
+
+# Platform notes
+if PLATFORM not in ('darwin', 'linux', 'windows'):
+    print(f"Warning: Platform '{PLATFORM}' may have limited support.")
+    print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
 
 time.sleep(2)
 
@@ -21,7 +31,8 @@ disconnected = True
 died = False
 banned = False
 MONITOR_INDEX = 1          # 1 = main; use dbgmon to list all
-SCALE = 2                  # 2 on Retina; 1 on non-Retina
+SCALE = 2                  # 2 on Retina displays (macOS); 1 on standard displays (Windows/Linux/non-Retina)
+                           # Adjust based on your display's pixel density
 monitor = sct.monitors[MONITOR_INDEX]
 start1 = time.time()-start1
 

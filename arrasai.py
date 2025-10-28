@@ -1,4 +1,5 @@
 import numpy as np
+import platform
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -17,6 +18,16 @@ import traceback
 import pytesseract
 from PIL import Image
 import re
+
+# Detect platform
+PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
+print(f"Arras AI running on: {PLATFORM}")
+
+# Platform notes
+if PLATFORM not in ('darwin', 'linux', 'windows'):
+    print(f"Warning: Platform '{PLATFORM}' may have limited support.")
+    print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
+    print("NOTE: Tesseract OCR must be installed separately on your system.")
 
 # Add global escape flag
 keyboard_controller = KeyboardController()
@@ -54,6 +65,9 @@ def start_keyboard_listener():
     keyboard_listener.start()
 
 # Game region polygon
+# NOTE: These coordinates are for a specific screen resolution/layout.
+# Adjust GAME_REGION based on your display resolution and scaling.
+# Use pixel detection tools to find your game boundaries.
 GAME_REGION = Polygon([
     (1701.453125, 356.5390625), 
     (1447.49609375, 361.4921875), 

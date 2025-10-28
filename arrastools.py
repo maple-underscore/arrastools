@@ -1,10 +1,24 @@
 import random
 import time
 import threading
+import platform
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
 from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
 import tkinter as tk
+
+# Detect platform
+PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'android'
+print(f"Running on: {PLATFORM}")
+
+# Platform notes:
+# - macOS: Ctrl hotkeys work; Option+Arrow for 1px nudges
+# - Linux: Ctrl hotkeys work; Alt+Arrow for 1px nudges
+# - Windows: Ctrl hotkeys work; Alt+Arrow for 1px nudges
+# - Android: Limited support (pynput may not work on all devices)
+if PLATFORM not in ('darwin', 'linux', 'windows'):
+    print(f"Warning: Platform '{PLATFORM}' may have limited support.")
+    print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
 
 length = 4
 
@@ -176,7 +190,7 @@ def miniballcrash():
 
 def balls(amt = 210):
     controller.press("`")
-    controller.type("ch"*amt)
+   
     controller.release("`")
 
 def walls():
@@ -516,6 +530,24 @@ def _ctrl1_waiter():
         ctrl1_first_time = 0.0
         ctrl1_thread = None
 
+# Normalize modifier detection across platforms
+def is_ctrl(k):
+    return k in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r)
+
+def is_alt(k):
+    # On macOS, Option is alt; on other platforms, Alt is alt
+    return k in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r)
+
+def is_modifier_for_arrow_nudge(k):
+    """Return True if this key should trigger 1px arrow nudges.
+    
+    Platform-specific:
+    - macOS: Option (alt)
+    - Windows/Linux: Alt
+    - Android: Alt (if supported)
+    """
+    return is_alt(k)
+
 def on_press(key):
     global size_automation, braindamage, ballcash, slowballs, randomwalld, engispamming
     global ctrl6_last_time, ctrl6_armed
@@ -533,8 +565,23 @@ def on_press(key):
                 slowballs = False
                 engispamming = False
                 # stop all threads
-        elif key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+        elif is_ctrl(key):
             pressed_keys.add('ctrl')
+        elif is_alt(key):
+            pressed_keys.add('alt')
+            # print("alt down")  # uncomment to debug
+        elif key in (keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right):
+            if 'alt' in pressed_keys:
+                x, y = mouse.position
+                if key == keyboard.Key.up:
+                    mouse.position = (x, y - 1)
+                elif key == keyboard.Key.down:
+                    mouse.position = (x, y + 1)
+                elif key == keyboard.Key.left:
+                    mouse.position = (x - 1, y)
+                elif key == keyboard.Key.right:
+                    mouse.position = (x + 1, y)
+                return
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
                 print("Starting controlled nuke...")
@@ -695,8 +742,11 @@ def on_press(key):
         print(f"Error: {e}")
     
 def on_release(key):
-    if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+    if is_ctrl(key):
         pressed_keys.discard('ctrl')
+    elif is_alt(key):
+        pressed_keys.discard('alt')
+        # print("alt up")  # uncomment to debug
     elif key in pressed_keys:
         pressed_keys.remove(key)
 
