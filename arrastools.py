@@ -2,9 +2,8 @@ import random
 import time
 import threading
 from pynput import keyboard
-from pynput.keyboard import Controller as KeyboardController, Key
-from pynput.mouse import Controller as MouseController, Button
-from pynput.mouse import Listener as MouseListener
+from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
+from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
 import tkinter as tk
 
 length = 4
@@ -128,6 +127,8 @@ def click_positions(pos_list, delay=0.5):
         time.sleep(delay)
 
 def conq_quickstart():
+    for _ in range(50):
+        controller.tap("n")
     controller.type("kyyv")
     mouse = MouseController()
     pos = mouse.position
@@ -149,12 +150,12 @@ def wallcrash():
 
 def nuke():
     controller.press("`")
-    controller.type("wk"*400)
+    controller.type("wk"*40)
     controller.release("`")
 
 def shape():
     controller.press("`")
-    controller.type("f"*1000)
+    controller.type("f"*500)
     controller.release("`")
 
 def ballcrash():
@@ -289,8 +290,6 @@ def score():
     controller.release("`")
 
 def benchmark(amt = 5000):
-    from pynput.keyboard import Listener as KeyboardListener, Key
-
     shift_pressed = threading.Event()
 
     def on_press(key):
@@ -409,7 +408,7 @@ def simpletail(amt=20):
     controller.press("`")
     time.sleep(2)
     mouse.position = (pos[0] - s2, pos[1])
-    for _ in range(amt - 2):
+    for _ in range(amt - 1):
         controller.press("j")
         time.sleep(delay)
         mouse.position = (mouse.position[0] - s2, mouse.position[1])
