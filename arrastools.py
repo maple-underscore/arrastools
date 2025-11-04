@@ -54,6 +54,9 @@ ctrl1_count = 0
 ctrl1_first_time = 0.0
 ctrl1_thread = None
 
+# NEW: bind slowballs to Left Shift when enabled via Ctrl+C
+slowball_shift_bind = False
+
 def create_number_input_window(title):
     def handle_return(event=None):
         try:
@@ -170,12 +173,12 @@ def nuke():
 def shape():
     controller.press("`")
     controller.type("f"*500)
-    controller.release("`")
+    #controller.release("`")
 
 def ballcrash():
     controller.press("`")
-    for _ in range(100):
-        for _ in range(100):
+    for _ in range(150):
+        for _ in range(150):
             controller.tap("c")
             controller.tap("h")
     controller.release("`")
@@ -190,7 +193,9 @@ def miniballcrash():
 
 def balls(amt = 210):
     controller.press("`")
-   
+    for _ in range(amt):
+        controller.tap("c")
+        controller.tap("h")
     controller.release("`")
 
 def walls():
@@ -553,8 +558,10 @@ def on_press(key):
     global ctrl6_last_time, ctrl6_armed
     global controllednuke_points, controllednuke_active
     global ctrl1_count, ctrl1_first_time, ctrl1_thread
+    global slowball_shift_bind
     try:
-        if key == keyboard.Key.esc:
+        # Use Right Shift instead of Escape to stop scripts
+        if key == keyboard.Key.shift_r:
             if 'ctrl' in pressed_keys:
                 print("estop")
                 exit(0)
@@ -564,6 +571,8 @@ def on_press(key):
                 randomwalld = False
                 slowballs = False
                 engispamming = False
+                slowball_shift_bind = False
+                print("nstop")
                 # stop all threads
         elif is_ctrl(key):
             pressed_keys.add('ctrl')
@@ -582,9 +591,16 @@ def on_press(key):
                 elif key == keyboard.Key.right:
                     mouse.position = (x + 1, y)
                 return
+        # NEW: pressing Left Shift starts slowballs if binding is enabled
+        elif key == keyboard.Key.shift_l:
+            if slowball_shift_bind:
+                if not slowballs:
+                    print("art on")
+                slowballs = True
+                start_slowball()
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
-                print("Starting controlled nuke...")
+                print("cnuke")
                 start_controllednuke()
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
@@ -597,7 +613,7 @@ def on_press(key):
                     ctrl1_thread = threading.Thread(target=_ctrl1_waiter)
                     ctrl1_thread.daemon = True
                     ctrl1_thread.start()
-                    print("ctrl+1 detected (1) — press again within 2s to change mode")
+                    print("arena scrip")
                 else:
                     # if within 2s of first press, increment count (cap at 3)
                     if now - ctrl1_first_time <= 2.0:
@@ -612,15 +628,15 @@ def on_press(key):
                             ctrl1_thread = threading.Thread(target=_ctrl1_waiter)
                             ctrl1_thread.daemon = True
                             ctrl1_thread.start()
-                        print("ctrl+1 detected (1) — press again within 2s to change mode")
+                        print("arena script")
         elif hasattr(key, 'char') and key.char and key.char=='2':
             if 'ctrl' in pressed_keys:
-                print("Conqueror quickstart initiated.")
+                print("conq")
                 conq_quickstart()
         elif hasattr(key, 'char') and key.char and key.char=='3':
             if 'ctrl' in pressed_keys:
                 braindamage = True
-                print("Brain damage function called.")
+                print("bdmg")
                 start_brain_damage()
         elif hasattr(key, 'char') and key.char and key.char=='4':
             if 'ctrl' in pressed_keys:
@@ -637,12 +653,12 @@ def on_press(key):
                     ballcrash()
                     ctrl6_armed = False
                 else:
-                    print("Press ctrl+6 again within 5 seconds to confirm death by ball.")
+                    print("crasharmed")
                     ctrl6_armed = True
                     ctrl6_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='7':
             if 'ctrl' in pressed_keys:
-                print("Wall crashing...")
+                print("wallcrash")
                 wallcrash()
         elif hasattr(key, 'char') and key.char and key.char=='8':
             if 'ctrl' in pressed_keys:
@@ -658,7 +674,7 @@ def on_press(key):
                 shape() 
         elif hasattr(key, 'char') and key.char and key.char=='d':
             if 'ctrl' in pressed_keys:
-                print("Random mouse + w abuse started.")
+                print("randomdrag")
                 start_random_mouse_w()
         elif hasattr(key, 'char') and key.char and key.char=='n':
             if 'ctrl' in pressed_keys:
@@ -677,9 +693,10 @@ def on_press(key):
                 slowwall()
         elif hasattr(key, 'char') and key.char and key.char=='c':
             if 'ctrl' in pressed_keys:
-                print("slow balls")
-                slowballs = True
-                start_slowball()
+                # NEW: enable binding to Left Shift instead of starting immediately
+                slowball_shift_bind = True
+                slowballs = False  # ensure idle until Left Shift is pressed
+                print("toggle art")
         elif hasattr(key, 'char') and key.char and key.char=='m':
             if 'ctrl' in pressed_keys:
                 print("benchmarking...")
@@ -742,11 +759,18 @@ def on_press(key):
         print(f"Error: {e}")
     
 def on_release(key):
+    global slowballs, slowball_shift_bind
     if is_ctrl(key):
         pressed_keys.discard('ctrl')
     elif is_alt(key):
         pressed_keys.discard('alt')
         # print("alt up")  # uncomment to debug
+    # NEW: releasing Left Shift stops slowballs if binding is enabled
+    elif key == keyboard.Key.shift_l:
+        if slowball_shift_bind and slowballs:
+            print("art off")
+        if slowball_shift_bind:
+            slowballs = False
     elif key in pressed_keys:
         pressed_keys.remove(key)
 
@@ -754,7 +778,7 @@ def on_click(x, y, button, pressed):
     global controllednuke_points, controllednuke_active
     if controllednuke_active and pressed and button == Button.left:
         controllednuke_points.append((x, y))
-        print(f"ControlledNuke: Point {len(controllednuke_points)} selected at ({x}, {y})")
+        print(f"cnuke point: {len(controllednuke_points)} at ({x}, {y})")
 
 # Start mouse listener globally (after your keyboard listener setup)
 mouse_listener = MouseListener(on_click=on_click)

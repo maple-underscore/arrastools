@@ -55,30 +55,22 @@ def interruptible_sleep(duration):
         time.sleep(interval)
         elapsed += interval
 
-def split_sentences(filepath, max_length=60, disable_space_breaking=False, disable_line_breaks=False):
+def split_sentences(filepath, max_length=60, disable_space_breaking=False):
     sentences = []
-    with open(filepath, encoding='utf-8') as file:
+    with open(filepath) as file:
         lines = file.readlines()
-        
-        # If disable_line_breaks is True, merge all lines into one continuous text
-        if disable_line_breaks:
-            lines = [' '.join(line.rstrip() for line in lines if line.strip())]
-        
         for line in lines:
             line = line.rstrip()
             if not line.strip():
-                continue
+                continue  # skip empty or whitespace-only lines
             if disable_space_breaking:
-                # Break only at max_length, preserving all characters including spaces
+                # Break only at max_length, not at spaces
                 buffer = line
                 while len(buffer) > max_length:
-                    chunk = buffer[:max_length]
-                    sentences.append(chunk)
-                    print(f"[DEBUG] No-space chunk ({len(chunk)} chars): '{chunk}'")  # Debug
+                    sentences.append(buffer[:max_length])
                     buffer = buffer[max_length:]
                 if buffer:
                     sentences.append(buffer)
-                    print(f"[DEBUG] No-space final ({len(buffer)} chars): '{buffer}'")  # Debug
             else:
                 # Break at spaces, but always start a new sentence at each line
                 words = line.split()
@@ -87,20 +79,17 @@ def split_sentences(filepath, max_length=60, disable_space_breaking=False, disab
                     if buffer:
                         if len(buffer) + 1 + len(word) > max_length:
                             sentences.append(buffer)
-                            print(f"[DEBUG] Space-broken chunk ({len(buffer)} chars): '{buffer}'")  # Debug
                             buffer = word
                         else:
                             buffer += " " + word
                     else:
                         if len(word) > max_length:
                             sentences.append(word[:max_length])
-                            print(f"[DEBUG] Long word chunk ({len(word[:max_length])} chars): '{word[:max_length]}'")  # Debug
                             buffer = word[max_length:]
                         else:
                             buffer = word
                 if buffer:
                     sentences.append(buffer)
-                    print(f"[DEBUG] Space-broken final ({len(buffer)} chars): '{buffer}'")  # Debug
     return sentences
 
 pause_event = threading.Event()
@@ -126,7 +115,7 @@ def replace_emojis(text):
     )
     return emoji_pattern.sub(':e:', text)
 
-def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_text=False, disable_line_breaks=False):
+def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_text=False):
     time.sleep(2)
     global ids, copypastaing, filepaths, controller, pause_event, current_chars, current_percent
     if id in ids:
@@ -137,7 +126,7 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
         if not os.path.exists(filepath):
             print(f"File not found: {filepath}")
             return
-        sentences = split_sentences(filepath, disable_space_breaking=disable_space_breaking, disable_line_breaks=disable_line_breaks)
+        sentences = split_sentences(filepath, disable_space_breaking=disable_space_breaking)
         leng = sum(len(replace_emojis(s)) for s in sentences)
         pos = 0
         if prepare:
@@ -245,19 +234,17 @@ while True:
     id_input = input("Enter copypasta id > ").strip()
     prepare_input = input("Prepare mode? (true/false) > ").strip().lower()
     disable_space_breaking_input = input("Disable space breaking? (true/false) > ").strip().lower()
-    disable_line_breaks_input = input("Disable line breaks? (true/false) > ").strip().lower()
     disable_finish_text_input = input("Disable finish text? (true/false) > ").strip().lower()
 
     prepare = prepare_input == 'true'
     disable_space_breaking = disable_space_breaking_input == 'true'
-    disable_line_breaks = disable_line_breaks_input == 'true'
     disable_finish_text = disable_finish_text_input == 'true'
 
     if id_input in ids:
         if copypastaing:
             print("Already copypastaing, wait until finished or press Escape to stop")
         else:
-            thread = threading.Thread(target=copypasta, args=(id_input, prepare, disable_space_breaking, disable_finish_text, disable_line_breaks))
+            thread = threading.Thread(target=copypasta, args=(id_input, prepare, disable_space_breaking, disable_finish_text))
             thread.start()
     else:
         print("Invalid id, available ids are:")
@@ -266,7 +253,7 @@ while True:
         if copypastaing:
             print("Already copypastaing, wait until finished or press Escape to stop")
         else:
-            thread = threading.Thread(target=copypasta, args=('char', prepare, disable_space_breaking, disable_finish_text, disable_line_breaks))
+            thread = threading.Thread(target=copypasta, args=('char', prepare, disable_space_breaking, disable_finish_text))
             thread.start()
     done = False
     while not done:

@@ -138,6 +138,7 @@ HOME = str(Path.home())
 foldername = f"abss_{timestamp()}"
 SCREENSHOT_DIR = os.path.join(HOME, "Desktop", "abss", foldername)
 start4 = time.time()-start4
+start_input_listener()
 
 print("Creating log file")
 filename = f"logs/abss_{timestamp()}.log"
@@ -163,7 +164,7 @@ Bot initialized in {round(init, 3)} seconds
     lastdisconnect = time.time()
     controller.tap(Key.enter)
     time.sleep(0.1)
-    controller.type("Arras Bot [arrasbot.py] > v2.14.3 < loading...")
+    controller.type("Arras Bot [arrasbot.py] > v3.7.2 < loading...")
     time.sleep(0.1)
     for _ in range(2):
         controller.tap(Key.enter)
@@ -177,9 +178,7 @@ Bot initialized in {round(init, 3)} seconds
     time.sleep(0.1)
     controller.tap(Key.enter)
     while working:
-        p27930 = get_pixel_rgb(27, 930)  # cache once
-        print(p27930)
-        time.sleep(1)
+        p27930 = get_pixel_rgb(27, 930)
 
         if color_close(get_pixel_rgb(1021, 716), (152, 232, 241)):
             disconnected = True
@@ -197,14 +196,15 @@ Bot initialized in {round(init, 3)} seconds
             time.sleep(0.1)
             mouse.click(Button.left, 1)
 
-        if color_close(get_pixel_rgb(855, 255), (150, 150, 159)):
-            log_file.write(f"Detected backroom crash at {timestamp()}\n")
-            print(f"Detected backroom crash at {timestamp()}")
-            controller.press("`")
-            time.sleep(0.1)
-            controller.tap("j")
-            time.sleep(0.1)
-            controller.release("`")
+        
+        #if color_close(get_pixel_rgb(855, 255), (150, 150, 159)):
+        #    log_file.write(f"Detected backroom crash at {timestamp()}\n")
+        #    print(f"Detected backroom crash at {timestamp()}")
+        #    controller.press("`")
+        #    time.sleep(0.1)
+        #    controller.tap("j")
+        #    time.sleep(0.1)
+        #    controller.release("`")
 
         if (color_close(p27930, (167, 81, 68)) or color_close(p27930, (138, 27, 34)) or
             color_close(p27930, (201, 92, 75)) or color_close(p27930, (199, 118, 98)) or
@@ -272,7 +272,9 @@ Bot initialized in {round(init, 3)} seconds
             log_file.write(f"Successfully reconnected at {timestamp()}\n")
             disconnected = False
             died = False
-            controller.tap("i")
+            controller.tap("h")
+            controller.tap("u")
+            controller.tap("u")
             controller.tap("c")
             time.sleep(0.1)
             controller.press("`")
