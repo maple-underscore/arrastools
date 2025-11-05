@@ -144,14 +144,17 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
             file_size_bytes = os.path.getsize(filepath)
             file_size_kb = file_size_bytes / 1024
             end = time.time()
+            # Extract just the copypastas/filename.txt part for display
+            path_obj = Path(filepath)
+            relative_path = f"copypastas/{path_obj.name}"
             controller.tap(Key.enter)
             interruptible_sleep(0.1)
-            controller.type(f"Arras Copypasta Utility [ACU] > v1.5.1 < loading...")
+            controller.type(f"Arras Copypasta Utility [ACU] > v02.04.11-beta.4 < loading")
             interruptible_sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)
                 interruptible_sleep(0.1)
-            controller.type(f"Filepath: > [.../{filepath[53:]}] < | Loaded > {leng} chars <")
+            controller.type(f"Filepath: > [.../{relative_path}] < | Loaded > {leng} chars <")
             interruptible_sleep(0.1)
             for _ in range(2):
                 controller.tap(Key.enter)

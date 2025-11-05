@@ -13,8 +13,7 @@ venv/
 .DS_Store
 
 # Logs and local outputs
-logs/
-arrasbot.log
+logs/*.log
 
 # Editor
 .vscode/
