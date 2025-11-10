@@ -46,6 +46,7 @@ thread = None
 controller = KeyboardController()
 current_chars = 0
 current_percent = 0
+controller_typing = False  # Flag to ignore synthetic keypresses
 
 def interruptible_sleep(duration):
     global copypastaing
@@ -106,6 +107,20 @@ def split_sentences(filepath, max_length=60, disable_space_breaking=False, disab
 pause_event = threading.Event()
 pause_event.set()  # Start as running
 
+def safe_type(text):
+    """Type text while flagging to ignore synthetic keypresses"""
+    global controller_typing
+    controller_typing = True
+    controller.type(text)
+    controller_typing = False
+
+def safe_tap(key):
+    """Tap key while flagging to ignore synthetic keypresses"""
+    global controller_typing
+    controller_typing = True
+    controller.tap(key)
+    controller_typing = False
+
 def replace_emojis(text):
     # Emoji unicode ranges
     emoji_pattern = re.compile(
@@ -128,7 +143,7 @@ def replace_emojis(text):
 
 def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_text=False, disable_line_breaks=False):
     time.sleep(2)
-    global ids, copypastaing, filepaths, controller, pause_event, current_chars, current_percent
+    global ids, copypastaing, filepaths, controller, pause_event, current_chars, current_percent, controller_typing
     if id in ids:
         index = ids.index(id)
         filepath = filepaths[index]
@@ -147,33 +162,33 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
             # Extract just the copypastas/filename.txt part for display
             path_obj = Path(filepath)
             relative_path = f"copypastas/{path_obj.name}"
-            controller.tap(Key.enter)
+            safe_tap(Key.enter)
             interruptible_sleep(0.1)
-            controller.type(f"Arras Copypasta Utility [ACU] > v02.04.11-beta.4 < loading")
-            interruptible_sleep(0.1)
-            for _ in range(2):
-                controller.tap(Key.enter)
-                interruptible_sleep(0.1)
-            controller.type(f"Filepath: > [.../{relative_path}] < | Loaded > {leng} chars <")
+            safe_type(f"Arras Copypasta Utility [ACU] > v02.04.11-beta.4 < loading")
             interruptible_sleep(0.1)
             for _ in range(2):
-                controller.tap(Key.enter)
+                safe_tap(Key.enter)
                 interruptible_sleep(0.1)
-            controller.type(f"Size: > [{file_size_kb:.2f}KB] < | Time taken > [{round((end-start)*1000, 3)}ms] <")
+            safe_type(f"Filepath: > [.../{relative_path}] < | Loaded > {leng} chars <")
             interruptible_sleep(0.1)
-            controller.tap(Key.enter)
+            for _ in range(2):
+                safe_tap(Key.enter)
+                interruptible_sleep(0.1)
+            safe_type(f"Size: > [{file_size_kb:.2f}KB] < | Time taken > [{round((end-start)*1000, 3)}ms] <")
+            interruptible_sleep(0.1)
+            safe_tap(Key.enter)
             interruptible_sleep(10)
         endf = False
         for sentence in sentences:
             if not copypastaing:
                 break
             pause_event.wait()  # Wait here if paused
-            controller.tap(Key.enter)
+            safe_tap(Key.enter)
             interruptible_sleep(0.1)
             sentence_no_emoji = replace_emojis(sentence)
-            controller.type(sentence_no_emoji)
+            safe_type(sentence_no_emoji)
             interruptible_sleep(0.1)
-            controller.tap(Key.enter)
+            safe_tap(Key.enter)
             pos += len(sentence_no_emoji)
             current_chars = pos
             current_percent = (current_chars / leng) * 100 if leng > 0 else 0
@@ -184,36 +199,40 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
         percent_typed = (chars_typed / leng) * 100 if leng > 0 else 0
         if not endf:  # Force stop by Escape
             print(f"Forced stop at > [{chars_typed}] characters [{percent_typed:.2f}%]")
-            controller.tap(Key.enter)
+            safe_tap(Key.enter)
             interruptible_sleep(0.1)
-            controller.type(f"Forced stop at > [{chars_typed}] characters [{percent_typed:.2f}%]")
+            safe_type(f"Forced stop at > [{chars_typed}] characters [{percent_typed:.2f}%]")
             interruptible_sleep(0.1)
         else:
             if not disable_finish_text:
                 print(f"Copypasta of > [{leng}] characters < finished")
-                controller.tap(Key.enter)
+                safe_tap(Key.enter)
                 interruptible_sleep(0.1)
-                controller.type(f"Copypasta of > [{leng}] characters < finished")
+                safe_type(f"Copypasta of > [{leng}] characters < finished")
                 interruptible_sleep(0.1)
             else:
                 print(f"Copypasta of > [{leng}] characters < finished (without finish text)")
         if not disable_finish_text:
-            controller.tap(Key.enter)
+            safe_tap(Key.enter)
             interruptible_sleep(0.1)
             time.sleep(3.5)
-            controller.tap(Key.enter)
+            safe_tap(Key.enter)
             interruptible_sleep(0.1)
             print(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
-            controller.type(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
+            safe_type(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
             interruptible_sleep(0.1)
-            controller.tap(Key.enter)
+            safe_tap(Key.enter)
             interruptible_sleep(0.1)
         # Do not exit here; let the thread finish
     copypastaing = False
 
 def on_press(key):
-    global copypastaing, pause_event, current_chars, current_percent, controller
+    global copypastaing, pause_event, current_chars, current_percent, controller, controller_typing
     try:
+        # Ignore synthetic keypresses from the controller
+        if controller_typing:
+            return
+        
         if key == keyboard.Key.esc:
             copypastaing = False
         elif hasattr(key, 'char') and key.char == 'p' and copypastaing:
@@ -221,21 +240,21 @@ def on_press(key):
                 pause_event.clear()
                 time.sleep(3.3)
                 print(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                controller.tap(Key.enter)
+                safe_tap(Key.enter)
                 interruptible_sleep(0.1)
-                controller.type(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                safe_type(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
                 interruptible_sleep(0.1)
-                controller.tap(Key.enter)
+                safe_tap(Key.enter)
                 interruptible_sleep(0.1)
             else:
                 pause_event.set()
                 time.sleep(3.3)
                 print(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                controller.tap(Key.enter)
+                safe_tap(Key.enter)
                 interruptible_sleep(0.1)
-                controller.type(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                safe_type(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
                 interruptible_sleep(0.1)
-                controller.tap(Key.enter)
+                safe_tap(Key.enter)
                 interruptible_sleep(0.1)
     except UnicodeDecodeError:
         print("UnicodeDecodeError: Non-standard key (emoji?) pressed. Ignored.")
