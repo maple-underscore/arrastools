@@ -89,8 +89,6 @@ def get_pixel_rgb(x, y):
     return tuple(int(v) for v in pixel[:3])
 
 def is_dead():
-    p27930 = get_pixel_rgb(27, 930)  # cache once
-    print(f"Death check pixel color at (27, 930): {p27930}")
     """Check if the player is dead."""
     global simulate_death
     
@@ -98,10 +96,14 @@ def is_dead():
     if simulate_death:
         simulate_death = False  # Reset the flag
         return True
-    elif p27930 == (176, 100, 81):
+    
+    p27930 = get_pixel_rgb(27, 930)
+    # Removed print statement for speed - was causing massive slowdown
+    if p27930 == (176, 100, 81):
+        print(f"Death detected at pixel (27, 930): {p27930}")
         return True
-    # Add your real death detection logic here when ready
-    return False  # Don't detect death until you implement proper logic
+    
+    return False
 
 def detect_score():
     """Detect the current score from screen using OCR."""
@@ -113,7 +115,7 @@ def detect_score():
         # Save screenshot for debugging
         tmp_file = 'score_capture.png'
         mss.tools.to_png(screenshot.rgb, screenshot.size, output=tmp_file)
-        print(f"Score screenshot saved to {tmp_file}")
+        # Removed print for speed
         
         try:
             # Convert to PIL Image for OCR
@@ -121,7 +123,7 @@ def detect_score():
             
             # Use OCR to extract text (configure for digit recognition)
             text = pytesseract.image_to_string(img, config='--psm 7 -c tessedit_char_whitelist=0123456789')
-            print(f"OCR raw text: {text}")
+            # Removed verbose OCR print for speed
             
             # Extract numbers using regex
             matches = re.findall(r'\d+', text)
@@ -130,7 +132,6 @@ def detect_score():
                 print(f"Detected score: {largest_num}")
                 return largest_num
                 
-            print("No numeric score found in OCR text")
             return 30000  # Fallback score
         except ImportError:
             print("pytesseract not installed. Install with: pip install pytesseract")
@@ -159,10 +160,11 @@ def sample_points_in_polygon(polygon, step=10):
         for coord in polygon.exterior.coords:
             points.append(coord)
     
-    return points[:500]  # Limit to 500 points max for performance
+    return points[:100]  # Limit to 100 points max for performance
 
 # Sample observation points within game region
-OBSERVATION_POINTS = sample_points_in_polygon(GAME_REGION, 10)
+# Using step=50 for much faster sampling (was 10, giving 500 points)
+OBSERVATION_POINTS = sample_points_in_polygon(GAME_REGION, 50)
 
 class PolicyNetwork(nn.Module):
     def __init__(self, input_dim, action_dim):
@@ -220,8 +222,9 @@ class PolicyNetwork(nn.Module):
         state_value = self.value_head(x)
         
         mouse_params = self.mouse_head(x)
-        mouse_x_mean = 2 + torch.sigmoid(mouse_params[:, 0]) * (1693 - 2)
-        mouse_y_mean = 128 + torch.sigmoid(mouse_params[:, 2]) * (1094 - 128)
+        # Expanded mouse range to cover entire screen (0-1920 x 0-1200)
+        mouse_x_mean = 0 + torch.sigmoid(mouse_params[:, 0]) * 1920
+        mouse_y_mean = 0 + torch.sigmoid(mouse_params[:, 2]) * 1200
         mouse_x_log_std = mouse_params[:, 1]
         mouse_y_log_std = mouse_params[:, 3]
         
@@ -359,17 +362,17 @@ class ArrasAI:
         
         # Either take random sample or occasionally force uniform random position
         if random.random() < 0.05:  # 5% chance of random position
-            mouse_x = random.uniform(2, 1693)
-            mouse_y = random.uniform(128, 1094)
+            mouse_x = random.uniform(0, 1920)
+            mouse_y = random.uniform(0, 1200)
             mouse_action = torch.tensor([[mouse_x, mouse_y]], device=self.device)
             mouse_log_prob = mouse_dist.log_prob(mouse_action)
         else:
             mouse_action = mouse_samples[random.randint(0, num_samples-1)]
             mouse_log_prob = mouse_dist.log_prob(mouse_action)
         
-        # Clamp mouse position to valid range
-        mouse_x = torch.clamp(mouse_action[0, 0], 2, 1693).item()
-        mouse_y = torch.clamp(mouse_action[0, 1], 128, 1094).item()
+        # Clamp mouse position to valid range (expanded to full screen)
+        mouse_x = torch.clamp(mouse_action[0, 0], 0, 1920).item()
+        mouse_y = torch.clamp(mouse_action[0, 1], 0, 1200).item()
         
         # Get sum42 and upgrade_path
         sum42_values = sum42.squeeze(0).cpu().numpy()
@@ -475,24 +478,30 @@ class ArrasAI:
         # Update keys
         target_key = self.action_map[action_idx] if action_idx < len(self.action_map) else None
         
-        # Debug print what action we're taking
+        # Debug print what action we're taking (reduce verbosity)
         if target_key:
             action_name = target_key if target_key != Key.space else "SPACE"
-            print(f"Action: {action_name}, Mouse: {mouse_pos}")
-        else:
-            print(f"Action: NONE, Mouse: {mouse_pos}")
+            print(f"Action: {action_name}, Mouse: ({mouse_pos[0]:.0f}, {mouse_pos[1]:.0f})")
         
-        # Press new key if needed
-        if target_key is not None and target_key not in self.active_keys:
-            if target_key == Key.space:
+        # Release all currently held keys except the target key
+        for key in list(self.active_keys):
+            if key != target_key:
+                keyboard_controller.release(key)
+                self.active_keys.remove(key)
+        
+        # Handle Space key - tap it (press and release)
+        if target_key == Key.space:
+            if target_key not in self.active_keys:
                 keyboard_controller.press(Key.space)
-                print(f"Pressed: SPACE")
-            else:
+                time.sleep(0.05)
+                keyboard_controller.release(Key.space)
+                print("SPACE tapped")
+        # Handle movement keys - hold them down
+        elif target_key is not None:
+            if target_key not in self.active_keys:
                 keyboard_controller.press(target_key)
-                print(f"Pressed: {target_key}")
-            self.active_keys.add(target_key)
-            time.sleep(0.2)
-            keyboard_controller.release(target_key)
+                self.active_keys.add(target_key)
+                print(f"Holding: {target_key}")
             
         # Update mouse position
         mouse_controller.position = mouse_pos
@@ -504,7 +513,7 @@ def apply_upgrade_path(path):
     # This is just a placeholder
 
 def get_observation():
-    """Get current observation from screen."""
+    """Get current observation from screen - optimized for speed."""
     try:
         # Print first time to see how many points we're observing
         if not hasattr(get_observation, "first_run"):
@@ -513,22 +522,34 @@ def get_observation():
             if len(OBSERVATION_POINTS) == 0:
                 print("WARNING: No observation points found in polygon!")
 
+        # OPTIMIZATION: Capture entire screen once instead of per-pixel
+        min_x = int(min(x for x, y in OBSERVATION_POINTS))
+        max_x = int(max(x for x, y in OBSERVATION_POINTS))
+        min_y = int(min(y for x, y in OBSERVATION_POINTS))
+        max_y = int(max(y for x, y in OBSERVATION_POINTS))
+        
+        bbox = {"top": min_y, "left": min_x, "width": max_x - min_x + 1, "height": max_y - min_y + 1}
+        screenshot = sct.grab(bbox)
+        img_array = np.array(screenshot)[:, :, :3]  # RGB only, drop alpha
+        
         obs = []
         for x, y in OBSERVATION_POINTS:
             try:
-                rgb = get_pixel_rgb(x, y)
+                # Convert absolute coords to relative coords within screenshot
+                rel_x = int(x - min_x)
+                rel_y = int(y - min_y)
+                rgb = img_array[rel_y, rel_x]
                 obs.extend([c/255.0 for c in rgb])  # Normalize colors
             except Exception as e:
-                print(f"Error sampling point ({x}, {y}): {e}")
-                # Use zeros as fallback
+                # Use zeros as fallback if point is out of bounds
                 obs.extend([0, 0, 0])
                 
-        return np.array(obs)
+        return np.array(obs, dtype=np.float32)
     except Exception as e:
         print(f"Error in get_observation(): {e}")
         traceback.print_exc()
         # Return zeros as fallback
-        return np.zeros(len(OBSERVATION_POINTS) * 3)
+        return np.zeros(len(OBSERVATION_POINTS) * 3, dtype=np.float32)
 
 # Fix the train_ai function to properly declare globals
 def train_ai(episodes=100, steps_per_episode=2000, save_interval=10, 
@@ -570,6 +591,10 @@ def train_ai(episodes=100, steps_per_episode=2000, save_interval=10,
             state = get_observation()
             episode_reward = 0
             
+            # Rate limiting: track last action time for 10 actions per second
+            last_action_time = 0
+            action_interval = 0.1  # 10 actions per second (100ms between actions)
+            
             # Get initial outputs for this episode
             action_idx, action_log_prob, value, mouse_mean, mouse_log_std, mouse_pos, mouse_log_prob, sum42, upgrade_idx = agent.get_action(state)
             
@@ -592,23 +617,23 @@ def train_ai(episodes=100, steps_per_episode=2000, save_interval=10,
                 if exit_requested:
                     break
                 
-                # Handle cooldown period (first run or after death)
-                if step == 0 or cooldown_active:
+                # Handle cooldown period ONLY at the start of episode or after death
+                if cooldown_active:
                     current_time = time.time()
-                    # If it's the first step or we're within 2 seconds of starting cooldown
-                    if step == 0 or (current_time - last_cooldown_time) < 2.0:
-                        if step == 0:
-                            print("Starting episode - waiting 2 seconds before first action")
-                            last_cooldown_time = current_time
-                            cooldown_active = True
-                        elif cooldown_active:
-                            # Still in cooldown
-                            time.sleep(0.1)  # Small sleep to not burn CPU
-                            continue  # Skip taking action
+                    if (current_time - last_cooldown_time) < 2.0:
+                        time.sleep(0.1)  # Small sleep to not burn CPU
+                        continue  # Skip taking action
                     else:
                         # Cooldown period is over
                         cooldown_active = False
                         print("Cooldown period ended - resuming actions")
+                
+                # For the very first step of the episode, start cooldown
+                if step == 0:
+                    print("Starting episode - waiting 2 seconds before first action")
+                    last_cooldown_time = time.time()
+                    cooldown_active = True
+                    continue  # Skip to next iteration to wait
                 
                 # Simulate death if flag is set
                 if simulate_death or is_dead():
@@ -627,6 +652,13 @@ def train_ai(episodes=100, steps_per_episode=2000, save_interval=10,
                 else:
                     done = False
                     reward = 0.1  # Small reward for surviving
+                
+                # Rate limiting: ensure 10 actions per second (0.1s between actions)
+                current_time = time.time()
+                time_since_last_action = current_time - last_action_time
+                if time_since_last_action < action_interval:
+                    time.sleep(action_interval - time_since_last_action)
+                last_action_time = time.time()
                 
                 # Take action
                 agent.apply_action(action_idx, mouse_pos)
@@ -723,6 +755,10 @@ def run_trained_ai(model_path, episodes=5):
         cooldown_active = False
         last_cooldown_time = 0
         
+        # Rate limiting: 10 actions per second
+        last_action_time = 0
+        action_interval = 0.1  # 10 actions per second (100ms between actions)
+        
         while not done and steps < 10000 and not exit_requested:
             # Check if paused - if so, wait until unpaused
             while paused and not exit_requested:
@@ -749,9 +785,15 @@ def run_trained_ai(model_path, episodes=5):
                     cooldown_active = False
                     print("Cooldown period ended - resuming actions")
             
+            # Rate limiting: ensure 10 actions per second (0.1s between actions)
+            current_time = time.time()
+            time_since_last_action = current_time - last_action_time
+            if time_since_last_action < action_interval:
+                time.sleep(action_interval - time_since_last_action)
+            last_action_time = time.time()
+            
             # Take action
             agent.apply_action(action_idx, mouse_pos)
-            time.sleep(0.05)
             
             # Get new state and action
             state = get_observation()

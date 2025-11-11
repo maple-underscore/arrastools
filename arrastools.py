@@ -49,6 +49,10 @@ controllednuke_active = False
 ctrl6_last_time = 0
 ctrl6_armed = False
 
+# ctrl+o double-press lock
+ctrlo_last_time = 0
+ctrlo_armed = False
+
 # new ctrl+1 multi-press globals
 ctrl1_count = 0
 ctrl1_first_time = 0.0
@@ -185,7 +189,7 @@ def ballcrash():
 
 def miniballcrash():
     controller.press("`")
-    for _ in range(25):
+    for _ in range(50):
         for _ in range(100):
             controller.tap("c")
             controller.tap("h")
@@ -232,6 +236,8 @@ def ball10x10():
             time.sleep(0.04)
             controller.press("w")
             time.sleep(0.04)
+            controller.tap("c")
+            time.sleep(0.1)
             mouse.position = (starting_position[0]+i*s, starting_position[1]+i2*s)
             time.sleep(0.04)
             controller.release("w")
@@ -240,6 +246,8 @@ def ball10x10():
             time.sleep(0.04)
             controller.press("w")
             time.sleep(0.04)
+            controller.tap("c")
+            time.sleep(0.1)
             mouse.position = (starting_position[0]+i*s, starting_position[1]+i2*s)
             time.sleep(0.04)
             controller.release("w")
@@ -247,6 +255,8 @@ def ball10x10():
             time.sleep(0.04)
             controller.press("w")
             time.sleep(0.04)
+            controller.tap("c")
+            time.sleep(0.1)
             mouse.position = (starting_position[0]+i*s, starting_position[1]+i2*s)
             time.sleep(0.04)
             controller.release("w")
@@ -392,6 +402,13 @@ def randomwall():
         controller.release("z")
         time.sleep(0.02)
     controller.release("`")
+
+def shapel():
+    controller.press("`")
+    for _ in range(10):
+        controller.tap("f")
+        time.sleep(0.04)
+        controller.tap("b")
 
 def random_mouse_w():
     global randomwalld
@@ -556,6 +573,7 @@ def is_modifier_for_arrow_nudge(k):
 def on_press(key):
     global size_automation, braindamage, ballcash, slowballs, randomwalld, engispamming
     global ctrl6_last_time, ctrl6_armed
+    global ctrlo_last_time, ctrlo_armed
     global controllednuke_points, controllednuke_active
     global ctrl1_count, ctrl1_first_time, ctrl1_thread
     global slowball_shift_bind
@@ -688,6 +706,10 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("200 walls")
                 walls()
+        elif hasattr(key, 'char') and key.char and key.char=='v':
+            if 'ctrl' in pressed_keys:
+                print("shapel")
+                shapel()
         elif hasattr(key, 'char') and key.char and key.char=='z':
             if 'ctrl' in pressed_keys:
                 slowwall()
@@ -708,8 +730,15 @@ def on_press(key):
                 start_randomwall()
         elif hasattr(key, 'char') and key.char and key.char=='o':
             if 'ctrl' in pressed_keys:
-                print("miniballcrash")
-                miniballcrash()
+                now = time.time()
+                if ctrlo_armed and (now - ctrlo_last_time <= 5):
+                    print("miniballcrash")
+                    miniballcrash()
+                    ctrlo_armed = False
+                else:
+                    print("minicrash armed")
+                    ctrlo_armed = True
+                    ctrlo_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='e':
             if 'ctrl' in pressed_keys:
                 print("engispam")

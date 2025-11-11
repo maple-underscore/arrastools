@@ -1,0 +1,45 @@
+{
+  "game": {
+    "grid_size": 50,
+    "cell_size": 30,
+    "game_speed": 250,
+    "starting_length": 3
+  },
+  "training": {
+    "episodes": 5000,
+    "max_steps_per_episode": 10000,
+    "save_interval": 100,
+    "model_dir": "snake_models",
+    "model_name": "snake_model.pt"
+  },
+  "agent": {
+    "learning_rate": 0.001,
+    "gamma": 0.95,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.01,
+    "epsilon_decay": 0.9988,
+    "memory_size": 10000,
+    "batch_size": 64,
+    "target_update_frequency": 10
+  },
+  "rewards": {
+    "apple": 2000,
+    "death": -1000,
+    "closer_to_apple": 200,
+    "farther_from_apple": -400,
+    "step": -100
+  },
+  "display": {
+    "show_game": true,
+    "display_interval": 10,
+    "time_update_interval": 1,
+    "window_width": 1500,
+    "window_height": 990,
+    "parallel_games_horizontal": 10,
+    "parallel_games_vertical": 6,
+    "background_color": [0, 0, 0],
+    "snake_color": [0, 255, 0],
+    "apple_color": [255, 0, 0],
+    "grid_color": [80, 80, 80]
+  }
+}
