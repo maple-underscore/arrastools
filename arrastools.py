@@ -5,7 +5,7 @@ import platform
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
 from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
-import tkinter as tk
+
 
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'android'
@@ -23,9 +23,10 @@ if PLATFORM not in ('darwin', 'linux', 'windows'):
 length = 4
 
 # Function
-global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step
+global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step, ctrlswap
 step = 20
 s = 25 #ball spacing in px
+ctrlswap = False  # When True, use Cmd (macOS) instead of Ctrl for macros
 size_automation = False
 engispamming = False
 engispam_thread = None
@@ -56,27 +57,6 @@ ctrl1_thread = None
 
 # NEW: bind slowballs to Left Shift when enabled via Ctrl+C
 slowball_shift_bind = False
-
-def create_number_input_window(title):
-    def handle_return(event=None):
-        try:
-            num = float(entry.get())
-            return num
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-
-    root = tk.Tk()
-    root.title(title)
-    
-    label = tk.Label(root, text="Please enter a number:")
-    label.pack(pady=10)
-
-    entry = tk.Entry(root)
-    entry.pack(pady=5)
-    entry.bind('<Return>', handle_return)
-    entry.focus()
-
-    root.mainloop()
 
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
@@ -537,7 +517,14 @@ def _ctrl1_waiter():
 
 # Normalize modifier detection across platforms
 def is_ctrl(k):
-    return k in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r)
+    """Check if key is Ctrl (or Cmd if ctrlswap=True on macOS)"""
+    global ctrlswap
+    if ctrlswap and PLATFORM == 'darwin':
+        # Use Cmd key on macOS when ctrlswap is enabled
+        return k in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r)
+    else:
+        # Use Ctrl key normally
+        return k in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r)
 
 def is_alt(k):
     # On macOS, Option is alt; on other platforms, Alt is alt
@@ -558,7 +545,7 @@ def on_press(key):
     global ctrl6_last_time, ctrl6_armed
     global controllednuke_points, controllednuke_active
     global ctrl1_count, ctrl1_first_time, ctrl1_thread
-    global slowball_shift_bind
+    global slowball_shift_bind, ctrlswap
     try:
         # Use Right Shift instead of Escape to stop scripts
         if key == keyboard.Key.shift_r:
@@ -579,6 +566,10 @@ def on_press(key):
         elif is_alt(key):
             pressed_keys.add('alt')
             # print("alt down")  # uncomment to debug
+        # Handle actual Cmd key presses (for toggling ctrlswap on macOS)
+        elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+            if ctrlswap:
+                pressed_keys.add('ctrl')  # Treat Cmd as Ctrl when ctrlswap is enabled
         elif key in (keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right):
             if 'alt' in pressed_keys:
                 x, y = mouse.position
@@ -762,6 +753,9 @@ def on_release(key):
     global slowballs, slowball_shift_bind
     if is_ctrl(key):
         pressed_keys.discard('ctrl')
+    elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+        if ctrlswap:
+            pressed_keys.discard('ctrl')  # Release Cmd when ctrlswap is enabled
     elif is_alt(key):
         pressed_keys.discard('alt')
         # print("alt up")  # uncomment to debug
