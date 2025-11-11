@@ -8,7 +8,6 @@ from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
 from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
 
-
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'android'
 print(f"Running on: {PLATFORM}")
@@ -820,6 +819,14 @@ class MacroGUI:
         self.root.configure(bg='black')
         self.root.geometry("400x600")
         
+        # Force Tk to use older rendering on macOS for color support
+        # This is a workaround for Tcl/Tk 9.0 aqua theme not respecting colors
+        try:
+            # Try to set the window to use the classic appearance
+            self.root.tk.call('tk::unsupported::MacWindowStyle', 'style', self.root, 'document', 'closeBox resizable')
+        except:
+            pass
+        
         # Macro button configurations: (title, function, state_var_name, is_boolean)
         # is_boolean=True means the macro toggles on/off, False means one-shot execution
         self.macros = [
@@ -827,7 +834,7 @@ class MacroGUI:
             ("Arena Automation Type 2", lambda: self.trigger_macro(start_arena_automation, 2), 'size_automation', True),
             ("Arena Automation Type 3", lambda: self.trigger_macro(start_arena_automation, 3), 'size_automation', True),
             ("Conqueror", lambda: self.trigger_macro(conq_quickstart), None, False),
-            ("Brain Damage", lambda: self.trigger_boolean_macro('braindamage'), 'braindamage', True),
+            ("Brain Damage", lambda: self.toggle_boolean_macro('braindamage'), 'braindamage', True),
             ("Circle", lambda: self.trigger_macro(circle), None, False),
             ("Tail (Legacy)", lambda: self.trigger_macro(start_circle_tail_legacy), None, False),
             ("Circle Crash", lambda: self.trigger_macro(circlecrash), None, False),
@@ -839,10 +846,10 @@ class MacroGUI:
             ("200 Circles", lambda: self.trigger_macro(circles), None, False),
             ("200 Walls", lambda: self.trigger_macro(walls), None, False),
             ("Slow Wall", lambda: self.trigger_macro(slowwall), None, False),
-            ("Art (Shift)", lambda: self.trigger_boolean_macro('slowcircle_shift_bind'), 'slowcircle_shift_bind', True),
+            ("Art (Shift)", lambda: self.toggle_boolean_macro('slowcircle_shift_bind'), 'slowcircle_shift_bind', True),
             ("Benchmark", lambda: self.trigger_macro(benchmark), None, False),
             ("Mini Circle Crash", lambda: self.trigger_macro(minicirclecrash), None, False),
-            ("Engi Spam", lambda: self.trigger_boolean_macro('engispamming'), 'engispamming', True),
+            ("Engi Spam", lambda: self.toggle_boolean_macro('engispamming'), 'engispamming', True),
             ("50M Score", lambda: self.trigger_macro(score50m), None, False),
             ("Controlled Nuke", lambda: self.trigger_macro(start_controllednuke), None, False),
         ]
@@ -861,29 +868,35 @@ class MacroGUI:
         canvas.configure(yscrollcommand=scrollbar.set)
         
         # Toggle all macros button at top
-        self.toggle_all_btn = tk.Button(
+        self.toggle_all_btn = tk.Label(
             scrollable_frame,
             text="DISABLE ALL MACROS",
-            command=self.toggle_all_macros,
             bg='green',
             fg='white',
             font=('Arial', 12, 'bold'),
-            height=2
+            height=2,
+            relief='raised',
+            bd=2,
+            cursor='hand2'
         )
+        self.toggle_all_btn.bind('<Button-1>', lambda e: self.toggle_all_macros())
         self.toggle_all_btn.pack(fill='x', padx=10, pady=5)
         
-        # Create buttons
+        # Create buttons (using Labels for color support on macOS)
         self.buttons = []
         for title, func, state_var, is_boolean in self.macros:
-            btn = tk.Button(
+            btn = tk.Label(
                 scrollable_frame,
                 text=title,
-                command=func,
                 bg='green',
                 fg='white',
                 font=('Arial', 10),
-                height=2
+                height=2,
+                relief='raised',
+                bd=2,
+                cursor='hand2'
             )
+            btn.bind('<Button-1>', lambda e, f=func: f())
             btn.pack(fill='x', padx=10, pady=2)
             self.buttons.append((btn, state_var, is_boolean))
         
@@ -1019,20 +1032,23 @@ class MacroGUI:
         """Run the GUI main loop"""
         self.root.mainloop()
 
-# Start GUI in separate thread
-def start_gui():
-    gui = MacroGUI()
-    gui.run()
+# Start keyboard and mouse listeners in background
+def start_listeners():
+    """Start keyboard and mouse listeners in a thread"""
+    # Start mouse listener
+    mouse_listener = MouseListener(on_click=on_click)
+    mouse_listener.daemon = True
+    mouse_listener.start()
+    
+    # Start keyboard listener (this blocks)
+    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+        listener.join()
 
-gui_thread = threading.Thread(target=start_gui)
-gui_thread.daemon = True
-gui_thread.start()
+# Start listeners in separate thread so GUI can run on main thread
+listener_thread = threading.Thread(target=start_listeners)
+listener_thread.daemon = True
+listener_thread.start()
 
-# Start mouse listener glocircley (after your keyboard listener setup)
-mouse_listener = MouseListener(on_click=on_click)
-mouse_listener.daemon = True
-mouse_listener.start()
-
-with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-    listener.join()
-
+# Run GUI on main thread (required for macOS)
+gui = MacroGUI()
+gui.run()
