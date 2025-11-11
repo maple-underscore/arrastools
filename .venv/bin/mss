@@ -1,4 +1,4 @@
-#!/Users/alexoh/Documents/GitHub/arrastools/.venv/bin/python3
+#!/Users/alexoh/Documents/GitHub/arrastools/.venv/bin/python3.12
 import sys
 from mss.__main__ import main
 if __name__ == '__main__':
