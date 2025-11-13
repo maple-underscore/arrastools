@@ -81,57 +81,50 @@ with open(POSITIONPATH, "r") as p:
 def place(queue):
     # Group datapoints by modifier first, then by color within each modifier group
     modifier_groups = {}
+    color_groups = {}
     for datapoint in queue:
         modifier = datapoint[0]
         if modifier not in modifier_groups:
-            modifier_groups[modifier] = {}
+            modifier_groups[modifier] = []
+        modifier_groups[modifier].append(datapoint)
         color = datapoint[1]
-        if color not in modifier_groups[modifier]:
-            modifier_groups[modifier][color] = []
-        modifier_groups[modifier][color].append(datapoint)
+        if color not in color_groups:
+            color_groups[color] = []
+        color_groups[color].append(datapoint)
     
-    # Process each modifier group
-    for modifier in modifier_groups:
-        # Set modifier once for this group
-        controller.press("`")
-        time.sleep(0.01)
-        controller.tap("x")
-        time.sleep(0.01)
-        controller.press("z")
-        time.sleep(0.01)
-        exec(modifierinstructions[modifiers.index(modifier)])
-        time.sleep(0.01)
-        controller.release("z")
-        time.sleep(0.01)
-        controller.tap("x")
-        time.sleep(0.01)
-        
-        # Process each color group within this modifier
-        for color in modifier_groups[modifier]:
-            # Set color once for this group
-            controller.tap("x")
-            time.sleep(0.01)
-            controller.press("c")
-            time.sleep(0.01)
-            exec(colorinstructions[colors.index(color)])
-            time.sleep(0.01)
-            controller.release("c")
+    # 404 179
+    global modifierheld, colorheld
+    for modifier_group in modifier_groups.values():
+        for obj in modifier_group:
+            mouse.position = (404 + obj[2], 179 + obj[3])
             time.sleep(0.01)
             controller.tap("x")
-            time.sleep(0.01)
-            
-            # Place all walls with this modifier+color combination
-            for datapoint in modifier_groups[modifier][color]:
-                x = datapoint[2]
-                y = datapoint[3]
-                mouse.position = (int(x) + 404, int(y) + 179)
+            if modifierheld != obj[0]:
                 time.sleep(0.01)
-                controller.press("x")
+                controller.press("z")
+                time.sleep(0.01)
+                exec(modifierinstructions[modifiers.index(obj[0])])
+                time.sleep(0.01)
+                controller.release("z")
+                modifierheld = obj[0]
+            else:
+                controller.press("z")
                 time.sleep(0.03)
-                controller.release("x")
+                controller.release("z")
+    for color_group in color_groups.values():
+        for obj in color_group:
+            mouse.position = (404 + obj[2], 179 + obj[3])
+            time.sleep(0.01)
+            if colorheld != obj[1]:
+                controller.press("c")
                 time.sleep(0.01)
-        
-        controller.release("`")
-        time.sleep(0.01)
+                exec(colorinstructions[colors.index(obj[1])])
+                time.sleep(0.01)
+                controller.release("c")
+                colorheld = obj[1]
+            else:
+                controller.press("c")
+                time.sleep(0.03)
+                controller.release("c")
 
 place(buildqueue)
