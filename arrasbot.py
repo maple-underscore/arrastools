@@ -10,6 +10,8 @@ from threading import Thread
 from pathlib import Path
 from ping3 import ping
 
+firefox = True
+
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
 print(f"Arrasbot running on: {PLATFORM}")
@@ -178,7 +180,10 @@ Bot initialized in {round(init, 3)} seconds
     time.sleep(0.1)
     controller.tap(Key.enter)
     while working:
-        p28925 = get_pixel_rgb(28, 925)
+        if firefox:
+            targetcolor = get_pixel_rgb(26, 930)
+        else:
+            targetcolor = get_pixel_rgb(28, 925)
         if color_close(get_pixel_rgb(1021, 716), (152, 232, 241)):
             disconnected = True
             log_file.write(f"Backroom crashed at {timestamp()}\n")
@@ -205,9 +210,9 @@ Bot initialized in {round(init, 3)} seconds
         #    time.sleep(0.1)
         #    controller.release("`")
 
-        if (color_close(p28925, (167, 81, 68)) or color_close(p28925, (138, 27, 34)) or
-            color_close(p28925, (201, 92, 75)) or color_close(p28925, (199, 118, 98)) or
-            color_close(p28925, (213, 114, 93))):
+        if (color_close(targetcolor, (167, 81, 68)) or color_close(targetcolor, (138, 27, 34)) or
+            color_close(targetcolor, (201, 92, 75)) or color_close(targetcolor, (199, 118, 98)) or
+            color_close(targetcolor, (213, 114, 93))):
             if get_pixel_rgb(686, 650) == (231, 137, 109) or get_pixel_rgb(837, 675) == (231, 137, 109):
                 log_file.write(f"Temporarily banned at {timestamp()}\n")
                 print(f"Temporarily banned at {timestamp()}")
@@ -249,12 +254,12 @@ Bot initialized in {round(init, 3)} seconds
                 for _ in range(200):
                     mouse.click(Button.left, 1)
                     time.sleep(pingm/1000)
-        if color_close(p28925, (176, 100, 81)) and ((not disconnected or not died) or ((time.time() - lastdeath) > 5 and died)):
+        if color_close(targetcolor, (176, 100, 81)) and ((not disconnected or not died) or ((time.time() - lastdeath) > 5 and died)):
             print(f"Checking death at {timestamp()}")
             log_file.write(f"Checking death at {timestamp()}\n")
             time.sleep(3)
-            p28925_after = get_pixel_rgb(28, 925)
-            if color_close(p28925_after, (176, 100, 81)) and (not disconnected and not died or ((time.time() - lastdeath) > 5 and died)):
+            targetcolor_after = get_pixel_rgb(28, 925)
+            if color_close(targetcolor_after, (176, 100, 81)) and (not disconnected and not died or ((time.time() - lastdeath) > 5 and died)):
                 take_screenshot("died")
                 log_file.write(f"[DEATH] screenshot taken at {timestamp()}\n")
                 print(f"Died at {timestamp()}")
@@ -264,7 +269,7 @@ Bot initialized in {round(init, 3)} seconds
                 controller.tap(Key.enter)
 
         # Reconnect detection (tolerant)
-        if color_close(p28925, (223, 116, 90)) and (disconnected or died):
+        if color_close(targetcolor, (223, 116, 90)) and (disconnected or died):
             take_screenshot("reconnected")
             log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")

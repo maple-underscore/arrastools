@@ -153,7 +153,7 @@ def nuke():
 def shape():
     controller.press("`")
     controller.type("f"*500)
-    controller.release("`")
+    #controller.release("`")
 
 def ballcrash():
     controller.press("`")

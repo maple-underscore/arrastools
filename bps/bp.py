@@ -103,15 +103,21 @@ def place(queue):
         time.sleep(0.01)
         controller.release("z")
         time.sleep(0.01)
+        controller.tap("x")
+        time.sleep(0.01)
         
         # Process each color group within this modifier
         for color in modifier_groups[modifier]:
             # Set color once for this group
+            controller.tap("x")
+            time.sleep(0.01)
             controller.press("c")
             time.sleep(0.01)
             exec(colorinstructions[colors.index(color)])
             time.sleep(0.01)
             controller.release("c")
+            time.sleep(0.01)
+            controller.tap("x")
             time.sleep(0.01)
             
             # Place all walls with this modifier+color combination
@@ -120,7 +126,10 @@ def place(queue):
                 y = datapoint[3]
                 mouse.position = (int(x) + 404, int(y) + 179)
                 time.sleep(0.01)
-                controller.tap("x")
+                controller.press("x")
+                time.sleep(0.03)
+                controller.release("x")
+                time.sleep(0.01)
         
         controller.release("`")
         time.sleep(0.01)
