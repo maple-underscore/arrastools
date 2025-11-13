@@ -14,8 +14,9 @@ modifierheld = "n"
 
 time.sleep(4)
 
-colors = ["b", "g", "r", "p", "y", "G", "e", "s", "t", "P", "h", "c", "S", "l", "w", "o", "W", "C", "f", "B"]
+colors = ["n", "b", "g", "r", "p", "y", "G", "e", "s", "t", "P", "h", "c", "S", "l", "w", "o", "W", "C", "f", "B"]
 colorinstructions = [
+    "pass",
     "mouse.position = (mouse.position[0] + 1.5, mouse.position[1] - 22.8)",
     "mouse.position = (mouse.position[0] + 11.9, mouse.position[1] - 21.5)",
     "mouse.position = (mouse.position[0] + 19.4, mouse.position[1] - 16.8)",
@@ -78,39 +79,50 @@ with open(POSITIONPATH, "r") as p:
                 ypos += s
 
 def place(queue):
+    # Group datapoints by modifier first, then by color within each modifier group
+    modifier_groups = {}
     for datapoint in queue:
         modifier = datapoint[0]
+        if modifier not in modifier_groups:
+            modifier_groups[modifier] = {}
         color = datapoint[1]
-        x = datapoint[2]
-        y = datapoint[3]
-        mouse.position = (int(x) + 404, int(y) + 179)
-        time.sleep(0.01)
+        if color not in modifier_groups[modifier]:
+            modifier_groups[modifier][color] = []
+        modifier_groups[modifier][color].append(datapoint)
+    
+    # Process each modifier group
+    for modifier in modifier_groups:
+        # Set modifier once for this group
         controller.press("`")
         time.sleep(0.01)
         controller.tap("x")
         time.sleep(0.01)
-        if color != colorheld:
-            colorheld = color
+        controller.press("z")
+        time.sleep(0.01)
+        exec(modifierinstructions[modifiers.index(modifier)])
+        time.sleep(0.01)
+        controller.release("z")
+        time.sleep(0.01)
+        
+        # Process each color group within this modifier
+        for color in modifier_groups[modifier]:
+            # Set color once for this group
             controller.press("c")
             time.sleep(0.01)
             exec(colorinstructions[colors.index(color)])
             time.sleep(0.01)
             controller.release("c")
-        else:
-            controller.press("c")
-            time.sleep(0.03)
-            controller.release("c")
-        if modifier != modifierheld:
-            modifierheld = modifier
-            controller.press("z")
             time.sleep(0.01)
-            exec(modifierinstructions[modifiers.index(modifier)])
-            time.sleep(0.01)
-            controller.release("z")
-        else:
-            controller.press("z")
-            time.sleep(0.03)
-            controller.release("z")
+            
+            # Place all walls with this modifier+color combination
+            for datapoint in modifier_groups[modifier][color]:
+                x = datapoint[2]
+                y = datapoint[3]
+                mouse.position = (int(x) + 404, int(y) + 179)
+                time.sleep(0.01)
+                controller.tap("x")
+        
+        controller.release("`")
         time.sleep(0.01)
 
 place(buildqueue)
