@@ -2,11 +2,10 @@ import random
 import time
 import threading
 import platform
-import tkinter as tk
-from tkinter import ttk
 from pynput import keyboard
 from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
 from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
+
 
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'android'
@@ -24,28 +23,26 @@ if PLATFORM not in ('darwin', 'linux', 'windows'):
 length = 4
 
 # Function
-global size_automation, controller, randomwalld, circlecash, mouse, slowcircles, step, ctrlswap
-global macros_enabled
+global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step, ctrlswap
 step = 20
-s = 25 #circle spacing in px
+s = 25 #ball spacing in px
 ctrlswap = False  # When True, use Cmd (macOS) instead of Ctrl for macros
-macros_enabled = True  # Global flag to enable/disable all macros
 size_automation = False
 engispamming = False
 engispam_thread = None
 randomwalld = False
-slowcircles = False
-circlecash = False
-circlecrash_thread = None
+slowballs = False
+ballcash = False
+ballcrash_thread = None
 braindamage = False
 controller = KeyboardController()
 mouse = MouseController()
 pressed_keys = set()
 automation_thread = None
-slowcircle_thread = None
+slowball_thread = None
 randomwall_thread = None
 braindamage_thread = None  # Add this global variable
-circle_tail_legacy_thread = None  # Add this global variable
+ball10x10_thread = None  # Add this global variable
 controllednuke_points = []
 controllednuke_active = False
 
@@ -53,17 +50,13 @@ controllednuke_active = False
 ctrl6_last_time = 0
 ctrl6_armed = False
 
-# ctrl+o double-press lock
-ctrlo_last_time = 0
-ctrlo_armed = False
-
 # new ctrl+1 multi-press globals
 ctrl1_count = 0
 ctrl1_first_time = 0.0
 ctrl1_thread = None
 
-# NEW: bind slowcircles to Left Shift when enabled via Ctrl+C
-slowcircle_shift_bind = False
+# NEW: bind slowballs to Left Shift when enabled via Ctrl+C
+slowball_shift_bind = False
 
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
@@ -162,7 +155,7 @@ def shape():
     controller.type("f"*500)
     controller.release("`")
 
-def circlecrash():
+def ballcrash():
     controller.press("`")
     for _ in range(150):
         for _ in range(150):
@@ -170,15 +163,15 @@ def circlecrash():
             controller.tap("h")
     controller.release("`")
 
-def minicirclecrash():
+def miniballcrash():
     controller.press("`")
-    for _ in range(50):
+    for _ in range(25):
         for _ in range(100):
             controller.tap("c")
             controller.tap("h")
     controller.release("`")
 
-def circles(amt = 210):
+def balls(amt = 210):
     controller.press("`")
     for _ in range(amt):
         controller.tap("c")
@@ -190,16 +183,16 @@ def walls():
     controller.type("x"*210)
     controller.release("`")
 
-def slowcircle():
-    global slowcircles
+def slowball():
+    global slowballs
     controller.press("`")
-    while slowcircles:
+    while slowballs:
         controller.tap("c")
         controller.tap("h")
         time.sleep(0.04)
     controller.release("`")
 
-def circle_tail_legacy():
+def ball10x10():
     controller.press("`")
     controller.tap("0")
     controller.tap("-")
@@ -219,8 +212,6 @@ def circle_tail_legacy():
             time.sleep(0.04)
             controller.press("w")
             time.sleep(0.04)
-            controller.tap("c")
-            time.sleep(0.1)
             mouse.position = (starting_position[0]+i*s, starting_position[1]+i2*s)
             time.sleep(0.04)
             controller.release("w")
@@ -229,8 +220,6 @@ def circle_tail_legacy():
             time.sleep(0.04)
             controller.press("w")
             time.sleep(0.04)
-            controller.tap("c")
-            time.sleep(0.1)
             mouse.position = (starting_position[0]+i*s, starting_position[1]+i2*s)
             time.sleep(0.04)
             controller.release("w")
@@ -238,8 +227,6 @@ def circle_tail_legacy():
             time.sleep(0.04)
             controller.press("w")
             time.sleep(0.04)
-            controller.tap("c")
-            time.sleep(0.1)
             mouse.position = (starting_position[0]+i*s, starting_position[1]+i2*s)
             time.sleep(0.04)
             controller.release("w")
@@ -311,14 +298,14 @@ def benchmark(amt = 5000):
 
     # Start the benchmark
     start = time.time()
-    circles(amt)
+    balls(amt)
     print("Press any Shift key to stop the benchmark timer...")
     # Start keyboard listener
     with KeyboardListener(on_press=on_press) as listener:
         shift_pressed.wait()  # Wait until Shift is pressed
         listener.stop()
     elapsed = time.time() - start
-    print(f"{amt} circles in {round(elapsed*1000, 3)} ms")
+    print(f"{amt} balls in {round(elapsed*1000, 3)} ms")
     controller.tap(Key.enter)
     time.sleep(0.15)
     controller.type(f"> [{round(elapsed * 1000, 3)}ms] <")
@@ -354,7 +341,7 @@ def engispam():
         controller.press("q")
         controller.release("`")
 
-def circle():
+def ball():
     controller.press("`")
     controller.type("ch")
     controller.release("`")
@@ -386,13 +373,6 @@ def randomwall():
         time.sleep(0.02)
     controller.release("`")
 
-def shapel():
-    controller.press("`")
-    for _ in range(10):
-        controller.tap("f")
-        time.sleep(0.04)
-        controller.tap("b")
-
 def random_mouse_w():
     global randomwalld
     randomwalld = True
@@ -413,7 +393,7 @@ def simpletail(amt=20):
     time.sleep(delay)
     for _ in range(amt):
         for _ in range(3):
-            circle()
+            ball()
         controller.press("`")
         time.sleep(delay)
         controller.press("c")
@@ -488,12 +468,12 @@ def start_brain_damage():
         braindamage_thread.daemon = True
         braindamage_thread.start()
 
-def start_circle_tail_legacy():
-    global circle_tail_legacy_thread
-    if circle_tail_legacy_thread is None or not circle_tail_legacy_thread.is_alive():
-        circle_tail_legacy_thread = threading.Thread(target=circle_tail_legacy)
-        circle_tail_legacy_thread.daemon = True
-        circle_tail_legacy_thread.start()
+def start_ball10x10():
+    global ball10x10_thread
+    if ball10x10_thread is None or not ball10x10_thread.is_alive():
+        ball10x10_thread = threading.Thread(target=ball10x10)
+        ball10x10_thread.daemon = True
+        ball10x10_thread.start()
 
 def start_randomwall():
     global randomwall_thread
@@ -502,12 +482,12 @@ def start_randomwall():
         randomwall_thread.daemon = True
         randomwall_thread.start()
 
-def start_slowcircle():
-    global slowcircle_thread
-    if slowcircle_thread is None or not slowcircle_thread.is_alive():
-        slowcircle_thread = threading.Thread(target=slowcircle)
-        slowcircle_thread.daemon = True
-        slowcircle_thread.start()
+def start_slowball():
+    global slowball_thread
+    if slowball_thread is None or not slowball_thread.is_alive():
+        slowball_thread = threading.Thread(target=slowball)
+        slowball_thread.daemon = True
+        slowball_thread.start()
 
 def start_controllednuke():
     thread = threading.Thread(target=controllednuke)
@@ -561,12 +541,11 @@ def is_modifier_for_arrow_nudge(k):
     return is_alt(k)
 
 def on_press(key):
-    global size_automation, braindamage, circlecash, slowcircles, randomwalld, engispamming
+    global size_automation, braindamage, ballcash, slowballs, randomwalld, engispamming
     global ctrl6_last_time, ctrl6_armed
-    global ctrlo_last_time, ctrlo_armed
     global controllednuke_points, controllednuke_active
     global ctrl1_count, ctrl1_first_time, ctrl1_thread
-    global slowcircle_shift_bind, ctrlswap, macros_enabled
+    global slowball_shift_bind, ctrlswap
     try:
         # Use Right Shift instead of Escape to stop scripts
         if key == keyboard.Key.shift_r:
@@ -577,9 +556,9 @@ def on_press(key):
                 size_automation = False
                 braindamage = False
                 randomwalld = False
-                slowcircles = False
+                slowballs = False
                 engispamming = False
-                slowcircle_shift_bind = False
+                slowball_shift_bind = False
                 print("nstop")
                 # stop all threads
         elif is_ctrl(key):
@@ -603,18 +582,13 @@ def on_press(key):
                 elif key == keyboard.Key.right:
                     mouse.position = (x + 1, y)
                 return
-        
-        # Check if macros are enabled before processing hotkeys
-        if not macros_enabled:
-            return
-            
-        # NEW: pressing Left Shift starts slowcircles if binding is enabled
-        if key == keyboard.Key.shift_l:
-            if slowcircle_shift_bind:
-                if not slowcircles:
+        # NEW: pressing Left Shift starts slowballs if binding is enabled
+        elif key == keyboard.Key.shift_l:
+            if slowball_shift_bind:
+                if not slowballs:
                     print("art on")
-                slowcircles = True
-                start_slowcircle()
+                slowballs = True
+                start_slowball()
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
                 print("cnuke")
@@ -657,17 +631,17 @@ def on_press(key):
                 start_brain_damage()
         elif hasattr(key, 'char') and key.char and key.char=='4':
             if 'ctrl' in pressed_keys:
-                circle()
+                ball()
         elif hasattr(key, 'char') and key.char and key.char=='5':
             if 'ctrl' in pressed_keys:
-                print("circle square")
-                start_circle_tail_legacy()
+                print("ball square")
+                start_ball10x10()
         elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
                 now = time.time()
                 if ctrl6_armed and (now - ctrl6_last_time <= 5):
-                    print("death by circle")
-                    circlecrash()
+                    print("death by ball")
+                    ballcrash()
                     ctrl6_armed = False
                 else:
                     print("crasharmed")
@@ -699,24 +673,20 @@ def on_press(key):
                 score()
         elif hasattr(key, 'char') and key.char and key.char=='b':
             if 'ctrl' in pressed_keys:
-                print("200 circles")
-                circles()
+                print("200 balls")
+                balls()
         elif hasattr(key, 'char') and key.char and key.char=='w':
             if 'ctrl' in pressed_keys:
                 print("200 walls")
                 walls()
-        elif hasattr(key, 'char') and key.char and key.char=='v':
-            if 'ctrl' in pressed_keys:
-                print("shapel")
-                shapel()
         elif hasattr(key, 'char') and key.char and key.char=='z':
             if 'ctrl' in pressed_keys:
                 slowwall()
         elif hasattr(key, 'char') and key.char and key.char=='c':
             if 'ctrl' in pressed_keys:
                 # NEW: enable binding to Left Shift instead of starting immediately
-                slowcircle_shift_bind = True
-                slowcircles = False  # ensure idle until Left Shift is pressed
+                slowball_shift_bind = True
+                slowballs = False  # ensure idle until Left Shift is pressed
                 print("toggle art")
         elif hasattr(key, 'char') and key.char and key.char=='m':
             if 'ctrl' in pressed_keys:
@@ -729,15 +699,8 @@ def on_press(key):
                 start_randomwall()
         elif hasattr(key, 'char') and key.char and key.char=='o':
             if 'ctrl' in pressed_keys:
-                now = time.time()
-                if ctrlo_armed and (now - ctrlo_last_time <= 5):
-                    print("minicirclecrash")
-                    minicirclecrash()
-                    ctrlo_armed = False
-                else:
-                    print("minicrash armed")
-                    ctrlo_armed = True
-                    ctrlo_last_time = now
+                print("miniballcrash")
+                miniballcrash()
         elif hasattr(key, 'char') and key.char and key.char=='e':
             if 'ctrl' in pressed_keys:
                 print("engispam")
@@ -761,7 +724,7 @@ def on_press(key):
                     controller.tap(Key.enter)
         elif hasattr(key, 'char') and key.char and key.char=='s':
             if 'ctrl' in pressed_keys:
-                time.sleep(0.5)
+                time.sleep(0.1)
                 print("quicksetup")
                 controller.press("`")
                 time.sleep(0.05)
@@ -787,7 +750,7 @@ def on_press(key):
         print(f"Error: {e}")
     
 def on_release(key):
-    global slowcircles, slowcircle_shift_bind
+    global slowballs, slowball_shift_bind
     if is_ctrl(key):
         pressed_keys.discard('ctrl')
     elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
@@ -796,12 +759,12 @@ def on_release(key):
     elif is_alt(key):
         pressed_keys.discard('alt')
         # print("alt up")  # uncomment to debug
-    # NEW: releasing Left Shift stops slowcircles if binding is enabled
+    # NEW: releasing Left Shift stops slowballs if binding is enabled
     elif key == keyboard.Key.shift_l:
-        if slowcircle_shift_bind and slowcircles:
+        if slowball_shift_bind and slowballs:
             print("art off")
-        if slowcircle_shift_bind:
-            slowcircles = False
+        if slowball_shift_bind:
+            slowballs = False
     elif key in pressed_keys:
         pressed_keys.remove(key)
 
@@ -811,256 +774,11 @@ def on_click(x, y, button, pressed):
         controllednuke_points.append((x, y))
         print(f"cnuke point: {len(controllednuke_points)} at ({x}, {y})")
 
-# GUI Class for Macro Control Panel
-class MacroGUI:
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("Arras Macro Control Panel")
-        self.root.configure(bg='black')
-        self.root.geometry("400x600")
-        
-        # Force Tk to use older rendering on macOS for color support
-        # This is a workaround for Tcl/Tk 9.0 aqua theme not respecting colors
-        try:
-            # Try to set the window to use the classic appearance
-            self.root.tk.call('tk::unsupported::MacWindowStyle', 'style', self.root, 'document', 'closeBox resizable')
-        except:
-            pass
-        
-        # Macro button configurations: (title, function, state_var_name, is_boolean)
-        # is_boolean=True means the macro toggles on/off, False means one-shot execution
-        self.macros = [
-            ("Arena Automation Type 1", lambda: self.trigger_macro(start_arena_automation, 1), 'size_automation', True),
-            ("Arena Automation Type 2", lambda: self.trigger_macro(start_arena_automation, 2), 'size_automation', True),
-            ("Arena Automation Type 3", lambda: self.trigger_macro(start_arena_automation, 3), 'size_automation', True),
-            ("Conqueror", lambda: self.trigger_macro(conq_quickstart), None, False),
-            ("Brain Damage", lambda: self.toggle_boolean_macro('braindamage'), 'braindamage', True),
-            ("Circle", lambda: self.trigger_macro(circle), None, False),
-            ("Tail (Legacy)", lambda: self.trigger_macro(start_circle_tail_legacy), None, False),
-            ("Circle Crash", lambda: self.trigger_macro(circlecrash), None, False),
-            ("Wall Crash", lambda: self.trigger_macro(wallcrash), None, False),
-            ("Simple Tail", lambda: self.trigger_macro(simpletail), None, False),
-            ("Nuke", lambda: self.trigger_macro(nuke), None, False),
-            ("Shape Nuke", lambda: self.trigger_macro(shape), None, False),
-            ("Score", lambda: self.trigger_macro(score), None, False),
-            ("200 Circles", lambda: self.trigger_macro(circles), None, False),
-            ("200 Walls", lambda: self.trigger_macro(walls), None, False),
-            ("Slow Wall", lambda: self.trigger_macro(slowwall), None, False),
-            ("Art (Shift)", lambda: self.toggle_boolean_macro('slowcircle_shift_bind'), 'slowcircle_shift_bind', True),
-            ("Benchmark", lambda: self.trigger_macro(benchmark), None, False),
-            ("Mini Circle Crash", lambda: self.trigger_macro(minicirclecrash), None, False),
-            ("Engi Spam", lambda: self.toggle_boolean_macro('engispamming'), 'engispamming', True),
-            ("50M Score", lambda: self.trigger_macro(score50m), None, False),
-            ("Controlled Nuke", lambda: self.trigger_macro(start_controllednuke), None, False),
-        ]
-        
-        # Create scrollable frame
-        canvas = tk.Canvas(self.root, bg='black', highlightthickness=0)
-        scrollbar = tk.Scrollbar(self.root, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg='black')
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        # Toggle all macros button at top
-        self.toggle_all_btn = tk.Label(
-            scrollable_frame,
-            text="DISABLE ALL MACROS",
-            bg='green',
-            fg='white',
-            font=('Arial', 12, 'bold'),
-            height=2,
-            relief='raised',
-            bd=2,
-            cursor='hand2'
-        )
-        self.toggle_all_btn.bind('<Button-1>', lambda e: self._animate_button_press(self.toggle_all_btn, self.toggle_all_macros))
-        self.toggle_all_btn.pack(fill='x', padx=10, pady=5)
-        
-        # Create buttons (using Labels for color support on macOS)
-        self.buttons = []
-        for title, func, state_var, is_boolean in self.macros:
-            btn = tk.Label(
-                scrollable_frame,
-                text=title,
-                bg='green',
-                fg='white',
-                font=('Arial', 10),
-                height=2,
-                relief='raised',
-                bd=2,
-                cursor='hand2'
-            )
-            btn.bind('<Button-1>', lambda e, f=func, b=btn: self._animate_button_press(b, f))
-            btn.pack(fill='x', padx=10, pady=2)
-            self.buttons.append((btn, state_var, is_boolean))
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Start periodic update
-        self.update_button_colors()
-    
-    def _animate_button_press(self, button, callback):
-        """Animate button press with sunken effect"""
-        # Press down effect
-        button.config(relief='sunken')
-        # Schedule release effect and callback
-        self.root.after(100, lambda: self._release_button(button, callback))
-    
-    def _release_button(self, button, callback):
-        """Release button and execute callback"""
-        button.config(relief='raised')
-        callback()
-    
-    def toggle_boolean_macro(self, state_var_name):
-        """Toggle a boolean macro on/off"""
-        global size_automation, braindamage, randomwalld, slowcircles, engispamming, slowcircle_shift_bind, macros_enabled
-        
-        # Can't start new macros when disabled, but can stop running ones
-        if not macros_enabled:
-            current_state = globals().get(state_var_name, False)
-            if not current_state:
-                print(f"Cannot start {state_var_name}: macros are disabled!")
-                return
-            else:
-                print(f"Stopping {state_var_name}...")
-        
-        # Toggle the state
-        if state_var_name == 'size_automation':
-            size_automation = not size_automation
-            if size_automation:
-                start_arena_automation(1)
-        elif state_var_name == 'braindamage':
-            braindamage = not braindamage
-            if braindamage:
-                start_brain_damage()
-        elif state_var_name == 'randomwalld':
-            randomwalld = not randomwalld
-            if randomwalld:
-                start_randomwall()
-        elif state_var_name == 'slowcircles':
-            slowcircles = not slowcircles
-            if slowcircles:
-                start_slowcircle()
-        elif state_var_name == 'engispamming':
-            engispamming = not engispamming
-            if engispamming:
-                start_engispam()
-        elif state_var_name == 'slowcircle_shift_bind':
-            slowcircle_shift_bind = not slowcircle_shift_bind
-        
-        current_state = globals().get(state_var_name, False)
-        status = "ON" if current_state else "OFF"
-        print(f"{state_var_name}: {status}")
-        
-    def toggle_slowcircle_bind(self):
-        """Toggle slowcircle shift bind"""
-        global slowcircle_shift_bind
-        slowcircle_shift_bind = not slowcircle_shift_bind
-        print(f"Slowcircle shift bind: {slowcircle_shift_bind}")
-    
-    def trigger_macro(self, func, *args):
-        """Trigger a macro with 1 second delay"""
-        global macros_enabled
-        if not macros_enabled:
-            print("Macros are disabled!")
-            return
-        else:
-            print(f"Triggering macro: {func.__name__}")
-            
-        def delayed_trigger():
-            time.sleep(1)
-            if macros_enabled:  # Check again after delay
-                func(*args)
-        
-        thread = threading.Thread(target=delayed_trigger)
-        thread.daemon = True
-        thread.start()
-    
-    def toggle_all_macros(self):
-        """Toggle all macros on/off"""
-        global macros_enabled, size_automation, braindamage, randomwalld, slowcircles, engispamming
-        macros_enabled = not macros_enabled
-        
-        if not macros_enabled:
-            # Don't stop running macros - let them continue but show as yellow
-            self.toggle_all_btn.config(text="ENABLE ALL MACROS", bg='red')
-            print("All macros DISABLED (running macros will continue but show as yellow)")
-        else:
-            self.toggle_all_btn.config(text="DISABLE ALL MACROS", bg='green')
-            print("All macros ENABLED")
-    
-    def update_button_colors(self):
-        """Update button colors based on state
-        - Green: Ready (macros enabled, not running)
-        - Blue: Active (macros enabled, running)
-        - Red: Disabled (macros disabled, not running)
-        - Yellow: Running but disabled (macros disabled, still running)
-        """
-        global macros_enabled, size_automation, braindamage, randomwalld, slowcircles, engispamming, slowcircle_shift_bind
-        
-        for btn, state_var, is_boolean in self.buttons:
-            is_active = False
-            
-            # Check if this macro is active (only for boolean macros)
-            if state_var and is_boolean:
-                if state_var == 'size_automation':
-                    is_active = size_automation
-                elif state_var == 'braindamage':
-                    is_active = braindamage
-                elif state_var == 'randomwalld':
-                    is_active = randomwalld
-                elif state_var == 'slowcircles':
-                    is_active = slowcircles
-                elif state_var == 'engispamming':
-                    is_active = engispamming
-                elif state_var == 'slowcircle_shift_bind':
-                    is_active = slowcircle_shift_bind
-            
-            # Set color based on state
-            if is_active and not macros_enabled:
-                # Running but macros disabled = yellow
-                btn.config(bg='yellow', fg='black')
-            elif is_active and macros_enabled:
-                # Running and macros enabled = blue
-                btn.config(bg='blue', fg='white')
-            elif not is_active and not macros_enabled:
-                # Not running and macros disabled = red
-                btn.config(bg='red', fg='white')
-            else:
-                # Not running and macros enabled = green (ready)
-                btn.config(bg='green', fg='white')
-        
-        # Schedule next update
-        self.root.after(100, self.update_button_colors)
-    
-    def run(self):
-        """Run the GUI main loop"""
-        self.root.mainloop()
+# Start mouse listener globally (after your keyboard listener setup)
+mouse_listener = MouseListener(on_click=on_click)
+mouse_listener.daemon = True
+mouse_listener.start()
 
-# Start keyboard and mouse listeners in background
-def start_listeners():
-    """Start keyboard and mouse listeners in a thread"""
-    # Start mouse listener
-    mouse_listener = MouseListener(on_click=on_click)
-    mouse_listener.daemon = True
-    mouse_listener.start()
-    
-    # Start keyboard listener (this blocks)
-    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-        listener.join()
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
 
-# Start listeners in separate thread so GUI can run on main thread
-listener_thread = threading.Thread(target=start_listeners)
-listener_thread.daemon = True
-listener_thread.start()
-
-# Run GUI on main thread (required for macOS)
-gui = MacroGUI()
-gui.run()
