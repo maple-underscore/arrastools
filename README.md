@@ -1,3 +1,5 @@
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
 # arrastools
 
 Desktop automation tools and a PPO-based AI for Arras.io gameplay. Cross-platform support for macOS, Linux, and Windows.
@@ -199,7 +201,7 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detai
 
 ## License
 
-MIT License - See LICENSE file for details
+CC BY-NC-SA 4.0 License - See LICENSE and NOTICE files for details. Non-commercial use only.
 
 ## Contributing
 
