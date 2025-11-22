@@ -24,13 +24,14 @@ length = 4
 
 # Function
 global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step, ctrlswap
-global circle_mouse_active, circle_mouse_speed, circle_mouse_radius
+global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
 step = 20
 s = 25 #ball spacing in px
 ctrlswap = False  # When True, use Cmd (macOS) instead of Ctrl for macros
 circle_mouse_active = False
 circle_mouse_speed = 0.02  # Time delay between updates (lower = faster)
 circle_mouse_radius = 100  # Radius in pixels
+circle_mouse_direction = 1  # 1 for clockwise, -1 for counterclockwise
 size_automation = False
 engispamming = False
 engispam_thread = None
@@ -289,8 +290,8 @@ def brain_damage():
         time.sleep(0.02)  # Add a small delay to prevent locking up your systema
 
 def circle_mouse():
-    """Move mouse in circles around a center point"""
-    global circle_mouse_active, circle_mouse_speed, circle_mouse_radius
+    """Move mouse in circles around a center point. Press '\\' to reverse direction."""
+    global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
     global controllednuke_points, controllednuke_active
     import math
     
@@ -331,8 +332,8 @@ def circle_mouse():
         
         # Scale rotation step with radius for consistent arc length
         # Larger radius = smaller angular increment for smooth motion
-        angle_step = 5.0 / max(circle_mouse_radius, 10)
-        angle += angle_step
+        angle_step_base = 5.0 / max(circle_mouse_radius, 10)
+        angle += circle_mouse_direction * angle_step_base
         if angle >= 2 * math.pi:
             angle = 0
         
@@ -756,10 +757,17 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 circle_mouse_active = not circle_mouse_active
                 if circle_mouse_active:
+                    circle_mouse_direction = 1  # reset to default on start
                     print(f"circle mouse on (radius: {circle_mouse_radius}, speed: {circle_mouse_speed})")
                     start_circle_mouse()
                 else:
                     print("circle mouse off")
+        elif hasattr(key, 'char') and key.char and key.char=='\\':
+            # Toggle direction of circle while active
+            if circle_mouse_active:
+                circle_mouse_direction *= -1
+                dir_text = 'clockwise' if circle_mouse_direction == 1 else 'counterclockwise'
+                print(f"circle direction -> {dir_text}")
         elif hasattr(key, 'char') and key.char and key.char=='k':
             if 'ctrl' in pressed_keys:
                 controller.tap(Key.enter)
