@@ -1,0 +1,286 @@
+Cascading-E Notation
+PREV>> 4.3.3 - Extended Hyper-E Numbers (1142 - 2684)
+ Introduction 
+            As we have seen in the previous chapters, Bowers' exploding array function (BEAF) is very powerful and very general, if extremely difficult to define precisely. It is possible however to construct other systems of equal power, and some of these are easier to define than others. Due to the popularity of my Hyper-E and Extended Hyper-E Notation, I have decided to develop a major extension to my "Extensible-E System" (ExE for short) which brings it to the next level of sophistication. One motivation for this is that my Extensible-E System is heavily inspired by my original work with large numbers as a kid, so it's natural that I should develop it further with the hindsight of several years of study. This new extension to Extensible-E is called "Cascading-E Notation" ( E^ for short). The reasons for this choice will be made clear as we work out it's details. Before we look into this, I'd first like to address a weak extension to my Extended Hyper-E which was used briefly on the googology wiki (it has since been deleted due to their citation policy).
+Plus Notation
+            On the googology wiki, there was an attempt to extend my Extended Hyper-E Notation, and a few numbers were even devised. This extension begins by inventing a new separator, " + ", and giving it the following definition:
+ 
+@a+b = @a###...###a w/b #s
+ 
+                Keep in mind that the notational conventions we will be using here are those that have already been established in my Hyper-E Notation article. So "@" is just short hand for the rest of the expression. Remember that in the E System only the last two entries are ever part of the transformation. Only once the two arguments have been reduced to a single argument can the evaluation proceed to the next step. Thus, we can truncate our expression to only the last two arguments.
+ 
+                With this separator and definition established we can write certain numbers more compactly. For example:
+ 
+grangol = E100+1 = E100#100
+ 
+gugold = E100+2 = E100##100
+ 
+throogol = E100+3 = E100###100
+ 
+tetroogol = E100+4 = E100####100
+ 
+...
+ 
+godgahlah = E100+100 = E100####...####100 w/100 #s
+ 
+grand godgahlah = E100+100#2 = E100+(E100+100) = E100+godgahlah
+ 
+grand grand godgahlah = E100+100#3 = E100+(E100+100#2) = E100+(grand godgahlah)
+ 
+                Using this notation a few numbers were devised, not by me, but by other users. Here are some examples:
+ 
+bodgahlah = E100+100+100
+ 
+trodgahlah = E100+100+100+100
+ 
+                On the googology wiki, a double plus was used at one point with the following definition:
+ 
+@a++b = @a+a+ ... +a+a w/b a's
+ 
+Only a single number was defined using this notation. namely:
+ 
+godmegalah = E100++100 = E100+100+100+ ... +100+100+100 w/100 100s
+ 
+                This suggests that we could create strings of multiple plus marks to create a "2nd level" extended Hyper-E Notation. For example let:
+ 
+@a+++b = @a++a++ ... ++a++a w/b a's
+ 
+@a++++b = @a+++a+++ ... +++a w/b a's
+ 
+and in general
+ 
+@a+nb = @a+n-1a+n-1 ... +n-1a w/b a's
+ 
+where +k = ++ ... ++ w/k +s
+ 
+            Despite the fact that this might seem like the "next level" of the system, this is actually a rather weak extension of the system. Ironically, before the Plus notation even appeared on the googology wiki I had already developed the basics of a much more powerful extension. In the next part we'll start building this extension from the ground up...
+Building Cascades 
+                We will now begin to develop "Cascading-E Notation" (E^). The system begins by re-interpreting a string of hyperions as a product of hyperions. That is:
+ 
+###...### w/a #s = #*#*#*#* ... *#*# w/a #s = #^a = #a
+ 
+                Note that this gives us a nifty shorthand for writing out certain numbers in Extended Hyper-E:
+ 
+godgahlah = E100#### ... ####100 w/100 #s =
+ 
+E100#^(100)100 = E100#100100
+ 
+                Note that " ^ " is a new symbol being introduced to our E System. Initially the only symbols being used were "E" and "#". We now add the third symbol "^" to the system. This is normally known as the "caret" symbol. For the purposes of Cascading-E Notation it will be called a carrier mark, carrier or carrion. In addition to this we will also be adding the " * " asterisk as a punctuation symbol, with the usual multiplicative meaning. Note however that multiplications are not commutative in E^. We will also use " ( " and " ) " in the usual way to clarify order of operations.
+ 
+                The next step is crucial. Rather than simply allowing us to raise a hyperion to any power, we also allow the exponent to itself be a expression composed of hyperions. The simplest case of this would be "#^#". This becomes our next separator after the infinite set of separators , { # , ## , ###, #### , ... }. We begin with this new definition for the new separator:
+ 
+@a#^#b = @a#^(b)a = @a### ... ###a w/b #s
+ 
+                As you can see the hyperion within the exponent gets replaced by "b". Furthermore, we can think of this new separator as a generic power of the hyperion:
+ 
+#^# = ####...####
+ 
+                This notation allows us to write numbers in the  godgahlah group as:
+ 
+godgahlah = E100#^#100
+ 
+grand godgahlah = E100#^#100#2
+ 
+grand grand godgahlah = E100#^#100#3
+ 
+...
+ 
+hundred-ex-grand godgahlah = E100#^#100#101
+ 
+godgahlah-ex-grand godgahlah = E100#^#100#(godgahlah+1) 
+ 
+                As you can see, all the rules of Hyper-E and Extended Hyper-E carry over to the new notation. Note that the separator " #^# " is equivalent to " + ".
+ 
+                We continue by extrapolating a pattern observed with the existing separators within a new "hash-product" paradigm. Observe that every succeeding separator is multiplying the previous separator by a hyperion.
+ 
+ie.
+ 
+#*# = ##
+ 
+##*# = ###
+ 
+###*# = ####
+ 
+etc.
+ 
+Thus we conclude that the next separator after " #^# " should be " #^#*# ". To determine how the operator should work we again observe the pattern established in Extended Hyper-E Notation:
+ 
+@a##b = @a#a# ... #a w/b a's
+ 
+@a###b = @a##a## ... ##a w/b a's
+ 
+@a####b = @a###a### ... ###a w/b a's
+ 
+So we conclude that in general any hash-product is expanded by removing one hyperion (dividing it by #) and using this as a separator of b arguments of a. So it follows that:
+ 
+@a#^#*#b = a#^#a#^#a#^# ... #^#a#^#a w/b a's
+ 
+                So here we have repetitions of the #^# separator. #^#*# is equivalent to " ++ ". We can go further and define ...
+ 
+@a#^#*##b = @a#^#*#a#^#*# ... #^#*#a w/b a's
+ 
+... by following the same logic.
+ 
+#^#*## is equivalent to " +++ " 
+ 
+In general:
+ 
+@a#^#*#kb = @a#^#*#k-1a ... a w/b a's
+ 
+where #^#*#k is equivalent to ++...++ w/k+1 "+"s
+ 
+                So already we have reached the end of the Plus Notation. However Cascading-E Notation is just getting started! 
+ 
+                So that we can have some terms to describe what happens next, let a hyper band be defined as any product of simple hyperions, ie. anything of the form ### ... ### is a hyper band.
+ 
+                To continue with our notation we can truncate the second hyper band into another #^#.
+ 
+                Thus beyond all separators of the form { #^# , #^#*# , #^#*## , #^#*### , ... } we have the #^#*#^# separator.
+  
+                Next we define:
+ 
+@a#^#*#^#b = @a#^#*#^(b)a
+ 
+                Much the same way with multi-hyperion marks, we must resolve the last most part of the hyper product first. Any expression of the form #^X*#^X*...#^X is known as a hyper-product or alternatively as a hyper-term. Each of the individual terms, #^X, of the hyper-product are called cascaders (the rationale for this will be made clear as we progress). So every hyper-product is just the product of cascaders. Whenever resolving a Cascading-E Expression, remember to always resolve the last cascader before proceeding to the next.
+ 
+                With this logic established, the following continuation should be obvious:
+ 
+@a#^#*#^#*#b = @a#^#*#^#a ... a w/b a's
+ 
+@a#^#*#^#*##b = @a#^#*#^#*#a ... a w/b a's
+ 
+@a#^#*#^#*###b = @a#^#*#^#*##a ... a w/b a's
+ 
+...
+ 
+@a#^#*#^#*#^#b = @a#^#*#^#*#^(b)a
+ 
+@a#^#*#^#*#^#*#b = @a#^#*#^#*#^#a ... a w/b a's
+ 
+@a#^#*#^#*#^#*##b = @a#^#*#^#*#^#*#a ... a w/b a's
+ 
+...
+ 
+@a#^#*#^#*#^#*#^#b = @a#^#*#^#*#^#*#^(b)a
+ 
+...
+ 
+@a#^#*#^#*#^#*#^#*#^#b = @a#^#*#^#*#^#*#^#*#^(b)a
+ 
+...
+ 
+@a#^#*#^#*#^#*#^#*#^#*#^#b = @a#^#*#^#*#^#*#^#*#^#*#^(b)a
+ 
+etc.
+ 
+                    This brings us to the limit of this idea. To go beyond this, as always, all we need is a new separator. Here we can use the idea of exponential laws to devise a new separator. Recall that:
+ 
+ax * ay = ax+y
+                
+                With this in mind we can say that:
+ 
+## * ## * ## * ... ## * ## * ## = ##+#+#+ ... +#+#+# = ##*# = ###
+ 
+                Therefore we conclude that the next separator is #^##. We can then establish the following rule:
+ 
+@a#^##b = @a#^#*#^#*#^#* ... *#^#*#^#a w/b #^#s
+ 
+ 
+                In order to keep things as simple as possible I'll establish the following special notation:
+ 
+ 
+Let (#^X)^b = #^X*#^X*#^X* ... #^X*#^X*#^X w/b #^Xs
+ 
+ 
+This will allow us to simplify definitions somewhat. We can now say:
+ 
+ 
+@a#^##b = @a(#^#)^(b)a
+ 
+                We can multiply #^## by any hyper-product we have yet devised including #^##. The limit of this would be:
+ 
+#^##*#^##*#^##* ... *#^##
+ 
+                When resolving a hyper-product such as this, we would begin by expanding the last #^## into a series of #^#s. Each of these would then be expanded into hyper-bands in turn, until you eventually got to the next #^##. So here we now have two levels of expansions. As you can imagine, it would take a really really REALLY long time to resolve expressions of this form!                
+ 
+                 And it only gets worse (first rule of googology). By the same principles we've used up to this point we can devise the #^### separator and define it as:
+ 
+ 
+@a#^###b = @a(#^##)^(b)a
+ 
+ 
+                You can probably guess what happens next. We now can generalize this result to say that:
+ 
+@a#^#kb = @a(#^#k-1)^(b)a
+ 
+                Have we reached the end? Not at all, but we are now prepared to take these principles to their natural conclusion.
+ 
+ 
+                We can just create a new separator #^#^#, which expands to #^#b before continuing downwards. Thus we can say:
+ 
+@a#^#^#b = @a#^#^(b)a
+ 
+                 Note the similarity of this rule to the rule for #^#. At this point all the basic principles we have so far established keep being recycled. As some examples:
+ 
+ 
+@a#^(#^#*#)b = @a(#^#^#)^(b)a
+ 
+@a#^(#^#*##)b = @a(#^(#^#*#))^(b)a
+ 
+@a#^(#^#*###)b = @a(#^(#^#*##))^(b)a
+ 
+...
+ 
+@a#^(#^#*#^n)b = @a(#^(#^#*#^(n-1)))^(b)a
+ 
+@a#^(#^#*#^#)b = @a#^(#^#*#^b)a
+ 
+@a#^(#^#*#^#*#^#)b = @a#^(#^#*#^#*#^b)a
+ 
+...
+ 
+@a#^#^##b = @a#^((#^#)^b)a
+ 
+@a#^#^###b = @a#^((#^##)^b)a
+ 
+...
+ 
+@a#^#^#^#b = @a#^#^#^(b)a
+ 
+@a#^#^#^#^#b = @a#^#^#^#^(b)a
+ 
+etc.
+ 
+                Although the expressions are starting to get somewhat complicated and hard to read, there does seem to be only a few simple principles that are being used to resolve these expressions. It is not immediately obvious what is going on. All we have is a wealth of examples and a vague understanding for how to resolve them at the moment. Is there some way that we can capture the essence of what is going on and develop a more formal definition?  After some reflection I was able to isolate the fundamental principle used implicitly to resolve these expressions. 
+A Formal definition of Cascading-E 
+                The first thing we can observe that there are really 5 basic rule types that are occurring in our resolution of the Cascading-E. These are:
+ 
+1. The base case:
+ 
+ ie. Ea=10^a
+ 
+2. The hyper-product Expansion:
+ 
+If there is a complex hyper-product between the last two arguments whose last cascader is not of the form ###...###, then Let & be the hyper-product and &'(b) be the transformation with base b; we can then say @a&b = @a&'(b)a
+ 
+3. The Truncation Rule:
+ 
+ If there is a hyper-product between the last two arguments whose last cascade is of the form ##...## and the last argument=1, then let & be the hyper-product; we can then say @a&1 = @a
+ 
+4. The hyper-band Expansion:
+ 
+ If last argument > 1 but last cascade is of the form #^n where n>1, then Let & be the hyper-product and &/# be the hyper-product with one less hyperion at the end; we can then say @a&b = @a&/#a ... a w/b a's
+ 
+5. The default case:
+ 
+ If none of these apply than the last argument must be greater than 1, and the last separator must be the proto-hyperion, "#"; we then just say that @a#b = @(@a#(b-1))
+ 
+                Two important tasks remain however until this is properly formulated. Firstly we need to develop proper terminology and symbolism to reduce the amount of wordiness as much as possible. Words can be very useful in the development of a new googological function, just as pseudo-code is a great aid for programmers. However this should only serve as a rough draft. If at all possible a formal definition should be sought out. In the search for better notation, formalism, and terminology, one often gets much practice in the concepts and eventually this leads to a drastically simplified perspective on how the system actually works.
+ 
+                The Second task, and perhaps even the more important one, is to figure out how to solve for X'(b) for the general case.
+ 
+                The principle for solving X'(b) turns out to be fairly simple, though a bit tricky to explain. To understand it we need to establish some notation and terminology.
+ 
+                Firstly, let & be any hyper-product, and let X be either a positive integer or a hyper product. We now make the following statements:
+ 
+X = & or Z+

@@ -10,7 +10,7 @@ from threading import Thread
 from pathlib import Path
 from ping3 import ping
 
-firefox = True
+firefox = False
 
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
@@ -258,8 +258,11 @@ Bot initialized in {round(init, 3)} seconds
             print(f"Checking death at {timestamp()}")
             log_file.write(f"Checking death at {timestamp()}\n")
             time.sleep(3)
-            targetcolor_after = get_pixel_rgb(28, 925)
-            if color_close(targetcolor_after, (176, 100, 81)) and (not disconnected and not died or ((time.time() - lastdeath) > 5 and died)):
+            if firefox:
+                targetcolor_after = get_pixel_rgb(26, 930)
+            else:
+                targetcolor_after = get_pixel_rgb(28, 925)
+            if color_close(targetcolor_after, (176, 100, 81)) and ((not disconnected or not died) or ((time.time() - lastdeath) > 5 and died)):
                 take_screenshot("died")
                 log_file.write(f"[DEATH] screenshot taken at {timestamp()}\n")
                 print(f"Died at {timestamp()}")
@@ -270,6 +273,13 @@ Bot initialized in {round(init, 3)} seconds
 
         # Reconnect detection (tolerant)
         if color_close(targetcolor, (223, 116, 90)) and (disconnected or died):
+            mouse.position = (36, 155)
+            time.sleep(0.1)
+            mouse.click(Button.left, 1)
+            time.sleep(0.1)
+            mouse.position = (9, 194)
+            time.sleep(0.1)
+            mouse.click(Button.left, 1)
             take_screenshot("reconnected")
             log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")
@@ -298,6 +308,8 @@ Bot initialized in {round(init, 3)} seconds
             controller.release("`")
 
         if time.time() - lastscreenshot > 60:
+            mouse.position = (7, 1064)
+            time.sleep(0.1)
             take_screenshot()
             log_file.write(f"[PERIODIC] screenshot taken at {timestamp()}\n")
             lastscreenshot = time.time()

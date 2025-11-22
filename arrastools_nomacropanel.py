@@ -24,9 +24,13 @@ length = 4
 
 # Function
 global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step, ctrlswap
+global circle_mouse_active, circle_mouse_speed, circle_mouse_radius
 step = 20
 s = 25 #ball spacing in px
 ctrlswap = False  # When True, use Cmd (macOS) instead of Ctrl for macros
+circle_mouse_active = False
+circle_mouse_speed = 0.02  # Time delay between updates (lower = faster)
+circle_mouse_radius = 100  # Radius in pixels
 size_automation = False
 engispamming = False
 engispam_thread = None
@@ -43,6 +47,7 @@ slowball_thread = None
 randomwall_thread = None
 braindamage_thread = None  # Add this global variable
 ball10x10_thread = None  # Add this global variable
+circle_mouse_thread = None  # Add this global variable
 controllednuke_points = []
 controllednuke_active = False
 
@@ -189,7 +194,7 @@ def slowball():
     while slowballs:
         controller.tap("c")
         controller.tap("h")
-        time.sleep(0.04)
+        time.sleep(0.02)
     controller.release("`")
 
 def ball10x10():
@@ -283,6 +288,56 @@ def brain_damage():
         mouse.position = (random.randint(0, 1710), random.randint(168, 1112))
         time.sleep(0.02)  # Add a small delay to prevent locking up your systema
 
+def circle_mouse():
+    """Move mouse in circles around a center point"""
+    global circle_mouse_active, circle_mouse_speed, circle_mouse_radius
+    global controllednuke_points, controllednuke_active
+    import math
+    
+    # Wait for user to click to set center point
+    print("Click anywhere to set the center point for circular motion...")
+    temp_points = []
+    temp_active = True
+    
+    def temp_click_handler(x, y, button, pressed):
+        if pressed and button == Button.left and temp_active:
+            temp_points.append((x, y))
+    
+    # Temporarily use a mouse listener to capture the click
+    temp_listener = MouseListener(on_click=temp_click_handler)
+    temp_listener.start()
+    
+    start_time = time.time()
+    while len(temp_points) == 0 and circle_mouse_active and time.time() - start_time < 10:
+        time.sleep(0.01)
+    
+    temp_active = False
+    temp_listener.stop()
+    
+    if len(temp_points) == 0 or not circle_mouse_active:
+        print("Circle mouse: No point selected or cancelled")
+        circle_mouse_active = False
+        return
+    
+    center_x, center_y = temp_points[0]
+    print(f"Circle mouse: center ({center_x}, {center_y}), radius {circle_mouse_radius}, speed {circle_mouse_speed}")
+    
+    angle = 0
+    while circle_mouse_active:
+        # Calculate position on circle
+        x = center_x + int(circle_mouse_radius * math.cos(angle))
+        y = center_y + int(circle_mouse_radius * math.sin(angle))
+        mouse.position = (x, y)
+        
+        # Scale rotation step with radius for consistent arc length
+        # Larger radius = smaller angular increment for smooth motion
+        angle_step = 5.0 / max(circle_mouse_radius, 10)
+        angle += angle_step
+        if angle >= 2 * math.pi:
+            angle = 0
+        
+        time.sleep(circle_mouse_speed)
+
 def score():
     controller.press("`")
     controller.type("n"*20000)
@@ -353,39 +408,6 @@ def slowwall():
         time.sleep(0.08)
     controller.release("`")
 
-def randomwall():
-    global randomwalld
-    controller.press("`")
-    while randomwalld:
-        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
-        time.sleep(0.02)
-        pos = mouse.position
-        controller.press("w")
-        mouse.position = (pos[0]+random.randint(-5, 5), pos[1]+random.randint(-5, 5))
-        time.sleep(0.05)
-        controller.release("w")
-        time.sleep(0.02)
-        pos = mouse.position
-        controller.press("z")
-        mouse.position = (pos[0]+random.randint(-20, 20), pos[1]+random.randint(-20, 20))
-        time.sleep(0.05)
-        controller.release("z")
-        time.sleep(0.02)
-    controller.release("`")
-
-def random_mouse_w():
-    global randomwalld
-    randomwalld = True
-    while randomwalld:
-        mouse.position = (random.randint(5, 1705), random.randint(173, 1107))
-        time.sleep(0.02)
-        pos = mouse.position
-        controller.press("w")
-        mouse.position = (pos[0]+random.randint(-5, 5), pos[1]+random.randint(-5, 5))
-        time.sleep(0.05)
-        controller.release("w")
-        time.sleep(0.02)
-
 def simpletail(amt=20):
     controller.press("`")
     delay = 0.04
@@ -413,8 +435,6 @@ def simpletail(amt=20):
         mouse.position = (mouse.position[0] - s2, mouse.position[1])
         time.sleep(delay)
         controller.release("j")
-        time.sleep(delay)
-    controller.release("`")
 
 def controllednuke():
     global controllednuke_points, controllednuke_active, step
@@ -475,12 +495,12 @@ def start_ball10x10():
         ball10x10_thread.daemon = True
         ball10x10_thread.start()
 
-def start_randomwall():
-    global randomwall_thread
-    if randomwall_thread is None or not randomwall_thread.is_alive():
-        randomwall_thread = threading.Thread(target=randomwall)
-        randomwall_thread.daemon = True
-        randomwall_thread.start()
+def start_circle_mouse():
+    global circle_mouse_thread
+    if circle_mouse_thread is None or not circle_mouse_thread.is_alive():
+        circle_mouse_thread = threading.Thread(target=circle_mouse)
+        circle_mouse_thread.daemon = True
+        circle_mouse_thread.start()
 
 def start_slowball():
     global slowball_thread
@@ -493,13 +513,6 @@ def start_controllednuke():
     thread = threading.Thread(target=controllednuke)
     thread.daemon = True
     thread.start()
-
-def start_random_mouse_w():
-    global randomwall_thread
-    if randomwall_thread is None or not randomwall_thread.is_alive():
-        randomwall_thread = threading.Thread(target=random_mouse_w)
-        randomwall_thread.daemon = True
-        randomwall_thread.start()
 
 def _ctrl1_waiter():
     global ctrl1_count, ctrl1_first_time, ctrl1_thread
@@ -546,6 +559,7 @@ def on_press(key):
     global controllednuke_points, controllednuke_active
     global ctrl1_count, ctrl1_first_time, ctrl1_thread
     global slowball_shift_bind, ctrlswap
+    global circle_mouse_active, circle_mouse_speed, circle_mouse_radius
     try:
         # Use Right Shift instead of Escape to stop scripts
         if key == keyboard.Key.shift_r:
@@ -559,6 +573,7 @@ def on_press(key):
                 slowballs = False
                 engispamming = False
                 slowball_shift_bind = False
+                circle_mouse_active = False
                 print("nstop")
                 # stop all threads
         elif is_ctrl(key):
@@ -662,11 +677,7 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='f':
             if 'ctrl' in pressed_keys:
                 print("shape nuke")
-                shape() 
-        elif hasattr(key, 'char') and key.char and key.char=='d':
-            if 'ctrl' in pressed_keys:
-                print("randomdrag")
-                start_random_mouse_w()
+                shape()
         elif hasattr(key, 'char') and key.char and key.char=='n':
             if 'ctrl' in pressed_keys:
                 print("score")
@@ -692,11 +703,6 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("benchmarking...")
                 benchmark()
-        elif hasattr(key, 'char') and key.char and key.char=='a':
-            if 'ctrl' in pressed_keys:
-                randomwalld = True
-                print("all abuse")
-                start_randomwall()
         elif hasattr(key, 'char') and key.char and key.char=='o':
             if 'ctrl' in pressed_keys:
                 print("miniballcrash")
@@ -746,6 +752,36 @@ def on_press(key):
                 controller.tap("o")
                 controller.release("a")
                 controller.release("`")
+        elif hasattr(key, 'char') and key.char and key.char=='u':
+            if 'ctrl' in pressed_keys:
+                circle_mouse_active = not circle_mouse_active
+                if circle_mouse_active:
+                    print(f"circle mouse on (radius: {circle_mouse_radius}, speed: {circle_mouse_speed})")
+                    start_circle_mouse()
+                else:
+                    print("circle mouse off")
+        elif hasattr(key, 'char') and key.char and key.char=='k':
+            if 'ctrl' in pressed_keys:
+                controller.tap(Key.enter)
+                time.sleep(0.05)
+                controller.type("$arena team 1")
+                controller.tap(Key.enter)
+                controller.tap(Key.enter)
+                time.sleep(0.05)
+                controller.type("$arena spawnpoint 0 0")
+                controller.tap(Key.enter)
+        elif hasattr(key, 'char') and key.char and key.char=='-':
+            circle_mouse_speed = min(circle_mouse_speed + 0.001, 0.5)
+            print(f"circle speed: {round(circle_mouse_speed, 4)} (slower)")
+        elif hasattr(key, 'char') and key.char and key.char=='=':
+            circle_mouse_speed = max(circle_mouse_speed - 0.001, 0.001)
+            print(f"circle speed: {round(circle_mouse_speed, 4)} (faster)")
+        elif hasattr(key, 'char') and key.char and key.char=='[':
+            circle_mouse_radius = max(circle_mouse_radius - 5, 5)
+            print(f"circle radius: {circle_mouse_radius}")
+        elif hasattr(key, 'char') and key.char and key.char==']':
+            circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
+            print(f"circle radius: {circle_mouse_radius}")
     except Exception as e:
         print(f"Error: {e}")
     

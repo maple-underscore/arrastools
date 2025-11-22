@@ -36,7 +36,7 @@ colorinstructions = [
     "mouse.position = (mouse.position[0] + -24.9, mouse.position[1] + -11.0)",
     "mouse.position = (mouse.position[0] + -22.1, mouse.position[1] + -18.7)",
     "mouse.position = (mouse.position[0] + -14.3, mouse.position[1] + -23.3)",
-    "mouse.position = (mouse.position[0] + -5.3, mouse.position[1] + -25.4)",
+    "mouse.position = (mouse.position[0] + -5.3, mouse.position[1] + -25.4)"
 ]
 
 modifiers = ["n", "k", "h", "b", "B", "s", "e", "^", "v", ">", "<", "S", "f", "p", "F", "t", "T", "P", "r"]
@@ -59,7 +59,7 @@ modifierinstructions = [
     "mouse.position = (mouse.position[0] + -22.6, mouse.position[1] + -10.0)",
     "mouse.position = (mouse.position[0] + -17.6, mouse.position[1] + -18.3)",
     "mouse.position = (mouse.position[0] + -11.0, mouse.position[1] + -20.5)",
-    "mouse.position = (mouse.position[0] + -4.2, mouse.position[1] + -20.7)",
+    "mouse.position = (mouse.position[0] + -4.2, mouse.position[1] + -20.7)"
 ]
 
 # map every corresponding pair of characters
@@ -79,6 +79,7 @@ with open(POSITIONPATH, "r") as p:
                 ypos += s
 
 def place(queue):
+    controller.press("`")
     # Group datapoints by modifier first, then by color within each modifier group
     modifier_groups = {}
     color_groups = {}
@@ -111,6 +112,7 @@ def place(queue):
                 controller.press("z")
                 time.sleep(0.03)
                 controller.release("z")
+            print(f"Placed modifier {obj[0]} at ({404 + obj[2]}, {179 + obj[3]})")
     for color_group in color_groups.values():
         for obj in color_group:
             mouse.position = (404 + obj[2], 179 + obj[3])
@@ -126,5 +128,6 @@ def place(queue):
                 controller.press("c")
                 time.sleep(0.03)
                 controller.release("c")
+            print(f"Placed color {obj[1]} at ({404 + obj[2]}, {179 + obj[3]})")
 
 place(buildqueue)
