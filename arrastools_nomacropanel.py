@@ -560,7 +560,7 @@ def on_press(key):
     global controllednuke_points, controllednuke_active
     global ctrl1_count, ctrl1_first_time, ctrl1_thread
     global slowball_shift_bind, ctrlswap
-    global circle_mouse_active, circle_mouse_speed, circle_mouse_radius
+    global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
     try:
         # Use Right Shift instead of Escape to stop scripts
         if key == keyboard.Key.shift_r:
