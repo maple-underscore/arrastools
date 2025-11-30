@@ -1,29 +1,33 @@
 import random
 import time
 import threading
+import multiprocessing
 import platform
-from pynput import keyboard
-from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
-from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
+import sys
+
+try:
+    from pynput import keyboard
+    from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
+    from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
+except ImportError:
+    print("Missing dependency: pynput is required to run this script.")
+    print("Install with: python3 -m pip install -r requirements.txt")
+    sys.exit(1)
 
 
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'android'
-print(f"Running on: {PLATFORM}")
 
 # Platform notes:
 # - macOS: Ctrl hotkeys work; Option+Arrow for 1px nudges
 # - Linux: Ctrl hotkeys work; Alt+Arrow for 1px nudges
 # - Windows: Ctrl hotkeys work; Alt+Arrow for 1px nudges
 # - Android: Limited support (pynput may not work on all devices)
-if PLATFORM not in ('darwin', 'linux', 'windows'):
-    print(f"Warning: Platform '{PLATFORM}' may have limited support.")
-    print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
 
 length = 4
 
 # Function
-global size_automation, controller, randomwalld, ballcash, mouse, slowballs, step, ctrlswap
+global automation_working, controller, randomwalld, circlecrash_working, mouse, art_working, step, ctrlswap
 global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
 step = 20
 s = 25 #ball spacing in px
@@ -32,46 +36,110 @@ circle_mouse_active = False
 circle_mouse_speed = 0.02  # Time delay between updates (lower = faster)
 circle_mouse_radius = 100  # Radius in pixels
 circle_mouse_direction = 1  # 1 for clockwise, -1 for counterclockwise
-size_automation = False
-engispamming = False
+automation_working = False
+engispam_working = False
 engispam_thread = None
-randomwalld = False
-slowballs = False
-ballcash = False
-ballcrash_thread = None
-braindamage = False
+art_working = False
+circlecrash_working = False
+circlecrash_thread = None
+braindamage_working = False
 controller = KeyboardController()
 mouse = MouseController()
 pressed_keys = set()
-automation_thread = None
-slowball_thread = None
-randomwall_thread = None
-braindamage_thread = None  # Add this global variable
-ball10x10_thread = None  # Add this global variable
-circle_mouse_thread = None  # Add this global variable
+automation_process = None
+softwallstack_process = None
+art_process = None
+braindamage_process = None
+tail_process = None
+circle_mouse_process = None
+engispam_process = None
+circlecrash_process = None
 controllednuke_points = []
 controllednuke_active = False
+
+processes = ["automation", "engispam", "art", "braindamage_working", "tail", "circle_mouse", "softwallstack", "circlecrash"]
+for process in processes:
+    exec(f"{process}_process = None")
+    exec(f"global {process}_process, {process}_working")
 
 # Add these globals near the top
 ctrl6_last_time = 0
 ctrl6_armed = False
+ctrl7_last_time = 0
+ctrl7_armed = False
 
 # new ctrl+1 multi-press globals
 ctrl1_count = 0
 ctrl1_first_time = 0.0
-ctrl1_thread = None
 
-# NEW: bind slowballs to Left Shift when enabled via Ctrl+C
+# NEW: bind art_working to Left Shift when enabled via Ctrl+C
 slowball_shift_bind = False
 
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
 
+def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3):
+    time.sleep(1)
+    """Type a sequence of Unicode characters encoded as 4-hex-digit code points.
+
+    Format examples:
+        "011156F2C11A" -> U+0111 U+56F2 U+C11A
+
+    Behavior:
+      - If hex_string is provided its length must be a multiple of 4; each 4-digit
+        group is interpreted as a hexadecimal code point.
+      - If hex_string is None, a random sequence of `blocks` code points will be
+        generated (default 3 groups => 12 hex digits).
+      - Surrogate range (D800-DFFF) and code points > 0x10FFFF are skipped and
+        regenerated when auto-generating.
+      - Null code point (0000) is replaced with a literal space to avoid issues
+        with consumers treating NUL as terminator.
+      - Any group that parses but produces an unsupported character will be
+        replaced with '�'.
+
+    The resulting characters are typed inside backticks to keep existing
+    console-open convention consistent with other macros.
+    """
+    groups: list[str] = []
+    if hex_string is not None:
+        hex_string = hex_string.strip().upper()
+        if len(hex_string) % 4 != 0:
+            print("unicode blocks: invalid length (must be multiple of 4)")
+            return
+        for i in range(0, len(hex_string), 4):
+            groups.append(hex_string[i:i+4])
+    else:
+        while len(groups) < blocks:
+            cp = random.randint(0, 0xFFFF)
+            # Skip surrogate range and prefer printable BMP subset; allow null rarely
+            if 0xD800 <= cp <= 0xDFFF:
+                continue
+            groups.append(f"{cp:04X}")
+
+    chars: list[str] = []
+    for g in groups:
+        try:
+            cp = int(g, 16)
+            if cp == 0:
+                # Replace NUL with space to avoid termination semantics
+                chars.append(' ')
+                continue
+            if cp > 0x10FFFF or (0xD800 <= cp <= 0xDFFF):
+                chars.append('�')
+                continue
+            chars.append(chr(cp))
+        except Exception:
+            chars.append('�')
+
+    out = ''.join(chars)
+    print(f"unicode blocks: {' '.join(groups)} -> '{out}'")
+    controller.type(out)
+
 def arena_size_automation(atype = 1):
     time.sleep(2)
-    global size_automation
+    global automation_working
     if atype == 1:
-        while size_automation:
+        while automation_working:
             x = generate_even()
             y = generate_even()
             print(f"Sending command: $arena size {x} {y}")
@@ -80,13 +148,13 @@ def arena_size_automation(atype = 1):
             controller.type(command)
             controller.tap(Key.enter)
     elif atype == 2:
-        while size_automation:
+        while automation_working:
         # x and y go from 2 to 1024 in steps of 2
             x = 2
             y = 2
             direction_x = 2
             direction_y = 2
-            while size_automation:
+            while automation_working:
                 print(f"Sending command: $arena size {x} {y}")
                 command = f"$arena size {x} {y}"
                 controller.tap(Key.enter)
@@ -99,13 +167,13 @@ def arena_size_automation(atype = 1):
                 if y >= 1024 or y <= 2:
                     direction_y *= -1
     elif atype == 3:
-        while size_automation:
+        while automation_working:
             #x goes from 2 to 1024, y goes from 1024 to 2
             x = 2
             y = 1024
             direction_x = 2
             direction_y = -2
-            while size_automation:
+            while automation_working:
                 print(f"Sending command: $arena size {x} {y}")
                 command = f"$arena size {x} {y}"
                 controller.tap(Key.enter)
@@ -159,9 +227,13 @@ def nuke():
 def shape():
     controller.press("`")
     controller.type("f"*500)
-    #controller.release("`")
+    controller.release("`")
 
-def ballcrash():
+def shape2():
+    controller.press("`")
+    controller.type("f"*500)
+
+def circlecrash():
     controller.press("`")
     for _ in range(150):
         for _ in range(150):
@@ -169,7 +241,7 @@ def ballcrash():
             controller.tap("h")
     controller.release("`")
 
-def miniballcrash():
+def minicirclecrash():
     controller.press("`")
     for _ in range(25):
         for _ in range(100):
@@ -189,20 +261,17 @@ def walls():
     controller.type("x"*210)
     controller.release("`")
 
-def slowball():
-    global slowballs
+def art():
+    global art_working
     controller.press("`")
-    while slowballs:
+    while art_working:
         controller.tap("c")
         controller.tap("h")
         time.sleep(0.02)
     controller.release("`")
 
-def ball10x10():
+def tail():
     controller.press("`")
-    controller.tap("0")
-    controller.tap("-")
-    controller.tap("-")
     mouse = MouseController()
     init = mouse.position
     controller.type("ch"*int(length*33))
@@ -283,9 +352,9 @@ def ball10x10():
     controller.release("`")
 
 def brain_damage():
-    global braindamage
+    global braindamage_working
     mouse = MouseController()
-    while braindamage:
+    while braindamage_working:
         mouse.position = (random.randint(0, 1710), random.randint(168, 1112))
         time.sleep(0.02)  # Add a small delay to prevent locking up your systema
 
@@ -381,8 +450,8 @@ def score50m():
     controller.release("`")
 
 def engispam():
-    global engispamming
-    while engispamming:
+    global engispam_working
+    while engispam_working:
         controller.tap(",")
         controller.tap("y")
         controller.tap("i")
@@ -408,6 +477,28 @@ def slowwall():
         controller.tap("x")
         time.sleep(0.08)
     controller.release("`")
+
+def softwallstack():
+    walls()
+    start = mouse.position
+    stackpos = (start[0] - s, start[1] + 4 * s)
+    controller.press("`")
+    for _ in range(200):
+        mouse.position = (start[0] + 2 * s, start[1])
+        controller.tap("w")
+        time.sleep(0.03)
+        controller.press("c")
+        time.sleep(0.03)
+        controller.release("c")
+        time.sleep(0.03)
+        controller.tap("y")
+        time.sleep(0.03)
+        controller.press("w")
+        mouse.position = stackpos
+        time.sleep(0.03)
+        controller.release("w")
+    controller.release("`")
+
 
 def simpletail(amt=20):
     controller.press("`")
@@ -467,56 +558,63 @@ def controllednuke():
     controller.release("`")
 
 def start_arena_automation(atype = 1):
-    global automation_thread, size_automation
-    # ensure the running flag is set before starting the thread
-    size_automation = True
-    if automation_thread is None or not automation_thread.is_alive():
-        automation_thread = threading.Thread(target=arena_size_automation, args=(atype,))
-        automation_thread.daemon = True
-        automation_thread.start()
+    global automation_process, automation_working
+    # ensure the running flag is set before starting the process
+    automation_working = True
+    if automation_process is None or not automation_process.is_alive():
+        automation_process = multiprocessing.Process(target=arena_size_automation, args=(atype,))
+        automation_process.daemon = True
+        automation_process.start()
 
 def start_engispam():
-    global engispam_thread
-    if engispam_thread is None or not engispam_thread.is_alive():
-        engispam_thread = threading.Thread(target=engispam)
-        engispam_thread.daemon = True
-        engispam_thread.start()
+    global engispam_process
+    if engispam_process is None or not engispam_process.is_alive():
+        engispam_process = multiprocessing.Process(target=engispam)
+        engispam_process.daemon = True
+        engispam_process.start()
 
 def start_brain_damage():
-    global braindamage_thread
-    if braindamage_thread is None or not braindamage_thread.is_alive():
-        braindamage_thread = threading.Thread(target=brain_damage)
-        braindamage_thread.daemon = True
-        braindamage_thread.start()
+    global braindamage_process
+    if braindamage_process is None or not braindamage_process.is_alive():
+        braindamage_process = multiprocessing.Process(target=brain_damage)
+        braindamage_process.daemon = True
+        braindamage_process.start()
 
-def start_ball10x10():
-    global ball10x10_thread
-    if ball10x10_thread is None or not ball10x10_thread.is_alive():
-        ball10x10_thread = threading.Thread(target=ball10x10)
-        ball10x10_thread.daemon = True
-        ball10x10_thread.start()
+def start_tail():
+    global tail_process
+    if tail_process is None or not tail_process.is_alive():
+        tail_process = multiprocessing.Process(target=tail)
+        tail_process.daemon = True
+        tail_process.start()
 
 def start_circle_mouse():
-    global circle_mouse_thread
-    if circle_mouse_thread is None or not circle_mouse_thread.is_alive():
-        circle_mouse_thread = threading.Thread(target=circle_mouse)
-        circle_mouse_thread.daemon = True
-        circle_mouse_thread.start()
+    global circle_mouse_process
+    if circle_mouse_process is None or not circle_mouse_process.is_alive():
+        circle_mouse_process = multiprocessing.Process(target=circle_mouse)
+        circle_mouse_process.daemon = True
+        circle_mouse_process.start()
 
 def start_slowball():
-    global slowball_thread
-    if slowball_thread is None or not slowball_thread.is_alive():
-        slowball_thread = threading.Thread(target=slowball)
-        slowball_thread.daemon = True
-        slowball_thread.start()
+    global art_process
+    if art_process is None or not art_process.is_alive():
+        art_process = multiprocessing.Process(target=art)
+        art_process.daemon = True
+        art_process.start()
+
+def start_softwallstack():
+    global softwallstack_process
+    if softwallstack_process is None or not softwallstack_process.is_alive():
+        softwallstack_process = multiprocessing.Process(target=softwallstack)
+        softwallstack_process.daemon = True
+        softwallstack_process.start()
 
 def start_controllednuke():
-    thread = threading.Thread(target=controllednuke)
-    thread.daemon = True
-    thread.start()
+    proc = multiprocessing.Process(target=controllednuke)
+    proc.daemon = True
+    proc.start()
 
 def _ctrl1_waiter():
-    global ctrl1_count, ctrl1_first_time, ctrl1_thread
+    global ctrl1_count, ctrl1_first_time
     # wait 2 seconds from first press, then act on count
     first = ctrl1_first_time
     time.sleep(2.0)
@@ -527,7 +625,6 @@ def _ctrl1_waiter():
         start_arena_automation(int(atype))
         ctrl1_count = 0
         ctrl1_first_time = 0.0
-        ctrl1_thread = None
 
 # Normalize modifier detection across platforms
 def is_ctrl(k):
@@ -544,6 +641,37 @@ def is_alt(k):
     # On macOS, Option is alt; on other platforms, Alt is alt
     return k in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r)
 
+def stopallthreads():
+    global automation_process, engispam_process, art_process, braindamage_process
+    global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process
+    global automation_working, engispam_working, art_working, braindamage_working
+    global circle_mouse_active
+    
+    # Set all flags to False
+    automation_working = False
+    engispam_working = False
+    art_working = False
+    braindamage_working = False
+    circle_mouse_active = False
+    
+    # Terminate all processes
+    for proc in [automation_process, engispam_process, art_process, braindamage_process,
+                 tail_process, circle_mouse_process, softwallstack_process, circlecrash_process]:
+        if proc is not None and proc.is_alive():
+            proc.terminate()
+            proc.join(timeout=1)
+    
+    # Reset all process references
+    automation_process = None
+    engispam_process = None
+    art_process = None
+    braindamage_process = None
+    tail_process = None
+    circle_mouse_process = None
+    softwallstack_process = None
+    circlecrash_process = None
+
+
 def is_modifier_for_arrow_nudge(k):
     """Return True if this key should trigger 1px arrow nudges.
     
@@ -555,10 +683,10 @@ def is_modifier_for_arrow_nudge(k):
     return is_alt(k)
 
 def on_press(key):
-    global size_automation, braindamage, ballcash, slowballs, randomwalld, engispamming
-    global ctrl6_last_time, ctrl6_armed
+    global automation_working, braindamage_working, circlecrash_working, art_working, randomwalld, engispam_working
+    global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
     global controllednuke_points, controllednuke_active
-    global ctrl1_count, ctrl1_first_time, ctrl1_thread
+    global ctrl1_count, ctrl1_first_time
     global slowball_shift_bind, ctrlswap
     global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
     try:
@@ -568,13 +696,14 @@ def on_press(key):
                 print("estop")
                 exit(0)
             else:
-                size_automation = False
-                braindamage = False
+                automation_working = False
+                braindamage_working = False
                 randomwalld = False
-                slowballs = False
-                engispamming = False
+                art_working = False
+                engispam_working = False
                 slowball_shift_bind = False
                 circle_mouse_active = False
+                stopallthreads()
                 print("nstop")
                 # stop all threads
         elif is_ctrl(key):
@@ -598,13 +727,19 @@ def on_press(key):
                 elif key == keyboard.Key.right:
                     mouse.position = (x + 1, y)
                 return
-        # NEW: pressing Left Shift starts slowballs if binding is enabled
+        # NEW: pressing Left Shift starts art_working if binding is enabled
         elif key == keyboard.Key.shift_l:
             if slowball_shift_bind:
-                if not slowballs:
+                if not art_working:
                     print("art on")
-                slowballs = True
+                art_working = True
                 start_slowball()
+        elif hasattr(key, 'char') and key.char and key.char == "'":
+            if 'ctrl' in pressed_keys:
+                # Pressing ctrl+' triggers unicode block typing. Without a provided
+                # hex string it will auto-generate 3 blocks.
+                print("unicode blocks macro")
+                type_unicode_blocks("027103B103C1056C1D07005B000BFFFC007F2400000B005D")  # auto-generate
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
                 print("cnuke")
@@ -616,10 +751,10 @@ def on_press(key):
                 if ctrl1_count == 0:
                     ctrl1_first_time = now
                     ctrl1_count = 1
-                    # spawn waiter thread
-                    ctrl1_thread = threading.Thread(target=_ctrl1_waiter)
-                    ctrl1_thread.daemon = True
-                    ctrl1_thread.start()
+                    # spawn waiter thread (still using thread for timing)
+                    waiter = threading.Thread(target=_ctrl1_waiter)
+                    waiter.daemon = True
+                    waiter.start()
                     print("arena scrip")
                 else:
                     # if within 2s of first press, increment count (cap at 3)
@@ -630,11 +765,9 @@ def on_press(key):
                         # too late, start new sequence
                         ctrl1_first_time = now
                         ctrl1_count = 1
-                        # restart waiter thread if previous finished
-                        if ctrl1_thread is None or not ctrl1_thread.is_alive():
-                            ctrl1_thread = threading.Thread(target=_ctrl1_waiter)
-                            ctrl1_thread.daemon = True
-                            ctrl1_thread.start()
+                        waiter = threading.Thread(target=_ctrl1_waiter)
+                        waiter.daemon = True
+                        waiter.start()
                         print("arena script")
         elif hasattr(key, 'char') and key.char and key.char=='2':
             if 'ctrl' in pressed_keys:
@@ -642,7 +775,7 @@ def on_press(key):
                 conq_quickstart()
         elif hasattr(key, 'char') and key.char and key.char=='3':
             if 'ctrl' in pressed_keys:
-                braindamage = True
+                braindamage_working = True
                 print("bdmg")
                 start_brain_damage()
         elif hasattr(key, 'char') and key.char and key.char=='4':
@@ -651,13 +784,13 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='5':
             if 'ctrl' in pressed_keys:
                 print("ball square")
-                start_ball10x10()
+                start_tail()
         elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
                 now = time.time()
                 if ctrl6_armed and (now - ctrl6_last_time <= 5):
                     print("death by ball")
-                    ballcrash()
+                    circlecrash()
                     ctrl6_armed = False
                 else:
                     print("crasharmed")
@@ -665,8 +798,16 @@ def on_press(key):
                     ctrl6_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='7':
             if 'ctrl' in pressed_keys:
-                print("wallcrash")
-                wallcrash()
+                now = time.time()
+                # double-tap lock: first tap arms, second tap within 5s triggers
+                if ctrl7_armed and (now - ctrl7_last_time <= 5):
+                    print("death by wall")
+                    wallcrash()
+                    ctrl7_armed = False
+                else:
+                    print("wallcrash armed")
+                    ctrl7_armed = True
+                    ctrl7_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='8':
             if 'ctrl' in pressed_keys:
                 print("simple tail")
@@ -679,6 +820,10 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("shape nuke")
                 shape()
+        elif hasattr(key, 'char') and key.char and key.char=='j':
+            if 'ctrl' in pressed_keys:
+                print("shape nuke2")
+                shape2()
         elif hasattr(key, 'char') and key.char and key.char=='n':
             if 'ctrl' in pressed_keys:
                 print("score")
@@ -698,7 +843,7 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 # NEW: enable binding to Left Shift instead of starting immediately
                 slowball_shift_bind = True
-                slowballs = False  # ensure idle until Left Shift is pressed
+                art_working = False  # ensure idle until Left Shift is pressed
                 print("toggle art")
         elif hasattr(key, 'char') and key.char and key.char=='m':
             if 'ctrl' in pressed_keys:
@@ -706,12 +851,12 @@ def on_press(key):
                 benchmark()
         elif hasattr(key, 'char') and key.char and key.char=='o':
             if 'ctrl' in pressed_keys:
-                print("miniballcrash")
-                miniballcrash()
+                print("minicirclecrash")
+                minicirclecrash()
         elif hasattr(key, 'char') and key.char and key.char=='e':
             if 'ctrl' in pressed_keys:
                 print("engispam")
-                engispamming = True
+                engispam_working = True
                 start_engispam()
         elif hasattr(key, 'char') and key.char and key.char=='l':
             if 'ctrl' in pressed_keys:
@@ -729,12 +874,17 @@ def on_press(key):
                     controller.tap(Key.enter)
                     controller.type("$arena close")
                     controller.tap(Key.enter)
+        elif hasattr(key, 'char') and key.char and key.char=='g':
+            if 'ctrl' in pressed_keys:
+                start_softwallstack()
         elif hasattr(key, 'char') and key.char and key.char=='s':
             if 'ctrl' in pressed_keys:
                 time.sleep(0.1)
                 print("quicksetup")
                 controller.press("`")
                 time.sleep(0.05)
+                for _ in range(50):
+                    controller.tap("n")
                 controller.tap("i")
                 controller.press("s")
                 for _ in range(20):
@@ -794,7 +944,7 @@ def on_press(key):
         print(f"Error: {e}")
     
 def on_release(key):
-    global slowballs, slowball_shift_bind
+    global art_working, slowball_shift_bind
     if is_ctrl(key):
         pressed_keys.discard('ctrl')
     elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
@@ -803,12 +953,12 @@ def on_release(key):
     elif is_alt(key):
         pressed_keys.discard('alt')
         # print("alt up")  # uncomment to debug
-    # NEW: releasing Left Shift stops slowballs if binding is enabled
+    # NEW: releasing Left Shift stops art_working if binding is enabled
     elif key == keyboard.Key.shift_l:
-        if slowball_shift_bind and slowballs:
+        if slowball_shift_bind and art_working:
             print("art off")
         if slowball_shift_bind:
-            slowballs = False
+            art_working = False
     elif key in pressed_keys:
         pressed_keys.remove(key)
 
@@ -818,11 +968,20 @@ def on_click(x, y, button, pressed):
         controllednuke_points.append((x, y))
         print(f"cnuke point: {len(controllednuke_points)} at ({x}, {y})")
 
-# Start mouse listener globally (after your keyboard listener setup)
-mouse_listener = MouseListener(on_click=on_click)
-mouse_listener.daemon = True
-mouse_listener.start()
+if __name__ == '__main__':
+    # Required for multiprocessing on macOS and Windows
+    multiprocessing.set_start_method('spawn', force=True)
+    
+    print(f"Running on: {PLATFORM}")
+    if PLATFORM not in ('darwin', 'linux', 'windows'):
+        print(f"Warning: Platform '{PLATFORM}' may have limited support.")
+        print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
+    
+    # Start mouse listener globally (after your keyboard listener setup)
+    mouse_listener = MouseListener(on_click=on_click)
+    mouse_listener.daemon = True
+    mouse_listener.start()
 
-with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-    listener.join()
+    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+        listener.join()
 

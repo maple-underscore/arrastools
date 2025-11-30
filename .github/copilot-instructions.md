@@ -7,11 +7,37 @@ Purpose: Help AI coding agents work productively in this repo of desktop automat
 - Screen + input automation:
   - `arrastools.py` — hotkey-driven macros using pynput. Listeners run at module end and spawn daemon threads via `start_*` helpers.
   - `arrastools2.py` — alternative version with similar functionality and cross-platform support.
+  - `arrastools_nomacropanel.py` — streamlined version of arrastools without the macro panel GUI, same hotkey functionality.
   - `arrasbot.py` — a watchdog that samples screen pixels with `mss`, reacts to state (disconnected/died/banned), and logs/screenshots.
   - `arrascopypasta.py` — copypasta automation with platform-agnostic file path handling using pathlib.
-- PPO AI prototype:
+  - `arrascopypastareload.py` — enhanced copypasta with auto-reload functionality and pixel detection for UI state.
+- PPO AI prototypes:
   - `arrasai.py` — defines PPO agent (PolicyNetwork, PPOMemory, ArrasAI) and training/exec loops over screen observations sampled in a polygon (`GAME_REGION`). Models saved to `arras_models/` (e.g., `arras_model.pt_best`).
-- Assets/data: `arras_models/`, `logs/`, `copypastas/`.
+  - `asnake.py` — DQN-based Snake game AI with configurable training via `snake_config.json`. Models saved to `snake_models/`. Optional pygame visualization (headless mode if pygame unavailable).
+- Utilities and helpers:
+  - `arraspixel.py` — click-to-inspect pixel color tool using mss and pynput mouse listener.
+  - `arrasmouselocator.py` — records mouse click positions for coordinate mapping.
+  - `arrasmouse.py` — simple mouse position setter utility.
+  - `keylogger.py` — keypress logger with timestamped output to `logsk/` directory. Press Esc to stop.
+- Game-specific macros:
+  - `arrasantiafk.py` — simple anti-AFK mouse wiggle with periodic clicks.
+  - `arrashealmacro.py` — auto-spam 'h' key for 15s when h is pressed (healer macro).
+  - `arrastank.py` — tank upgrade/control automation sequence.
+  - `arrasstack.py` — stack macro with circular mouse movement at configurable angles/radius.
+  - `arrasdev.py` — multi-threaded ball crash stress test (spawns 32 threads for mass ball spawning).
+  - `arrasreload.py` — automated UI reload with chat message automation.
+  - `arrastext.py` / `arrastext2.py` — in-game text drawing using ball placement with bitmap font support.
+  - `arrasshaver.py` — utility for processing bitmap font character templates.
+  - `arrasbp.py` — blueprint/character pair processing utility.
+- External tools:
+  - `screensender.py` — WebSocket screen streaming server with remote mouse/keyboard input support.
+  - `minesweeper.py` — terminal-based Minesweeper game with ANSI color display.
+  - `cobalt.py` — automated video downloader using cobalt.tools with pixel-based UI detection.
+  - `sumo.py` — pixel-based directional movement automation (detects red pixels for WASD input).
+  - `drawacircle.py` — click two points to define a rectangle, finds white center, draws a circle with mouse drag.
+- Test/development scripts:
+  - `linuxtest.py`, `arrastest2.py`, `arashealertest.py` — minimal pynput test scripts for platform verification.
+- Assets/data: `arras_models/`, `snake_models/`, `logs/`, `logsk/`, `copypastas/`, `bps/`, `bitmap.txt`.
 
 ## Cross-platform support and runtime assumptions
 
@@ -62,6 +88,8 @@ All main scripts now include platform detection using `platform.system().lower()
 - **Core libraries**: `pynput`, `mss`, `numpy`, `pathlib` (built-in)
 - **Bot utilities**: `ping3`, `Pillow`, `mss.tools`
 - **AI/ML**: `torch`, `shapely`, `pytesseract`, `Pillow`
+- **Snake AI**: `torch`, `numpy`, `pygame` (optional for visualization)
+- **Screen streaming**: `websockets`, `Pillow`, `mss`
 
 ### System dependencies (platform-specific)
 - **macOS**: Tesseract via Homebrew: `brew install tesseract`
@@ -78,7 +106,7 @@ source .venv/bin/activate  # Linux/macOS
 .venv\Scripts\activate  # Windows
 
 # Install dependencies
-pip install pynput mss numpy ping3 pillow torch shapely pytesseract
+pip install pynput mss numpy ping3 pillow torch shapely pytesseract websockets pygame
 
 # Platform-specific system packages
 # macOS: brew install tesseract
@@ -101,6 +129,14 @@ pip install pynput mss numpy ping3 pillow torch shapely pytesseract
   - Samples RGB at `OBSERVATION_POINTS = sample_points_in_polygon(GAME_REGION, step=10)` using `mss`; outputs: action (W/A/S/D/Space), mouse target, Sum42 head, and upgrade path.
   - Models saved in `arras_models/` with suffixes `_best`, `_final`, `_interrupted` based on training flow.
 - `arrascopypasta.py`: Reads `.txt` files from `copypastas/` directory (uses pathlib for cross-platform compatibility).
+- `asnake.py` Snake AI training:
+  - Config: `snake_config.json` controls grid size, training episodes, rewards, display settings, parallel games.
+  - Hotkeys: `Esc` to quit, visualization via pygame (optional).
+  - Models saved in `snake_models/` with suffixes `_best`, `_ep<N>`, `_interrupted`.
+- `keylogger.py`: Run to log all keypresses to `logsk/keylog_<timestamp>.txt`. Press Esc to stop.
+- `screensender.py`: WebSocket server for remote screen streaming. Set `SCREEN_SENDER_TOKEN` env var. Connect via `screenreciever.html`.
+- `drawacircle.py`: Click two points to define rectangle, then automatically draws circle at white center.
+- `cobalt.py`: Reads URLs from `downloadqueue.txt` and automates downloads via cobalt.tools UI.
 
 ## Conventions and patterns to follow
 - **Threading**: Use `threading.Thread(..., daemon=True)` for background actions; toggle with global flags (e.g., `slowballs`, `randomwalld`). Provide `start_*` helpers to avoid duplicate threads.
@@ -135,4 +171,4 @@ pip install pynput mss numpy ping3 pillow torch shapely pytesseract
 - Virtual environment recommended to isolate Python packages
 - Check pynput documentation for platform-specific requirements
 
-References: `arrastools.py`, `arrastools2.py`, `arrasbot.py`, `arrasai.py`, `arrascopypasta.py`, `arras_models/`, `logs/`, `copypastas/`. Keep changes minimal and aligned with existing patterns.
+References: `arrastools.py`, `arrastools2.py`, `arrastools_nomacropanel.py`, `arrasbot.py`, `arrasai.py`, `asnake.py`, `arrascopypasta.py`, `screensender.py`, `keylogger.py`, `arras_models/`, `snake_models/`, `logs/`, `logsk/`, `copypastas/`. Keep changes minimal and aligned with existing patterns.

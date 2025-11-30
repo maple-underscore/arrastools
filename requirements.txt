@@ -1,0 +1,12 @@
+pynput
+mss
+numpy
+ping3
+pillow
+torch
+shapely
+pytesseract
+multiprocessing
+sys
+platform
+threading

@@ -6,9 +6,16 @@ Press Esc to stop logging and exit.
 """
 
 import platform
-from pynput import keyboard
 from pathlib import Path
 from datetime import datetime
+import sys
+
+try:
+    from pynput import keyboard
+except ImportError:
+    print("Missing dependency: pynput is required to run the keylogger.")
+    print("Install with: python3 -m pip install pynput")
+    sys.exit(1)
 
 # Platform detection
 PLATFORM = platform.system().lower()
