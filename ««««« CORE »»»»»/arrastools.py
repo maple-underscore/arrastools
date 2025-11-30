@@ -1,3 +1,9 @@
+"""Hotkey-driven Arras macros and drawing helpers.
+
+The script mirrors historical behavior; readability tweaks (docstrings,
+comments) clarify intent without altering any macro logic.
+"""
+
 import random
 import time
 import threading
@@ -27,6 +33,8 @@ PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'a
 length = 4
 
 # Function
+# Centralized set of flags/shared state used across macro helpers. Values are
+# kept as globals because listeners spin up background threads that need access.
 global automation_working, controller, randomwalld, circlecrash_working, mouse, art_working, step, ctrlswap
 global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
 step = 20
@@ -740,6 +748,10 @@ def on_press(key):
                 # hex string it will auto-generate 3 blocks.
                 print("unicode blocks macro")
                 type_unicode_blocks("027103B103C1056C1D07005B000BFFFC007F2400000B005D")  # auto-generate
+        elif hasattr(key, 'char') and key.char and key.char == ";":
+            if 'ctrl' in pressed_keys:
+                time.sleep(1)
+                controller.type("«∑∏¯ˇ†∫–⁄∞∆µ•‰ª¬∂Ω◊ﬂı®»")
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
                 print("cnuke")

@@ -1,3 +1,5 @@
+"""Automated Arras copypasta typer with optional AI prompt mode."""
+
 import time, threading, os, mss, numpy as np
 import platform
 from pathlib import Path
@@ -44,9 +46,10 @@ def get_pixel_rgb(x, y):
     return tuple(int(v) for v in pixel[:3])
 
 # Use pathlib for cross-platform file paths
-# Get script directory and locate copypastas folder relative to it
-script_dir = Path(__file__).parent
-copypasta_dir = script_dir / 'copypastas'
+# Script dir holds automation scripts; copypastas live one level up
+script_dir = Path(__file__).resolve().parent
+repo_root = script_dir.parent
+copypasta_dir = repo_root / 'copypastas'
 
 # Ensure copypastas directory exists
 if not copypasta_dir.exists():

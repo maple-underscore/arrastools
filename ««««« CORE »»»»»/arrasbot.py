@@ -12,6 +12,15 @@ from ping3 import ping
 
 firefox = False
 
+# Resolve project paths once to avoid relying on cwd
+CORE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = CORE_DIR.parent
+LOGS_DIR = REPO_ROOT / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+ARRASBOT_LOG = LOGS_DIR / "arrasbot.log"
+DESKTOP_ROOT = Path.home() / "Desktop" / "abss"
+DESKTOP_ROOT.mkdir(parents=True, exist_ok=True)
+
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
 print(f"Arrasbot running on: {PLATFORM}")
@@ -64,16 +73,14 @@ def timestamp():
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 def take_screenshot(reason="periodic"):
-    if not os.path.exists(SCREENSHOT_DIR):
-        os.makedirs(SCREENSHOT_DIR)
+    SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
     current_time = timestamp()
-    filename = os.path.join(SCREENSHOT_DIR, f"{current_time}_{reason}.png")
+    filename = SCREENSHOT_DIR / f"{current_time}_{reason}.png"
     screenshot = sct.grab(sct.monitors[MONITOR_INDEX])
-    mss.tools.to_png(screenshot.rgb, screenshot.size, output=filename)
+    mss.tools.to_png(screenshot.rgb, screenshot.size, output=str(filename))
     print(f"Screenshot saved: {filename} at {timestamp()}")
-    with open("arrasbot.log", "a") as log_file:
+    with ARRASBOT_LOG.open("a", encoding="utf-8") as log_file:
         log_file.write(f"Screenshot saved: {filename} at {timestamp()}\n")
-        log_file.close()
 
 def inputlistener():
     global working, disconnected, died, banned
@@ -136,15 +143,15 @@ start3 = time.time()-start3
 
 start4 = time.time()
 print("Creating directories")
-HOME = str(Path.home())
 foldername = f"abss_{timestamp()}"
-SCREENSHOT_DIR = os.path.join(HOME, "Desktop", "abss", foldername)
+SCREENSHOT_DIR = DESKTOP_ROOT / foldername
+SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 start4 = time.time()-start4
 start_input_listener()
 
 print("Creating log file")
-filename = f"logs/abss_{timestamp()}.log"
-with open(filename, "a") as log_file:
+LOG_FILE = LOGS_DIR / f"abss_{timestamp()}.log"
+with LOG_FILE.open("a", encoding="utf-8") as log_file:
     print(f"Bot initialized at {timestamp()}")
     init = time.time()-init
     log_file.write(f"""

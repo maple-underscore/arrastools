@@ -21,9 +21,11 @@ except ImportError:
 PLATFORM = platform.system().lower()
 print(f"Running on platform: {PLATFORM}")
 
-# Create logs directory if it doesn't exist
-LOGS_DIR = Path("logsk")
-LOGS_DIR.mkdir(exist_ok=True)
+# Resolve workspace paths relative to this script to avoid CWD surprises
+CORE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = CORE_DIR.parent
+LOGS_DIR = REPO_ROOT / "logsk"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Create timestamped log file
 def timestamp():

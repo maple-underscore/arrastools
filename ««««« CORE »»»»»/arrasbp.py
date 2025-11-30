@@ -1,14 +1,25 @@
+"""Blueprint placement helpers for Arras macros.
+
+Reads the bitmap description from ``bps`` text files and replays the clicks
+needed to rebuild the structure in-game.  The gameplay behavior itself stays
+identical; the file handling is now pathlib-based for reliability.
+"""
+
+from pathlib import Path
 from pynput import keyboard, mouse
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 import time, threading
 
-s = 9 # wall width
+s = 9  # wall width / grid spacing
 controller = KeyboardController()
 mouse = MouseController()
-POSITIONPATH = "bps/wall.txt"
-MODIFIERPATH = "bps/type.txt"
-COLORRGBPATH = "bps/color.txt"
+
+CORE_DIR = Path(__file__).resolve().parent
+BPS_DIR = CORE_DIR / "bps"
+POSITIONPATH = BPS_DIR / "wall.txt"
+MODIFIERPATH = BPS_DIR / "type.txt"
+COLORRGBPATH = BPS_DIR / "color.txt"
 colorheld = "b"
 modifierheld = "n"
 
@@ -67,9 +78,9 @@ modifierinstructions = [
 # assign every pair an x and y coordinate
 # format: [{type}, {modifier}, {color}, {x}, {y}]
 buildqueue = []
-with open(POSITIONPATH, "r") as p:
-    with open(MODIFIERPATH, "r") as m:
-        with open(COLORRGBPATH, "r") as c:
+with POSITIONPATH.open("r", encoding="utf-8") as p:
+    with MODIFIERPATH.open("r", encoding="utf-8") as m:
+        with COLORRGBPATH.open("r", encoding="utf-8") as c:
             ypos = 0
             for mline, cline in zip(m.readlines(), c.readlines()):
                 xpos = 0

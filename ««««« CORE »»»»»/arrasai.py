@@ -9,6 +9,7 @@ import time
 import threading
 import os
 from datetime import datetime
+from pathlib import Path
 from pynput.keyboard import Key, Controller as KeyboardController, Listener as KeyboardListener
 from pynput.mouse import Controller as MouseController, Button
 from shapely.geometry import Point, Polygon
@@ -22,6 +23,10 @@ import re
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
 print(f"Arras AI running on: {PLATFORM}")
+
+CORE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = CORE_DIR.parent
+SCORE_CAPTURE_PATH = CORE_DIR / "score_capture.png"
 
 # Platform notes
 if PLATFORM not in ('darwin', 'linux', 'windows'):
@@ -112,9 +117,9 @@ def detect_score():
         bbox = {"top": 529, "left": 692, "width": 1228-692, "height": 592-529}
         screenshot = sct.grab(bbox)
         
-        # Save screenshot for debugging
-        tmp_file = 'score_capture.png'
-        mss.tools.to_png(screenshot.rgb, screenshot.size, output=tmp_file)
+        # Save screenshot for debugging (kept near script for easy inspection)
+        tmp_file = SCORE_CAPTURE_PATH
+        mss.tools.to_png(screenshot.rgb, screenshot.size, output=str(tmp_file))
         # Removed print for speed
         
         try:
@@ -566,7 +571,8 @@ def train_ai(episodes=100, steps_per_episode=2000, save_interval=10,
         print(f"Device: {torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')}")
         
         # Prepare model directory
-        os.makedirs(model_dir, exist_ok=True)
+        model_dir = Path(model_dir)
+        model_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize AI
         input_dim = len(OBSERVATION_POINTS) * 3  # RGB values
@@ -697,21 +703,21 @@ def train_ai(episodes=100, steps_per_episode=2000, save_interval=10,
             # Save model
             if episode_reward > best_reward:
                 best_reward = episode_reward
-                agent.save_model(f"{model_dir}/{model_name}_best")
+                agent.save_model(model_dir / f"{model_name}_best")
                 print(f"New best model saved with reward: {best_reward:.2f}")
                 
             if episode % save_interval == 0:
-                agent.save_model(f"{model_dir}/{model_name}_{episode}")
+                agent.save_model(model_dir / f"{model_name}_{episode}")
                 
             print(f"Episode {episode}/{episodes} - Reward: {episode_reward:.2f}, Steps: {step+1}, Time: {time.time()-start_time:.2f}s")
         
         # Save final model
         if not exit_requested:
-            agent.save_model(f"{model_dir}/{model_name}_final")
+            agent.save_model(model_dir / f"{model_name}_final")
             print("Training complete!")
         else:
             # Save interrupted model
-            agent.save_model(f"{model_dir}/{model_name}_interrupted")
+            agent.save_model(model_dir / f"{model_name}_interrupted")
             print("Training interrupted - partial model saved")
     except Exception as e:
         print(f"Error in train_ai(): {e}")
@@ -723,6 +729,7 @@ def run_trained_ai(model_path, episodes=5):
     
     # Start keyboard listener to detect escape key
     start_keyboard_listener()
+    model_path = Path(model_path)
     
     input_dim = len(OBSERVATION_POINTS) * 3
     action_dim = 5
@@ -827,8 +834,8 @@ if __name__ == "__main__":
     SAVE_INTERVAL = 10
     
     # Create model directory
-    MODEL_DIR = "arras_models"
-    os.makedirs(MODEL_DIR, exist_ok=True)
+    MODEL_DIR = REPO_ROOT / "arras_models"
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
     
     # Train or run model
     train_mode = True
@@ -843,7 +850,7 @@ if __name__ == "__main__":
             )
         else:
             # Replace with your model path
-            model_path = f"{MODEL_DIR}/arras_model_best"
+            model_path = MODEL_DIR / "arras_model_best"
             run_trained_ai(model_path, episodes=5)
     except Exception as e:
         print(f"Fatal error: {e}")
