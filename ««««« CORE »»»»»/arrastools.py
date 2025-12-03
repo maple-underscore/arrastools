@@ -10,6 +10,7 @@ import threading
 import multiprocessing
 import platform
 import sys
+from typing import Any
 
 try:
     from pynput import keyboard
@@ -62,8 +63,16 @@ tail_process = None
 circle_mouse_process = None
 engispam_process = None
 circlecrash_process = None
-controllednuke_points = []
-controllednuke_active = False
+
+# Shared multiprocessing primitives so worker processes can mirror thread-like behavior.
+automation_event = multiprocessing.Event()
+engispam_event = multiprocessing.Event()
+art_event = multiprocessing.Event()
+braindamage_event = multiprocessing.Event()
+circle_mouse_event = multiprocessing.Event()
+circle_mouse_radius_value = multiprocessing.Value('i', circle_mouse_radius)
+circle_mouse_speed_value = multiprocessing.Value('d', circle_mouse_speed)
+circle_mouse_direction_value = multiprocessing.Value('i', circle_mouse_direction)
 
 processes = ["automation", "engispam", "art", "braindamage_working", "tail", "circle_mouse", "softwallstack", "circlecrash"]
 for process in processes:
@@ -143,11 +152,15 @@ def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3):
     print(f"unicode blocks: {' '.join(groups)} -> '{out}'")
     controller.type(out)
 
-def arena_size_automation(atype = 1):
+def arena_size_automation(atype: int = 1, run_event: multiprocessing.Event | None = None):
+    """Spam $arena commands while the shared run_event stays set."""
+    if run_event is None:
+        run_event = multiprocessing.Event()
+        run_event.set()
+
     time.sleep(2)
-    global automation_working
     if atype == 1:
-        while automation_working:
+        while run_event.is_set():
             x = generate_even()
             y = generate_even()
             print(f"Sending command: $arena size {x} {y}")
@@ -156,13 +169,13 @@ def arena_size_automation(atype = 1):
             controller.type(command)
             controller.tap(Key.enter)
     elif atype == 2:
-        while automation_working:
-        # x and y go from 2 to 1024 in steps of 2
+        while run_event.is_set():
+            # x and y go from 2 to 1024 in steps of 2
             x = 2
             y = 2
             direction_x = 2
             direction_y = 2
-            while automation_working:
+            while run_event.is_set():
                 print(f"Sending command: $arena size {x} {y}")
                 command = f"$arena size {x} {y}"
                 controller.tap(Key.enter)
@@ -175,13 +188,13 @@ def arena_size_automation(atype = 1):
                 if y >= 1024 or y <= 2:
                     direction_y *= -1
     elif atype == 3:
-        while automation_working:
-            #x goes from 2 to 1024, y goes from 1024 to 2
+        while run_event.is_set():
+            # x goes from 2 to 1024, y goes from 1024 to 2
             x = 2
             y = 1024
             direction_x = 2
             direction_y = -2
-            while automation_working:
+            while run_event.is_set():
                 print(f"Sending command: $arena size {x} {y}")
                 command = f"$arena size {x} {y}"
                 controller.tap(Key.enter)
@@ -240,6 +253,9 @@ def shape():
 def shape2():
     controller.press("`")
     controller.type("f"*500)
+    time.sleep(0.01)
+    controller.press("w")
+    controller.release("`")
 
 def circlecrash():
     controller.press("`")
@@ -269,10 +285,9 @@ def walls():
     controller.type("x"*210)
     controller.release("`")
 
-def art():
-    global art_working
+def art(run_event: multiprocessing.Event):
     controller.press("`")
-    while art_working:
+    while run_event.is_set():
         controller.tap("c")
         controller.tap("h")
         time.sleep(0.02)
@@ -359,62 +374,63 @@ def tail():
         down = not down
     controller.release("`")
 
-def brain_damage():
-    global braindamage_working
+def brain_damage(run_event: multiprocessing.Event):
     mouse = MouseController()
-    while braindamage_working:
+    while run_event.is_set():
         mouse.position = (random.randint(0, 1710), random.randint(168, 1112))
-        time.sleep(0.02)  # Add a small delay to prevent locking up your systema
+        time.sleep(0.02)  # Add a small delay to prevent locking up your system
 
-def circle_mouse():
+def circle_mouse(
+    run_event: multiprocessing.Event,
+    radius_value: Any,
+    speed_value: Any,
+    direction_value: Any,
+):
     """Move mouse in circles around a center point. Press '\\' to reverse direction."""
-    global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
-    global controllednuke_points, controllednuke_active
     import math
-    
-    # Wait for user to click to set center point
+
     print("Click anywhere to set the center point for circular motion...")
-    temp_points = []
-    temp_active = True
-    
+    temp_points: list[tuple[int, int]] = []
+
     def temp_click_handler(x, y, button, pressed):
-        if pressed and button == Button.left and temp_active:
+        if pressed and button == Button.left and run_event.is_set():
             temp_points.append((x, y))
-    
-    # Temporarily use a mouse listener to capture the click
+
     temp_listener = MouseListener(on_click=temp_click_handler)
     temp_listener.start()
-    
+
     start_time = time.time()
-    while len(temp_points) == 0 and circle_mouse_active and time.time() - start_time < 10:
+    while len(temp_points) == 0 and run_event.is_set() and time.time() - start_time < 10:
         time.sleep(0.01)
-    
-    temp_active = False
+
     temp_listener.stop()
-    
-    if len(temp_points) == 0 or not circle_mouse_active:
+
+    if len(temp_points) == 0 or not run_event.is_set():
         print("Circle mouse: No point selected or cancelled")
-        circle_mouse_active = False
         return
-    
+
     center_x, center_y = temp_points[0]
-    print(f"Circle mouse: center ({center_x}, {center_y}), radius {circle_mouse_radius}, speed {circle_mouse_speed}")
-    
-    angle = 0
-    while circle_mouse_active:
-        # Calculate position on circle
-        x = center_x + int(circle_mouse_radius * math.cos(angle))
-        y = center_y + int(circle_mouse_radius * math.sin(angle))
+    print(
+        "Circle mouse: center (%s, %s), radius %s, speed %.4f"
+        % (center_x, center_y, radius_value.value, speed_value.value)
+    )
+
+    angle = 0.0
+    while run_event.is_set():
+        radius = max(radius_value.value, 5)
+        speed = max(speed_value.value, 0.001)
+        direction = 1 if direction_value.value >= 0 else -1
+
+        x = center_x + int(radius * math.cos(angle))
+        y = center_y + int(radius * math.sin(angle))
         mouse.position = (x, y)
-        
-        # Scale rotation step with radius for consistent arc length
-        # Larger radius = smaller angular increment for smooth motion
-        angle_step_base = 5.0 / max(circle_mouse_radius, 10)
-        angle += circle_mouse_direction * angle_step_base
+
+        angle_step_base = 5.0 / max(radius, 10)
+        angle += direction * angle_step_base
         if angle >= 2 * math.pi:
-            angle = 0
-        
-        time.sleep(circle_mouse_speed)
+            angle = 0.0
+
+        time.sleep(speed)
 
 def score():
     controller.press("`")
@@ -457,9 +473,8 @@ def score50m():
     controller.type("f"*20)
     controller.release("`")
 
-def engispam():
-    global engispam_working
-    while engispam_working:
+def engispam(run_event: multiprocessing.Event):
+    while run_event.is_set():
         controller.tap(",")
         controller.tap("y")
         controller.tap("i")
@@ -537,20 +552,31 @@ def simpletail(amt=20):
         controller.release("j")
 
 def controllednuke():
-    global controllednuke_points, controllednuke_active, step
-    controllednuke_points = []
-    controllednuke_active = True
+    global step
     mouse = MouseController()
-    print(f"Controlled Nuke: You have 10 seconds to select two points.")
+    print("Controlled Nuke: You have 10 seconds to select two points.")
     print(f"Click two points with the left mouse button. Step size: {step}")
+
+    selected: list[tuple[int, int]] = []
+
+    def click_handler(x, y, button, pressed):
+        if pressed and button == Button.left:
+            selected.append((int(x), int(y)))
+            print(f"cnuke point: {len(selected)} at ({int(x)}, {int(y)})")
+
+    listener = MouseListener(on_click=click_handler)
+    listener.start()
+
     start_time = time.time()
-    while len(controllednuke_points) < 2 and time.time() - start_time < 10:
+    while len(selected) < 2 and time.time() - start_time < 10:
         time.sleep(0.01)
-    controllednuke_active = False  # Stop collecting more points
-    if len(controllednuke_points) < 2:
+
+    listener.stop()
+    if len(selected) < 2:
         print("Timed out waiting for points.")
         return
-    (x1, y1), (x2, y2) = controllednuke_points
+
+    (x1, y1), (x2, y2) = selected
     x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
     print(f"Controlled Nuke: Rectangle from ({x1}, {y1}) to ({x2}, {y2}) with step {step}")
     controller.press("`")
@@ -567,24 +593,29 @@ def controllednuke():
 
 def start_arena_automation(atype = 1):
     global automation_process, automation_working
-    # ensure the running flag is set before starting the process
     automation_working = True
+    automation_event.set()
     if automation_process is None or not automation_process.is_alive():
-        automation_process = multiprocessing.Process(target=arena_size_automation, args=(atype,))
+        automation_process = multiprocessing.Process(
+            target=arena_size_automation,
+            args=(atype, automation_event),
+        )
         automation_process.daemon = True
         automation_process.start()
 
 def start_engispam():
     global engispam_process
+    engispam_event.set()
     if engispam_process is None or not engispam_process.is_alive():
-        engispam_process = multiprocessing.Process(target=engispam)
+        engispam_process = multiprocessing.Process(target=engispam, args=(engispam_event,))
         engispam_process.daemon = True
         engispam_process.start()
 
 def start_brain_damage():
     global braindamage_process
+    braindamage_event.set()
     if braindamage_process is None or not braindamage_process.is_alive():
-        braindamage_process = multiprocessing.Process(target=brain_damage)
+        braindamage_process = multiprocessing.Process(target=brain_damage, args=(braindamage_event,))
         braindamage_process.daemon = True
         braindamage_process.start()
 
@@ -597,15 +628,52 @@ def start_tail():
 
 def start_circle_mouse():
     global circle_mouse_process
+    circle_mouse_event.set()
+    circle_mouse_radius_value.value = circle_mouse_radius
+    circle_mouse_speed_value.value = circle_mouse_speed
+    circle_mouse_direction_value.value = circle_mouse_direction
     if circle_mouse_process is None or not circle_mouse_process.is_alive():
-        circle_mouse_process = multiprocessing.Process(target=circle_mouse)
+        circle_mouse_process = multiprocessing.Process(
+            target=circle_mouse,
+            args=(
+                circle_mouse_event,
+                circle_mouse_radius_value,
+                circle_mouse_speed_value,
+                circle_mouse_direction_value,
+            ),
+        )
         circle_mouse_process.daemon = True
         circle_mouse_process.start()
+        monitor = threading.Thread(target=_monitor_circle_mouse, args=(circle_mouse_process,))
+        monitor.daemon = True
+        monitor.start()
+
+def stop_circle_mouse():
+    """Gracefully stop the circle mouse process."""
+    global circle_mouse_process
+    circle_mouse_event.clear()
+    if circle_mouse_process is not None:
+        circle_mouse_process.join(timeout=1)
+        if circle_mouse_process.is_alive():
+            circle_mouse_process.terminate()
+        circle_mouse_process = None
+
+def _monitor_circle_mouse(proc: multiprocessing.Process):
+    """Reset circle-mouse state when its process exits."""
+    global circle_mouse_process, circle_mouse_active
+    if proc is None:
+        return
+    proc.join()
+    if circle_mouse_process is proc:
+        circle_mouse_event.clear()
+        circle_mouse_active = False
+        circle_mouse_process = None
 
 def start_slowball():
     global art_process
+    art_event.set()
     if art_process is None or not art_process.is_alive():
-        art_process = multiprocessing.Process(target=art)
+        art_process = multiprocessing.Process(target=art, args=(art_event,))
         art_process.daemon = True
         art_process.start()
 
@@ -661,10 +729,16 @@ def stopallthreads():
     art_working = False
     braindamage_working = False
     circle_mouse_active = False
+    automation_event.clear()
+    engispam_event.clear()
+    art_event.clear()
+    braindamage_event.clear()
+    circle_mouse_event.clear()
+    stop_circle_mouse()
     
     # Terminate all processes
     for proc in [automation_process, engispam_process, art_process, braindamage_process,
-                 tail_process, circle_mouse_process, softwallstack_process, circlecrash_process]:
+                 tail_process, softwallstack_process, circlecrash_process]:
         if proc is not None and proc.is_alive():
             proc.terminate()
             proc.join(timeout=1)
@@ -693,7 +767,6 @@ def is_modifier_for_arrow_nudge(k):
 def on_press(key):
     global automation_working, braindamage_working, circlecrash_working, art_working, randomwalld, engispam_working
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
-    global controllednuke_points, controllednuke_active
     global ctrl1_count, ctrl1_first_time
     global slowball_shift_bind, ctrlswap
     global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
@@ -856,6 +929,7 @@ def on_press(key):
                 # NEW: enable binding to Left Shift instead of starting immediately
                 slowball_shift_bind = True
                 art_working = False  # ensure idle until Left Shift is pressed
+                art_event.clear()
                 print("toggle art")
         elif hasattr(key, 'char') and key.char and key.char=='m':
             if 'ctrl' in pressed_keys:
@@ -920,14 +994,17 @@ def on_press(key):
                 circle_mouse_active = not circle_mouse_active
                 if circle_mouse_active:
                     circle_mouse_direction = 1  # reset to default on start
+                    circle_mouse_direction_value.value = circle_mouse_direction
                     print(f"circle mouse on (radius: {circle_mouse_radius}, speed: {circle_mouse_speed})")
                     start_circle_mouse()
                 else:
                     print("circle mouse off")
+                    stop_circle_mouse()
         elif hasattr(key, 'char') and key.char and key.char=='\\':
             # Toggle direction of circle while active
             if circle_mouse_active:
                 circle_mouse_direction *= -1
+                circle_mouse_direction_value.value = circle_mouse_direction
                 dir_text = 'clockwise' if circle_mouse_direction == 1 else 'counterclockwise'
                 print(f"circle direction -> {dir_text}")
         elif hasattr(key, 'char') and key.char and key.char=='k':
@@ -942,15 +1019,19 @@ def on_press(key):
                 controller.tap(Key.enter)
         elif hasattr(key, 'char') and key.char and key.char=='-':
             circle_mouse_speed = min(circle_mouse_speed + 0.001, 0.5)
+            circle_mouse_speed_value.value = circle_mouse_speed
             print(f"circle speed: {round(circle_mouse_speed, 4)} (slower)")
         elif hasattr(key, 'char') and key.char and key.char=='=':
             circle_mouse_speed = max(circle_mouse_speed - 0.001, 0.001)
+            circle_mouse_speed_value.value = circle_mouse_speed
             print(f"circle speed: {round(circle_mouse_speed, 4)} (faster)")
         elif hasattr(key, 'char') and key.char and key.char=='[':
             circle_mouse_radius = max(circle_mouse_radius - 5, 5)
+            circle_mouse_radius_value.value = circle_mouse_radius
             print(f"circle radius: {circle_mouse_radius}")
         elif hasattr(key, 'char') and key.char and key.char==']':
             circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
+            circle_mouse_radius_value.value = circle_mouse_radius
             print(f"circle radius: {circle_mouse_radius}")
     except Exception as e:
         print(f"Error: {e}")
@@ -971,14 +1052,9 @@ def on_release(key):
             print("art off")
         if slowball_shift_bind:
             art_working = False
+            art_event.clear()
     elif key in pressed_keys:
         pressed_keys.remove(key)
-
-def on_click(x, y, button, pressed):
-    global controllednuke_points, controllednuke_active
-    if controllednuke_active and pressed and button == Button.left:
-        controllednuke_points.append((x, y))
-        print(f"cnuke point: {len(controllednuke_points)} at ({x}, {y})")
 
 if __name__ == '__main__':
     # Required for multiprocessing on macOS and Windows
@@ -989,11 +1065,6 @@ if __name__ == '__main__':
         print(f"Warning: Platform '{PLATFORM}' may have limited support.")
         print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
     
-    # Start mouse listener globally (after your keyboard listener setup)
-    mouse_listener = MouseListener(on_click=on_click)
-    mouse_listener.daemon = True
-    mouse_listener.start()
-
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         listener.join()
 
