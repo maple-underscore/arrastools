@@ -247,7 +247,7 @@ def nuke():
 
 def shape():
     controller.press("`")
-    controller.type("f"*500)
+    controller.type("f"*15000)
     controller.release("`")
 
 def shape2():
@@ -290,7 +290,6 @@ def art(run_event: multiprocessing.Event):
     while run_event.is_set():
         controller.tap("c")
         controller.tap("h")
-        time.sleep(0.02)
     controller.release("`")
 
 def tail():
