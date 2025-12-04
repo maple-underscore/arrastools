@@ -823,7 +823,31 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char == ";":
             if 'ctrl' in pressed_keys:
                 time.sleep(1)
+                controller.tap(Key.enter)
+                time.sleep(0.1)
                 controller.type("«∑∏¯ˇ†∫–⁄∞∆µ•‰ª¬∂Ω◊ﬂı®»")
+                time.sleep(0.1)
+                controller.tap(Key.enter)
+        elif hasattr(key, 'char') and key.char and key.char == ".":
+            if 'ctrl' in pressed_keys:
+                time.sleep(1)
+                controller.tap(Key.enter)
+                time.sleep(0.1)
+                controller.type("«∑⫍ʩ௹∏₻‖₰¯ˇ†₢₥∫–⁄∞₯")
+                time.sleep(0.1)
+                controller.tap(Key.enter)
+                time.sleep(0.1)
+                controller.tap(Key.enter)
+                time.sleep(0.1)
+                controller.type("∆µ•‰৻৲ʨ⏔ʧª¬∂Ω⋾ↈ◊ﬂı®↹")
+                time.sleep(0.1)
+                controller.tap(Key.enter)
+                time.sleep(0.1)
+                controller.tap(Key.enter)
+                time.sleep(0.1)
+                controller.type("⁂⋣※⁞૱ɧ⊯⁛ɮ⏓⁊⁒Ϡ⁁⌁ϐͳϟ֏»")
+                time.sleep(0.1)
+                controller.tap(Key.enter)
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
                 print("cnuke")
