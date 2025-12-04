@@ -36,10 +36,10 @@ length = 4
 # Function
 # Centralized set of flags/shared state used across macro helpers. Values are
 # kept as globals because listeners spin up background threads that need access.
-global automation_working, controller, randomwalld, circlecrash_working, mouse, art_working, step, ctrlswap
+global automation_working, controller, circlecrash_working, mouse, art_working, step, ctrlswap
 global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
 step = 20
-s = 25 #ball spacing in px
+s = 25 #circle spacing in px
 ctrlswap = False  # When True, use Cmd (macOS) instead of Ctrl for macros
 circle_mouse_active = False
 circle_mouse_speed = 0.02  # Time delay between updates (lower = faster)
@@ -90,7 +90,7 @@ ctrl1_count = 0
 ctrl1_first_time = 0.0
 
 # NEW: bind art_working to Left Shift when enabled via Ctrl+C
-slowball_shift_bind = False
+art_shift_bind = False
 
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
@@ -273,7 +273,7 @@ def minicirclecrash():
             controller.tap("h")
     controller.release("`")
 
-def balls(amt = 210):
+def circles(amt = 210):
     controller.press("`")
     for _ in range(amt):
         controller.tap("c")
@@ -446,14 +446,14 @@ def benchmark(amt = 5000):
 
     # Start the benchmark
     start = time.time()
-    balls(amt)
+    circles(amt)
     print("Press any Shift key to stop the benchmark timer...")
     # Start keyboard listener
     with KeyboardListener(on_press=on_press) as listener:
         shift_pressed.wait()  # Wait until Shift is pressed
         listener.stop()
     elapsed = time.time() - start
-    print(f"{amt} balls in {round(elapsed*1000, 3)} ms")
+    print(f"{amt} circles in {round(elapsed*1000, 3)} ms")
     controller.tap(Key.enter)
     time.sleep(0.15)
     controller.type(f"> [{round(elapsed * 1000, 3)}ms] <")
@@ -488,7 +488,7 @@ def engispam(run_event: multiprocessing.Event):
         controller.press("q")
         controller.release("`")
 
-def ball():
+def circle():
     controller.press("`")
     controller.type("ch")
     controller.release("`")
@@ -529,7 +529,7 @@ def simpletail(amt=20):
     time.sleep(delay)
     for _ in range(amt):
         for _ in range(3):
-            ball()
+            circle()
         controller.press("`")
         time.sleep(delay)
         controller.press("c")
@@ -668,7 +668,7 @@ def _monitor_circle_mouse(proc: multiprocessing.Process):
         circle_mouse_active = False
         circle_mouse_process = None
 
-def start_slowball():
+def start_art():
     global art_process
     art_event.set()
     if art_process is None or not art_process.is_alive():
@@ -764,10 +764,10 @@ def is_modifier_for_arrow_nudge(k):
     return is_alt(k)
 
 def on_press(key):
-    global automation_working, braindamage_working, circlecrash_working, art_working, randomwalld, engispam_working
+    global automation_working, braindamage_working, circlecrash_working, art_working, engispam_working
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
     global ctrl1_count, ctrl1_first_time
-    global slowball_shift_bind, ctrlswap
+    global art_shift_bind, ctrlswap
     global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
     try:
         # Use Right Shift instead of Escape to stop scripts
@@ -778,14 +778,12 @@ def on_press(key):
             else:
                 automation_working = False
                 braindamage_working = False
-                randomwalld = False
                 art_working = False
                 engispam_working = False
-                slowball_shift_bind = False
+                art_shift_bind = False
                 circle_mouse_active = False
                 stopallthreads()
                 print("nstop")
-                # stop all threads
         elif is_ctrl(key):
             pressed_keys.add('ctrl')
         elif is_alt(key):
@@ -809,17 +807,15 @@ def on_press(key):
                 return
         # NEW: pressing Left Shift starts art_working if binding is enabled
         elif key == keyboard.Key.shift_l:
-            if slowball_shift_bind:
+            if art_shift_bind:
                 if not art_working:
                     print("art on")
                 art_working = True
-                start_slowball()
+                start_art()
         elif hasattr(key, 'char') and key.char and key.char == "'":
             if 'ctrl' in pressed_keys:
-                # Pressing ctrl+' triggers unicode block typing. Without a provided
-                # hex string it will auto-generate 3 blocks.
                 print("unicode blocks macro")
-                type_unicode_blocks("027103B103C1056C1D07005B000BFFFC007F2400000B005D")  # auto-generate
+                type_unicode_blocks("027103B103C1056C1D07005B000BFFFC007F2400000B005D")
         elif hasattr(key, 'char') and key.char and key.char == ";":
             if 'ctrl' in pressed_keys:
                 time.sleep(1)
@@ -888,16 +884,16 @@ def on_press(key):
                 start_brain_damage()
         elif hasattr(key, 'char') and key.char and key.char=='4':
             if 'ctrl' in pressed_keys:
-                ball()
+                circle()
         elif hasattr(key, 'char') and key.char and key.char=='5':
             if 'ctrl' in pressed_keys:
-                print("ball square")
+                print("circle square")
                 start_tail()
         elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
                 now = time.time()
                 if ctrl6_armed and (now - ctrl6_last_time <= 5):
-                    print("death by ball")
+                    print("death by circle")
                     circlecrash()
                     ctrl6_armed = False
                 else:
@@ -938,8 +934,8 @@ def on_press(key):
                 score()
         elif hasattr(key, 'char') and key.char and key.char=='b':
             if 'ctrl' in pressed_keys:
-                print("200 balls")
-                balls()
+                print("200 circles")
+                circles()
         elif hasattr(key, 'char') and key.char and key.char=='w':
             if 'ctrl' in pressed_keys:
                 print("200 walls")
@@ -950,7 +946,7 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char and key.char=='c':
             if 'ctrl' in pressed_keys:
                 # NEW: enable binding to Left Shift instead of starting immediately
-                slowball_shift_bind = True
+                art_shift_bind = True
                 art_working = False  # ensure idle until Left Shift is pressed
                 art_event.clear()
                 print("toggle art")
@@ -1060,7 +1056,7 @@ def on_press(key):
         print(f"Error: {e}")
     
 def on_release(key):
-    global art_working, slowball_shift_bind
+    global art_working, art_shift_bind
     if is_ctrl(key):
         pressed_keys.discard('ctrl')
     elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
@@ -1071,9 +1067,9 @@ def on_release(key):
         # print("alt up")  # uncomment to debug
     # NEW: releasing Left Shift stops art_working if binding is enabled
     elif key == keyboard.Key.shift_l:
-        if slowball_shift_bind and art_working:
+        if art_shift_bind and art_working:
             print("art off")
-        if slowball_shift_bind:
+        if art_shift_bind:
             art_working = False
             art_event.clear()
     elif key in pressed_keys:
