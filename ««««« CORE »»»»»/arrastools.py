@@ -8,9 +8,15 @@ import random
 import time
 import threading
 import multiprocessing
+from multiprocessing import Process
 import platform
 import sys
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from multiprocessing.synchronize import Event as MpEvent
+else:
+    MpEvent = Any  # type: ignore[assignment]
 
 try:
     from pynput import keyboard
@@ -152,7 +158,7 @@ def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3):
     print(f"unicode blocks: {' '.join(groups)} -> '{out}'")
     controller.type(out)
 
-def arena_size_automation(atype: int = 1, run_event: multiprocessing.Event | None = None):
+def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
     """Spam $arena commands while the shared run_event stays set."""
     if run_event is None:
         run_event = multiprocessing.Event()
@@ -285,7 +291,7 @@ def walls():
     controller.type("x"*210)
     controller.release("`")
 
-def art(run_event: multiprocessing.Event):
+def art(run_event: MpEvent):
     controller.press("`")
     while run_event.is_set():
         controller.tap("c")
@@ -373,14 +379,14 @@ def tail():
         down = not down
     controller.release("`")
 
-def brain_damage(run_event: multiprocessing.Event):
+def brain_damage(run_event: MpEvent):
     mouse = MouseController()
     while run_event.is_set():
         mouse.position = (random.randint(0, 1710), random.randint(168, 1112))
         time.sleep(0.02)  # Add a small delay to prevent locking up your system
 
 def circle_mouse(
-    run_event: multiprocessing.Event,
+    run_event: MpEvent,
     radius_value: Any,
     speed_value: Any,
     direction_value: Any,
@@ -472,7 +478,7 @@ def score50m():
     controller.type("f"*20)
     controller.release("`")
 
-def engispam(run_event: multiprocessing.Event):
+def engispam(run_event: MpEvent):
     while run_event.is_set():
         controller.tap(",")
         controller.tap("y")
@@ -657,7 +663,7 @@ def stop_circle_mouse():
             circle_mouse_process.terminate()
         circle_mouse_process = None
 
-def _monitor_circle_mouse(proc: multiprocessing.Process):
+def _monitor_circle_mouse(proc: Process):
     """Reset circle-mouse state when its process exits."""
     global circle_mouse_process, circle_mouse_active
     if proc is None:
