@@ -92,45 +92,6 @@ sudo apt install python3-tk tesseract-ocr
 - Download and install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki)
 - Add Tesseract to your system PATH
 
-## Quick Start
-
-### Automation Tools
-```bash
-python arrastools.py
-```
-
-**Key shortcuts (hold Ctrl):**
-- `Ctrl+1` (press 1-3 times): Arena size automation
-- `Ctrl+y`: Controlled nuke (click two points)
-- `Alt+Arrow` (`Option+Arrow` on macOS): 1-pixel mouse movement
-- `Ctrl+9`: Nuke
-- `Ctrl+m`: Benchmark balls
-- `Esc`: Stop current activity
-- `Ctrl+Esc`: Emergency exit
-
-### Bot Monitor
-```bash
-python arrasbot.py
-```
-
-**CLI commands:**
-- `status`: Check bot state
-- `screenshot`: Take manual screenshot
-- `probe`: Sample pixel color at mouse position
-- `dbgmon`: List all monitors
-- `setscale <1|2>`: Set display scaling
-- `ping`: Check connection to arras.io
-
-### AI Training
-```bash
-python arrasai.py
-```
-
-**Hotkeys while training:**
-- `Esc`: Force stop
-- `p`: Pause/resume
-- `r`: Simulate death
-
 ## Configuration
 
 ### Display Scaling
