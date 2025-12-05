@@ -42,7 +42,7 @@ length = 4
 # Function
 # Centralized set of flags/shared state used across macro helpers. Values are
 # kept as globals because listeners spin up background threads that need access.
-global automation_working, controller, circlecrash_working, mouse, art_working, step, ctrlswap
+global automation_working, controller, circlecrash_working, mouse, art_working, step, ctrlswap, mcrash_working
 global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
 step = 20
 s = 25 #circle spacing in px
@@ -53,6 +53,8 @@ circle_mouse_radius = 100  # Radius in pixels
 circle_mouse_direction = 1  # 1 for clockwise, -1 for counterclockwise
 automation_working = False
 engispam_working = False
+mcrash_working = False
+mcrash_thread = None
 engispam_thread = None
 art_working = False
 circlecrash_working = False
@@ -76,11 +78,12 @@ engispam_event = multiprocessing.Event()
 art_event = multiprocessing.Event()
 braindamage_event = multiprocessing.Event()
 circle_mouse_event = multiprocessing.Event()
+mcrash_event = multiprocessing.Event()
 circle_mouse_radius_value = multiprocessing.Value('i', circle_mouse_radius)
 circle_mouse_speed_value = multiprocessing.Value('d', circle_mouse_speed)
 circle_mouse_direction_value = multiprocessing.Value('i', circle_mouse_direction)
 
-processes = ["automation", "engispam", "art", "braindamage_working", "tail", "circle_mouse", "softwallstack", "circlecrash"]
+processes = ["automation", "engispam", "art", "braindamage_working", "tail", "circle_mouse", "softwallstack", "circlecrash", "mcrash"]
 for process in processes:
     exec(f"{process}_process = None")
     exec(f"global {process}_process, {process}_working")
@@ -97,6 +100,7 @@ ctrl1_first_time = 0.0
 
 # NEW: bind art_working to Left Shift when enabled via Ctrl+C
 art_shift_bind = False
+mcrash_shift_bind = False
 
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
@@ -259,7 +263,6 @@ def shape():
 def shape2():
     controller.press("`")
     controller.type("f"*500)
-    time.sleep(0.01)
     controller.press("w")
     controller.release("`")
 
@@ -292,6 +295,14 @@ def walls():
     controller.release("`")
 
 def art(run_event: MpEvent):
+    controller.press("`")
+    while run_event.is_set():
+        controller.tap("c")
+        controller.tap("h")
+        time.sleep(0.02)
+    controller.release("`")
+
+def mcrash(run_event: MpEvent):
     controller.press("`")
     while run_event.is_set():
         controller.tap("c")
@@ -694,6 +705,15 @@ def start_controllednuke():
     proc.daemon = True
     proc.start()
 
+def start_mcrash():
+    global mcrash_process, mcrash_working
+    mcrash_event.set()
+    mcrash_working = True
+    if mcrash_process is None or not mcrash_process.is_alive():
+        mcrash_process = multiprocessing.Process(target=mcrash, args=(mcrash_event,))
+        mcrash_process.daemon = True
+        mcrash_process.start()
+
 def _ctrl1_waiter():
     global ctrl1_count, ctrl1_first_time
     # wait 2 seconds from first press, then act on count
@@ -725,7 +745,7 @@ def is_alt(k):
 def stopallthreads():
     global automation_process, engispam_process, art_process, braindamage_process
     global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process
-    global automation_working, engispam_working, art_working, braindamage_working
+    global automation_working, engispam_working, art_working, braindamage_working, mcrash_working
     global circle_mouse_active
     
     # Set all flags to False
@@ -734,16 +754,18 @@ def stopallthreads():
     art_working = False
     braindamage_working = False
     circle_mouse_active = False
+    mcrash_working = False
     automation_event.clear()
     engispam_event.clear()
     art_event.clear()
     braindamage_event.clear()
     circle_mouse_event.clear()
+    mcrash_event.clear()
     stop_circle_mouse()
     
     # Terminate all processes
     for proc in [automation_process, engispam_process, art_process, braindamage_process,
-                 tail_process, softwallstack_process, circlecrash_process]:
+                 tail_process, softwallstack_process, circlecrash_process, mcrash_process]:
         if proc is not None and proc.is_alive():
             proc.terminate()
             proc.join(timeout=1)
@@ -757,7 +779,7 @@ def stopallthreads():
     circle_mouse_process = None
     softwallstack_process = None
     circlecrash_process = None
-
+    mcrash_process = None
 
 def is_modifier_for_arrow_nudge(k):
     """Return True if this key should trigger 1px arrow nudges.
@@ -770,10 +792,10 @@ def is_modifier_for_arrow_nudge(k):
     return is_alt(k)
 
 def on_press(key):
-    global automation_working, braindamage_working, circlecrash_working, art_working, engispam_working
+    global automation_working, braindamage_working, circlecrash_working, art_working, engispam_working, mcrash_working
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
     global ctrl1_count, ctrl1_first_time
-    global art_shift_bind, ctrlswap
+    global art_shift_bind, mcrash_shift_bind, ctrlswap
     global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
     try:
         # Use Right Shift instead of Escape to stop scripts
@@ -787,6 +809,7 @@ def on_press(key):
                 art_working = False
                 engispam_working = False
                 art_shift_bind = False
+                mcrash_shift_bind = False
                 circle_mouse_active = False
                 stopallthreads()
                 print("nstop")
@@ -818,36 +841,41 @@ def on_press(key):
                     print("art on")
                 art_working = True
                 start_art()
+                if mcrash_shift_bind:
+                    if not mcrash_working:
+                        print("mcrash on")
+                    mcrash_working = True
+                    start_mcrash()
         elif hasattr(key, 'char') and key.char and key.char == "'":
             if 'ctrl' in pressed_keys:
                 print("unicode blocks macro")
                 type_unicode_blocks("027103B103C1056C1D07005B000BFFFC007F2400000B005D")
         elif hasattr(key, 'char') and key.char and key.char == ";":
             if 'ctrl' in pressed_keys:
-                time.sleep(1)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
+                time.sleep(0.5)
                 controller.type("«∑∏¯ˇ†∫–⁄∞∆µ•‰ª¬∂Ω◊ﬂı®»")
-                time.sleep(0.1)
-                controller.tap(Key.enter)
+        elif hasattr(key, 'char') and key.char and key.char == ",":
+            if 'ctrl' in pressed_keys:
+                time.sleep(0.5)
+                controller.type("«∑∫–µ¬∂Ωı»")
         elif hasattr(key, 'char') and key.char and key.char == ".":
             if 'ctrl' in pressed_keys:
-                time.sleep(1)
+                time.sleep(0.5)
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-                controller.type("«∑⫍ʩ௹∏₻‖₰¯ˇ†₢₥∫–⁄∞₯")
-                time.sleep(0.1)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                controller.type("∆µ•‰৻৲ʨ⏔ʧª¬∂Ω⋾ↈ◊ﬂı®↹")
+                controller.type("«∑⫍ʩ∏₻‖₰¯ˇ†₢ƒ₥∫ø–⁄∞₯※˚")
                 time.sleep(0.1)
                 controller.tap(Key.enter)
                 time.sleep(0.1)
                 controller.tap(Key.enter)
                 time.sleep(0.1)
-                controller.type("⁂⋣※⁞૱ɧ⊯⁛ɮ⏓⁊⁒Ϡ⁁⌁ϐͳϟ֏»")
+                controller.type("∆µ•‰৻৲©Íʨ⏔ʧª¬æ∂Ω⋾ↈ◊‘ﬂı®π↹")
+                time.sleep(0.1)
+                controller.tap(Key.enter)
+                time.sleep(0.1)
+                controller.tap(Key.enter)
+                time.sleep(0.1)
+                controller.type("⁂⋣௹⁞ß૱ɧ⊯å⁛ɮ⏓⁊⁒Ϡç⁁⌁ϐÂͳϟ֏»")
                 time.sleep(0.1)
                 controller.tap(Key.enter)
         elif hasattr(key, 'char') and key.char and key.char == 'y':
@@ -883,6 +911,12 @@ def on_press(key):
             if 'ctrl' in pressed_keys:
                 print("conq")
                 conq_quickstart()
+        elif hasattr(key, 'char') and key.char and key.char=='v':
+            if 'ctrl' in pressed_keys:
+                mcrash_shift_bind = True
+                mcrash_working = False
+                mcrash_event.clear()
+                print("toggle mcrash")
         elif hasattr(key, 'char') and key.char and key.char=='3':
             if 'ctrl' in pressed_keys:
                 braindamage_working = True
@@ -1062,7 +1096,7 @@ def on_press(key):
         print(f"Error: {e}")
     
 def on_release(key):
-    global art_working, art_shift_bind
+    global art_working, art_shift_bind, mcrash_working, mcrash_shift_bind
     if is_ctrl(key):
         pressed_keys.discard('ctrl')
     elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
@@ -1078,6 +1112,11 @@ def on_release(key):
         if art_shift_bind:
             art_working = False
             art_event.clear()
+        if mcrash_shift_bind and mcrash_working:
+            print("mcrash off")
+        if mcrash_shift_bind:
+            mcrash_working = False
+            mcrash_event.clear()
     elif key in pressed_keys:
         pressed_keys.remove(key)
 
