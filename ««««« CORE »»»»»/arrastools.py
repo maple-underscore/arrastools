@@ -247,7 +247,7 @@ def nuke():
 
 def shape():
     controller.press("`")
-    controller.type("f"*15000)
+    controller.type("f"*5000)
     controller.release("`")
 
 def shape2():
@@ -259,8 +259,8 @@ def shape2():
 
 def circlecrash():
     controller.press("`")
-    for _ in range(150):
-        for _ in range(150):
+    for _ in range(180):
+        for _ in range(180):
             controller.tap("c")
             controller.tap("h")
     controller.release("`")
