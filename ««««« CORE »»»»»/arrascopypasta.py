@@ -1,15 +1,26 @@
 """Automated Arras copypasta typer with optional AI prompt mode."""
 
-import time, threading, os, mss, numpy as np
+import time, threading, os
 import platform
 from pathlib import Path
-from pynput import keyboard
-from pynput.keyboard import Controller as KeyboardController, Key
-from pynput.mouse import Controller as MouseController, Button
 import re
 import subprocess
 import tempfile
 import random
+
+# Lazy import pynput to avoid slow startup
+def _lazy_import_pynput():
+    global keyboard, KeyboardController, Key, MouseController, Button
+    from pynput import keyboard
+    from pynput.keyboard import Controller as KeyboardController, Key
+    from pynput.mouse import Controller as MouseController, Button
+
+# Placeholder globals - will be populated by lazy import
+keyboard = None
+KeyboardController = None
+Key = None
+MouseController = None
+Button = None
 
 models = [
     "deepseek-r1-14b-16k",
@@ -38,12 +49,6 @@ if PLATFORM not in ('darwin', 'linux', 'windows'):
 #each line should be 60 chars long
 global ids, copypastaing, controller, thread, filepaths, current_chars, current_percent, is_ai_mode
 is_ai_mode = False
-sct = mss.mss()
-def get_pixel_rgb(x, y):
-    bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
-    img = sct.grab(bbox)
-    pixel = np.array(img.pixel(0, 0))
-    return tuple(int(v) for v in pixel[:3])
 
 # Use pathlib for cross-platform file paths
 # Script dir holds automation scripts; copypastas live one level up
@@ -65,10 +70,22 @@ for fpath in copypasta_dir.glob('*.txt'):
         filepaths.append(str(fpath))  # Convert Path to string for compatibility
 copypastaing = False
 thread = None
-controller = KeyboardController()
+controller = None  # Will be initialized on first use
 current_chars = 0
 current_percent = 0
 controller_typing = False  # Flag to ignore synthetic keypresses
+
+def _ensure_controller():
+    """Initialize pynput components on first use"""
+    global controller
+    if controller is None:
+        _lazy_import_pynput()
+        controller = KeyboardController()
+
+def _ensure_key():
+    """Ensure Key class is available"""
+    if Key is None:
+        _lazy_import_pynput()
 
 def interruptible_sleep(duration):
     global copypastaing
@@ -132,6 +149,7 @@ pause_event.set()  # Start as running
 def safe_type(text):
     """Type text while flagging to ignore synthetic keypresses"""
     global controller_typing
+    _ensure_controller()
     controller_typing = True
     controller.type(text)
     controller_typing = False
@@ -139,6 +157,7 @@ def safe_type(text):
 def safe_tap(key):
     """Tap key while flagging to ignore synthetic keypresses"""
     global controller_typing
+    _ensure_controller()
     controller_typing = True
     controller.tap(key)
     controller_typing = False
@@ -165,6 +184,9 @@ def replace_emojis(text):
 
 def query_model(model, prompt, display_prompt=None):
     """Query Ollama's {model} model and return the response"""
+    # Ensure pynput is loaded before using Key
+    _ensure_key()
+    
     try:
         # Use display_prompt for in-game typing, or full prompt if not provided
         if display_prompt is None:
@@ -279,6 +301,9 @@ def query_model(model, prompt, display_prompt=None):
 def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_text=False, disable_line_breaks=False, custom_text=None):
     time.sleep(2)
     global ids, copypastaing, filepaths, controller, pause_event, current_chars, current_percent, controller_typing, is_ai_mode
+    
+    # Ensure pynput is loaded before using Key
+    _ensure_key()
     
     copypastaing = True
     is_ai_mode = custom_text is not None
@@ -458,9 +483,8 @@ def on_press(key):
     except UnicodeDecodeError:
         print("UnicodeDecodeError: Non-standard key (emoji?) pressed. Ignored.")
 
-listener = keyboard.Listener(on_press=on_press)
-listener.daemon = True
-listener.start()
+# Delay listener setup until first user input
+listener = None
 
 while True:
     mode_input = input("Mode (copypasta/ai) > ").strip().lower()

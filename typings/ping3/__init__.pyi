@@ -1,0 +1,3 @@
+from typing import Any
+
+def ping(dest_addr: str, timeout: float | None = ..., unit: str | None = ...) -> float | None: ...

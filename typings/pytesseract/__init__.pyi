@@ -1,0 +1,3 @@
+from typing import Any
+
+def image_to_string(image: Any, config: str | None = ..., lang: str | None = ...) -> str: ...

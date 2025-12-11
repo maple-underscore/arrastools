@@ -2,7 +2,6 @@ import mss, time, numpy as np, os
 import mss.tools
 import platform
 from datetime import datetime
-from pynput import mouse
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 import threading
@@ -116,7 +115,10 @@ def inputlistener():
         print(f"Working: {working}, Disconnected: {disconnected}, Died: {died}, Banned: {banned}")
     elif inp.lower() == "ping":
         pingm = getping()
-        print(f"Ping to arras.io: {pingm*1000:.2f}ms")
+        if pingm is None:
+            print("Ping to arras.io failed (timeout)")
+        else:
+            print(f"Ping to arras.io: {pingm*1000:.2f}ms")
     elif inp.lower() == "forcedisconnect":
         disconnected = True
         print("Forcing disconnect state...")
@@ -258,9 +260,10 @@ Bot initialized in {round(init, 3)} seconds
                 disconnected = True
                 mouse.position = (922, 767)
                 pingm = getping()
+                delay = pingm / 1000 if pingm else 0.05
                 for _ in range(200):
                     mouse.click(Button.left, 1)
-                    time.sleep(pingm/1000)
+                    time.sleep(delay)
         if color_close(targetcolor, (176, 100, 81)) and ((not disconnected or not died) or ((time.time() - lastdeath) > 5 and died)):
             print(f"Checking death at {timestamp()}")
             log_file.write(f"Checking death at {timestamp()}\n")

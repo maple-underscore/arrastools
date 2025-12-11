@@ -10,6 +10,7 @@ import threading
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Union
 from pynput.keyboard import Key, Controller as KeyboardController, Listener as KeyboardListener
 from pynput.mouse import Controller as MouseController, Button
 from shapely.geometry import Point, Polygon
@@ -86,6 +87,14 @@ GAME_REGION = Polygon([
 # Possible upgrade paths
 upgrade_paths = ['basic', 'twin', 'sniper', 'machine gun', 'pounder', 'flank guard', 'director', 'trapper', 'smasher', 'desmos'
 ]
+
+def _clamp_upgrade_index(raw_index: Any) -> int:
+    """Convert arbitrary numeric output into a safe list index."""
+    try:
+        index = int(raw_index)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(index, len(upgrade_paths) - 1))
 
 def get_pixel_rgb(x, y):
     bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
@@ -558,7 +567,7 @@ def get_observation():
 
 # Fix the train_ai function to properly declare globals
 def train_ai(episodes=100, steps_per_episode=2000, save_interval=10, 
-             model_dir="models", model_name="arras_model.pt"):
+             model_dir: Union[str, Path] = Path("models"), model_name="arras_model.pt"):
     """Train the AI using PPO."""
     global exit_requested, paused, cooldown_active, last_cooldown_time, simulate_death
     
@@ -602,15 +611,17 @@ def train_ai(episodes=100, steps_per_episode=2000, save_interval=10,
             action_interval = 0.1  # 10 actions per second (100ms between actions)
             
             # Get initial outputs for this episode
-            action_idx, action_log_prob, value, mouse_mean, mouse_log_std, mouse_pos, mouse_log_prob, sum42, upgrade_idx = agent.get_action(state)
+            (action_idx, action_log_prob, value, mouse_mean, mouse_log_std,
+             mouse_pos, mouse_log_prob, sum42, upgrade_idx) = agent.get_action(state)
+            upgrade_idx_value = _clamp_upgrade_index(upgrade_idx)
             
             # Output required values at start
             print(f"Episode {episode} - Initial outputs:")
             print(f"Sum42: {sum42.tolist()} (sum: {sum42.sum():.2f})")
-            print(f"Upgrade Path: {upgrade_paths[upgrade_idx]}")
+            print(f"Upgrade Path: {upgrade_paths[upgrade_idx_value]}")
             
             # Apply upgrade path in game (placeholder)
-            apply_upgrade_path(upgrade_paths[upgrade_idx])
+            apply_upgrade_path(upgrade_paths[upgrade_idx_value])
             
             for step in range(steps_per_episode):
                 if exit_requested:
@@ -752,11 +763,12 @@ def run_trained_ai(model_path, episodes=5):
         
         # Get initial outputs
         action_idx, _, _, _, _, mouse_pos, _, sum42, upgrade_idx = agent.get_action(state)
+        upgrade_idx_value = _clamp_upgrade_index(upgrade_idx)
         
         print(f"Sum42: {sum42.tolist()} (sum: {sum42.sum():.2f})")
-        print(f"Upgrade Path: {upgrade_paths[upgrade_idx]}")
+        print(f"Upgrade Path: {upgrade_paths[upgrade_idx_value]}")
         
-        apply_upgrade_path(upgrade_paths[upgrade_idx])
+        apply_upgrade_path(upgrade_paths[upgrade_idx_value])
         
         first_run = True
         cooldown_active = False

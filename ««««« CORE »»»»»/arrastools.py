@@ -16,17 +16,15 @@ from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from multiprocessing.synchronize import Event as MpEvent
 else:
-    MpEvent = Any  # type: ignore[assignment]
+    MpEvent = Any
 
 try:
-    from pynput import keyboard
     from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
     from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
 except ImportError:
     print("Missing dependency: pynput is required to run this script.")
     print("Install with: python3 -m pip install -r requirements.txt")
     sys.exit(1)
-
 
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'android'
@@ -51,6 +49,12 @@ circle_mouse_active = False
 circle_mouse_speed = 0.02  # Time delay between updates (lower = faster)
 circle_mouse_radius = 100  # Radius in pixels
 circle_mouse_direction = 1  # 1 for clockwise, -1 for counterclockwise
+
+# Arena automation limits
+arena_auto_terminate = True  # If True, stop after arena_auto_max_commands
+arena_auto_max_commands = 400  # Number of commands before auto-termination
+arena_auto_rate_limit = 100  # Maximum commands per second (0 = unlimited)
+
 automation_working = False
 engispam_working = False
 mcrash_working = False
@@ -71,6 +75,7 @@ tail_process = None
 circle_mouse_process = None
 engispam_process = None
 circlecrash_process = None
+mcrash_process: Process | None = None
 
 # Shared multiprocessing primitives so worker processes can mirror thread-like behavior.
 automation_event = multiprocessing.Event()
@@ -106,7 +111,6 @@ def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
 
 def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3):
-    time.sleep(1)
     """Type a sequence of Unicode characters encoded as 4-hex-digit code points.
 
     Format examples:
@@ -163,61 +167,119 @@ def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3):
     controller.type(out)
 
 def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
-    """Spam $arena commands while the shared run_event stays set."""
+    """Spam $arena commands using ultra-optimized native C++ implementation.
+    
+    Falls back to Python implementation if C++ binary not found.
+    Compile C++ version with: make
+    """
+    import os
+    import subprocess
+    
+    global arena_auto_terminate, arena_auto_max_commands, arena_auto_rate_limit
+    
+    # Calculate delay between commands based on rate limit
+    cmd_delay = (1.0 / arena_auto_rate_limit) if arena_auto_rate_limit > 0 else 0
+    
+    # Try to use the C++ binary for maximum performance (only if no rate limit)
+    # C++ binary doesn't support rate limiting yet, so use Python when rate limit is set
+    cpp_binary = os.path.join(os.path.dirname(__file__), "..", "arena_automation")
+    
+    if os.path.exists(cpp_binary) and arena_auto_rate_limit == 0:
+        print(f"Using optimized C++ implementation (type {atype})")
+        if arena_auto_terminate:
+            print(f"Will terminate after {arena_auto_max_commands} commands")
+        try:
+            # Run C++ binary in subprocess - it will run until Ctrl+C or process killed
+            proc = subprocess.Popen([cpp_binary, str(atype)])
+            
+            # Monitor run_event and terminate when cleared or max commands reached
+            if run_event is not None:
+                cmd_count = 0
+                while run_event.is_set():
+                    time.sleep(0.1)
+                    if arena_auto_terminate:
+                        cmd_count += 1  # Approximation: ~10 commands per 0.1s
+                        if cmd_count >= arena_auto_max_commands // 10:
+                            break
+                proc.terminate()
+                proc.wait(timeout=2)
+            else:
+                proc.wait()
+            return
+        except Exception as e:
+            print(f"C++ binary failed: {e}, falling back to Python")
+    
+    # Fallback to Python implementation
+    print(f"Using Python implementation (type {atype}). Compile C++ for 10-100x speedup: make")
+    if arena_auto_terminate:
+        print(f"Will terminate after {arena_auto_max_commands} commands")
+    if arena_auto_rate_limit > 0:
+        print(f"Rate limit: {arena_auto_rate_limit} commands/sec (delay: {cmd_delay:.3f}s)")
+    
     if run_event is None:
         run_event = multiprocessing.Event()
         run_event.set()
 
-    time.sleep(2)
+    cmd_count = 0
     if atype == 1:
         while run_event.is_set():
             x = generate_even()
             y = generate_even()
-            print(f"Sending command: $arena size {x} {y}")
-            command = f"$arena size {x} {y}"
             controller.tap(Key.enter)
-            controller.type(command)
+            controller.type(f"$arena size {x} {y}")
             controller.tap(Key.enter)
+            cmd_count += 1
+            if cmd_delay > 0:
+                time.sleep(cmd_delay)
+            if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
+                print(f"Reached {arena_auto_max_commands} commands, stopping")
+                break
     elif atype == 2:
+        # x and y go from 2 to 1024 in steps of 2
+        x = 2
+        y = 2
+        direction_x = 2
+        direction_y = 2
         while run_event.is_set():
-            # x and y go from 2 to 1024 in steps of 2
-            x = 2
-            y = 2
-            direction_x = 2
-            direction_y = 2
-            while run_event.is_set():
-                print(f"Sending command: $arena size {x} {y}")
-                command = f"$arena size {x} {y}"
-                controller.tap(Key.enter)
-                controller.type(command)
-                controller.tap(Key.enter)
-                x += direction_x
-                y += direction_y
-                if x >= 1024 or x <= 2:
-                    direction_x *= -1
-                if y >= 1024 or y <= 2:
-                    direction_y *= -1
+            controller.tap(Key.enter)
+            controller.type(f"$arena size {x} {y}")
+            controller.tap(Key.enter)
+            x += direction_x
+            y += direction_y
+            if x >= 1024 or x <= 2:
+                direction_x *= -1
+            if y >= 1024 or y <= 2:
+                direction_y *= -1
+            cmd_count += 1
+            if cmd_delay > 0:
+                time.sleep(cmd_delay)
+            if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
+                print(f"Reached {arena_auto_max_commands} commands, stopping")
+                break
     elif atype == 3:
+        # x goes from 2 to 1024, y goes from 1024 to 2
+        x = 2
+        y = 1024
+        direction_x = 2
+        direction_y = -2
         while run_event.is_set():
-            # x goes from 2 to 1024, y goes from 1024 to 2
-            x = 2
-            y = 1024
-            direction_x = 2
-            direction_y = -2
-            while run_event.is_set():
-                print(f"Sending command: $arena size {x} {y}")
-                command = f"$arena size {x} {y}"
-                controller.tap(Key.enter)
-                controller.type(command)
-                controller.tap(Key.enter)
-                x += direction_x
-                y += direction_y
-                if x >= 1024 or x <= 2:
-                    direction_x *= -1
-                if y >= 1024 or y <= 2:
-                    direction_y *= -1
-    else:
-        print(f"Unknown arena automation type: {atype}")
+            controller.tap(Key.enter)
+            controller.type(f"$arena size {x} {y}")
+            controller.tap(Key.enter)
+            x += direction_x
+            y += direction_y
+            if x >= 1024 or x <= 2:
+                direction_x *= -1
+            if y >= 1024 or y <= 2:
+                direction_y *= -1
+            cmd_count += 1
+            if cmd_delay > 0:
+                time.sleep(cmd_delay)
+            if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
+                print(f"Reached {arena_auto_max_commands} commands, stopping")
+                break
+            if y >= 1024 or y <= 2:
+                direction_y *= -1
         
 def click_positions(pos_list, delay=0.5):
     mouse = MouseController()
@@ -252,7 +314,7 @@ def wallcrash():
 
 def nuke():
     controller.press("`")
-    controller.type("wk"*40)
+    controller.type("wk"*100)
     controller.release("`")
 
 def shape():
@@ -262,7 +324,7 @@ def shape():
 
 def shape2():
     controller.press("`")
-    controller.type("f"*500)
+    controller.type("f"*1000)
     controller.press("w")
     controller.release("`")
 
@@ -733,18 +795,18 @@ def is_ctrl(k):
     global ctrlswap
     if ctrlswap and PLATFORM == 'darwin':
         # Use Cmd key on macOS when ctrlswap is enabled
-        return k in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r)
+        return k in (Key.cmd, Key.cmd_l, Key.cmd_r)
     else:
         # Use Ctrl key normally
-        return k in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r)
+        return k in (Key.ctrl, Key.ctrl_l, Key.ctrl_r)
 
 def is_alt(k):
     # On macOS, Option is alt; on other platforms, Alt is alt
-    return k in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r)
+    return k in (Key.alt, Key.alt_l, Key.alt_r)
 
 def stopallthreads():
     global automation_process, engispam_process, art_process, braindamage_process
-    global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process
+    global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process, mcrash_process
     global automation_working, engispam_working, art_working, braindamage_working, mcrash_working
     global circle_mouse_active
     
@@ -780,6 +842,7 @@ def stopallthreads():
     softwallstack_process = None
     circlecrash_process = None
     mcrash_process = None
+    mcrash_process = None
 
 def is_modifier_for_arrow_nudge(k):
     """Return True if this key should trigger 1px arrow nudges.
@@ -798,8 +861,11 @@ def on_press(key):
     global art_shift_bind, mcrash_shift_bind, ctrlswap
     global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
     try:
+        # Workaround for pynput macOS Unicode decode bug - some special keys trigger this
+        if key is None:
+            return
         # Use Right Shift instead of Escape to stop scripts
-        if key == keyboard.Key.shift_r:
+        if key == Key.shift_r:
             if 'ctrl' in pressed_keys:
                 print("estop")
                 exit(0)
@@ -819,23 +885,23 @@ def on_press(key):
             pressed_keys.add('alt')
             # print("alt down")  # uncomment to debug
         # Handle actual Cmd key presses (for toggling ctrlswap on macOS)
-        elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+        elif key in (Key.cmd, Key.cmd_l, Key.cmd_r):
             if ctrlswap:
                 pressed_keys.add('ctrl')  # Treat Cmd as Ctrl when ctrlswap is enabled
-        elif key in (keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right):
+        elif key in (Key.up, Key.down, Key.left, Key.right):
             if 'alt' in pressed_keys:
                 x, y = mouse.position
-                if key == keyboard.Key.up:
+                if key == Key.up:
                     mouse.position = (x, y - 1)
-                elif key == keyboard.Key.down:
+                elif key == Key.down:
                     mouse.position = (x, y + 1)
-                elif key == keyboard.Key.left:
+                elif key == Key.left:
                     mouse.position = (x - 1, y)
-                elif key == keyboard.Key.right:
+                elif key == Key.right:
                     mouse.position = (x + 1, y)
                 return
         # NEW: pressing Left Shift starts art_working if binding is enabled
-        elif key == keyboard.Key.shift_l:
+        elif key == Key.shift_l:
             if art_shift_bind:
                 if not art_working:
                     print("art on")
@@ -878,6 +944,10 @@ def on_press(key):
                 controller.type("⁂⋣௹⁞ß૱ɧ⊯å⁛ɮ⏓⁊⁒Ϡç⁁⌁ϐÂͳϟ֏»")
                 time.sleep(0.1)
                 controller.tap(Key.enter)
+        elif hasattr(key, 'char') and key.char and key.char == "/":
+            if 'ctrl' in pressed_keys:
+                time.sleep(0.5)
+                controller.type("₥ἆȵɪꜻƈ [𒈙]")
         elif hasattr(key, 'char') and key.char and key.char == 'y':
             if 'ctrl' in pressed_keys:
                 print("cnuke")
@@ -1048,6 +1118,26 @@ def on_press(key):
                 controller.tap("o")
                 controller.release("a")
                 controller.release("`")
+        elif hasattr(key, 'char') and key.char and key.char=='[':
+            if 'ctrl' in pressed_keys:
+                controller.press("`")
+                for _ in range(500):
+                    controller.tap("f")
+                controller.release("`")
+            else:
+                circle_mouse_radius = max(circle_mouse_radius - 5, 5)
+                circle_mouse_radius_value.value = circle_mouse_radius
+                print(f"circle radius: {circle_mouse_radius}")
+        elif hasattr(key, 'char') and key.char and key.char==']':
+            if 'ctrl' in pressed_keys:
+                controller.press("`")
+                for _ in range(5000):
+                    controller.tap("f")
+                controller.release("`")
+            else:
+                circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
+                circle_mouse_radius_value.value = circle_mouse_radius
+                print(f"circle radius: {circle_mouse_radius}")
         elif hasattr(key, 'char') and key.char and key.char=='u':
             if 'ctrl' in pressed_keys:
                 circle_mouse_active = not circle_mouse_active
@@ -1076,37 +1166,39 @@ def on_press(key):
                 time.sleep(0.05)
                 controller.type("$arena spawnpoint 0 0")
                 controller.tap(Key.enter)
-        elif hasattr(key, 'char') and key.char and key.char=='-':
+        if hasattr(key, 'char') and key.char and key.char=='-':
             circle_mouse_speed = min(circle_mouse_speed + 0.001, 0.5)
             circle_mouse_speed_value.value = circle_mouse_speed
             print(f"circle speed: {round(circle_mouse_speed, 4)} (slower)")
-        elif hasattr(key, 'char') and key.char and key.char=='=':
+        if hasattr(key, 'char') and key.char and key.char=='=':
             circle_mouse_speed = max(circle_mouse_speed - 0.001, 0.001)
             circle_mouse_speed_value.value = circle_mouse_speed
             print(f"circle speed: {round(circle_mouse_speed, 4)} (faster)")
-        elif hasattr(key, 'char') and key.char and key.char=='[':
-            circle_mouse_radius = max(circle_mouse_radius - 5, 5)
-            circle_mouse_radius_value.value = circle_mouse_radius
-            print(f"circle radius: {circle_mouse_radius}")
-        elif hasattr(key, 'char') and key.char and key.char==']':
-            circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
-            circle_mouse_radius_value.value = circle_mouse_radius
-            print(f"circle radius: {circle_mouse_radius}")
+    except UnicodeDecodeError:
+        # Silently ignore pynput Unicode decode errors (macOS keyboard event bug)
+        pass
     except Exception as e:
         print(f"Error: {e}")
     
 def on_release(key):
     global art_working, art_shift_bind, mcrash_working, mcrash_shift_bind
+    try:
+        # Workaround for pynput macOS Unicode decode bug
+        if key is None:
+            return
+    except UnicodeDecodeError:
+        return
+    
     if is_ctrl(key):
         pressed_keys.discard('ctrl')
-    elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+    elif key in (Key.cmd, Key.cmd_l, Key.cmd_r):
         if ctrlswap:
             pressed_keys.discard('ctrl')  # Release Cmd when ctrlswap is enabled
     elif is_alt(key):
         pressed_keys.discard('alt')
         # print("alt up")  # uncomment to debug
     # NEW: releasing Left Shift stops art_working if binding is enabled
-    elif key == keyboard.Key.shift_l:
+    elif key == Key.shift_l:
         if art_shift_bind and art_working:
             print("art off")
         if art_shift_bind:
@@ -1129,6 +1221,27 @@ if __name__ == '__main__':
         print(f"Warning: Platform '{PLATFORM}' may have limited support.")
         print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
     
-    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-        listener.join()
+    # Wrapper to suppress pynput Unicode decode errors on macOS
+    def safe_on_press(key):
+        try:
+            on_press(key)
+        except UnicodeDecodeError:
+            pass  # Ignore Unicode decode errors from special keys
+    
+    def safe_on_release(key):
+        try:
+            on_release(key)
+        except UnicodeDecodeError:
+            pass  # Ignore Unicode decode errors from special keys
+    
+    listener = KeyboardListener(on_press=safe_on_press, on_release=safe_on_release)
+    listener.start()
+    
+    try:
+        while True:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+        listener.stop()
+        stopallthreads()
 

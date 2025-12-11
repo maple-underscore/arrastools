@@ -6,7 +6,3 @@ pillow
 torch
 shapely
 pytesseract
-multiprocessing
-sys
-platform
-threading

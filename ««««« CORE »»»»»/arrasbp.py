@@ -6,7 +6,6 @@ identical; the file handling is now pathlib-based for reliability.
 """
 
 from pathlib import Path
-from pynput import keyboard, mouse
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 import time, threading
