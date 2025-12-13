@@ -87,8 +87,21 @@ void arenaAutomationType2() {
         x += direction_x;
         y += direction_y;
         
-        if (x >= 1024 || x <= 2) direction_x *= -1;
-        if (y >= 1024 || y <= 2) direction_y *= -1;
+        // Clamp and reverse direction if out of bounds
+        if (x > 1024) {
+            x = 1024;
+            direction_x = -2;
+        } else if (x < 2) {
+            x = 2;
+            direction_x = 2;
+        }
+        if (y > 1024) {
+            y = 1024;
+            direction_y = -2;
+        } else if (y < 2) {
+            y = 2;
+            direction_y = 2;
+        }
     }
 }
 
@@ -106,8 +119,21 @@ void arenaAutomationType3() {
         x += direction_x;
         y += direction_y;
         
-        if (x >= 1024 || x <= 2) direction_x *= -1;
-        if (y >= 1024 || y <= 2) direction_y *= -1;
+        // Clamp and reverse direction if out of bounds
+        if (x > 1024) {
+            x = 1024;
+            direction_x = -2;
+        } else if (x < 2) {
+            x = 2;
+            direction_x = 2;
+        }
+        if (y > 1024) {
+            y = 1024;
+            direction_y = -2;
+        } else if (y < 2) {
+            y = 2;
+            direction_y = 2;
+        }
     }
 }
 

@@ -52,8 +52,8 @@ circle_mouse_direction = 1  # 1 for clockwise, -1 for counterclockwise
 
 # Arena automation limits
 arena_auto_terminate = True  # If True, stop after arena_auto_max_commands
-arena_auto_max_commands = 400  # Number of commands before auto-termination
-arena_auto_rate_limit = 100  # Maximum commands per second (0 = unlimited)
+arena_auto_max_commands = 600  # Number of commands before auto-termination
+arena_auto_rate_limit = 150  # Maximum commands per second (0 = unlimited)
 
 automation_working = False
 engispam_working = False
@@ -109,6 +109,18 @@ mcrash_shift_bind = False
 
 def generate_even(low=2, high=1024):
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
+
+def run_cpp_macro(command, *args):
+    """Run a C++ macro if available, return True if successful, False if need Python fallback."""
+    cpp_binary = os.path.join(os.path.dirname(__file__), "..", "macro_tools")
+    if os.path.exists(cpp_binary):
+        try:
+            cmd = [cpp_binary, command] + list(map(str, args))
+            subprocess.run(cmd, check=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+    return False
 
 def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3):
     """Type a sequence of Unicode characters encoded as 4-hex-digit code points.
@@ -246,10 +258,19 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
             controller.tap(Key.enter)
             x += direction_x
             y += direction_y
-            if x >= 1024 or x <= 2:
-                direction_x *= -1
-            if y >= 1024 or y <= 2:
-                direction_y *= -1
+            # Clamp and reverse direction if out of bounds
+            if x > 1024:
+                x = 1024
+                direction_x = -2
+            elif x < 2:
+                x = 2
+                direction_x = 2
+            if y > 1024:
+                y = 1024
+                direction_y = -2
+            elif y < 2:
+                y = 2
+                direction_y = 2
             cmd_count += 1
             if cmd_delay > 0:
                 time.sleep(cmd_delay)
@@ -268,10 +289,19 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
             controller.tap(Key.enter)
             x += direction_x
             y += direction_y
-            if x >= 1024 or x <= 2:
-                direction_x *= -1
-            if y >= 1024 or y <= 2:
-                direction_y *= -1
+            # Clamp and reverse direction if out of bounds
+            if x > 1024:
+                x = 1024
+                direction_x = -2
+            elif x < 2:
+                x = 2
+                direction_x = 2
+            if y > 1024:
+                y = 1024
+                direction_y = -2
+            elif y < 2:
+                y = 2
+                direction_y = 2
             cmd_count += 1
             if cmd_delay > 0:
                 time.sleep(cmd_delay)
@@ -308,27 +338,37 @@ def conq_quickstart():
     mouse.position=pos
 
 def wallcrash():
+    if run_cpp_macro("wallcrash"):
+        return
     controller.press("`")
     controller.type("x"*1800)
     controller.release("`")
 
 def nuke():
+    if run_cpp_macro("nuke"):
+        return
     controller.press("`")
     controller.type("wk"*100)
     controller.release("`")
 
 def shape():
+    if run_cpp_macro("shape"):
+        return
     controller.press("`")
     controller.type("f"*5000)
     controller.release("`")
 
 def shape2():
+    if run_cpp_macro("shape2"):
+        return
     controller.press("`")
     controller.type("f"*1000)
     controller.press("w")
     controller.release("`")
 
 def circlecrash():
+    if run_cpp_macro("circlecrash"):
+        return
     controller.press("`")
     for _ in range(180):
         for _ in range(180):
@@ -337,6 +377,8 @@ def circlecrash():
     controller.release("`")
 
 def minicirclecrash():
+    if run_cpp_macro("minicirclecrash"):
+        return
     controller.press("`")
     for _ in range(25):
         for _ in range(100):
@@ -345,6 +387,8 @@ def minicirclecrash():
     controller.release("`")
 
 def circles(amt = 210):
+    if run_cpp_macro("circles", amt):
+        return
     controller.press("`")
     for _ in range(amt):
         controller.tap("c")
@@ -352,6 +396,8 @@ def circles(amt = 210):
     controller.release("`")
 
 def walls():
+    if run_cpp_macro("walls"):
+        return
     controller.press("`")
     controller.type("x"*210)
     controller.release("`")
@@ -511,11 +557,15 @@ def circle_mouse(
         time.sleep(speed)
 
 def score():
+    if run_cpp_macro("score"):
+        return
     controller.press("`")
     controller.type("n"*20000)
     controller.release("`")
 
 def benchmark(amt = 5000):
+    if run_cpp_macro("benchmark", amt):
+        return
     shift_pressed = threading.Event()
 
     def on_press(key):
@@ -1079,10 +1129,11 @@ def on_press(key):
                 score50m()
         elif hasattr(key, 'char') and key.char and key.char=='h':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                for _ in range(3000):
-                    controller.tap("h")
-                controller.release("`")
+                if not run_cpp_macro("heal"):
+                    controller.press("`")
+                    for _ in range(3000):
+                        controller.tap("h")
+                    controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='r':
             if 'ctrl' in pressed_keys:
                 for _ in range(200):
@@ -1120,20 +1171,22 @@ def on_press(key):
                 controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='[':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                for _ in range(500):
-                    controller.tap("f")
-                controller.release("`")
+                if not run_cpp_macro("shape_small"):
+                    controller.press("`")
+                    for _ in range(500):
+                        controller.tap("f")
+                    controller.release("`")
             else:
                 circle_mouse_radius = max(circle_mouse_radius - 5, 5)
                 circle_mouse_radius_value.value = circle_mouse_radius
                 print(f"circle radius: {circle_mouse_radius}")
         elif hasattr(key, 'char') and key.char and key.char==']':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                for _ in range(5000):
-                    controller.tap("f")
-                controller.release("`")
+                if not run_cpp_macro("shape_large"):
+                    controller.press("`")
+                    for _ in range(5000):
+                        controller.tap("f")
+                    controller.release("`")
             else:
                 circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
                 circle_mouse_radius_value.value = circle_mouse_radius
