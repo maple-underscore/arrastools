@@ -57,8 +57,9 @@ use_cpp_macros = False  # If False, use Python implementation even if C++ binary
 
 # Arena automation limits
 arena_auto_terminate = True  # If True, stop after arena_auto_max_commands
-arena_auto_max_commands = 600  # Number of commands before auto-termination
+arena_auto_max_commands = 6000  # Number of commands before auto-termination
 arena_auto_rate_limit = 150  # Maximum commands per second (0 = unlimited)
+arena_size_step = 8  # Step size for arena size changes (must be even, default: 2)
 
 automation_working = False
 engispam_working = False
@@ -196,7 +197,12 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
     import os
     import subprocess
     
-    global arena_auto_terminate, arena_auto_max_commands, arena_auto_rate_limit, use_cpp_macros
+    global arena_auto_terminate, arena_auto_max_commands, arena_auto_rate_limit, use_cpp_macros, arena_size_step
+    
+    # Ensure step is even
+    step = arena_size_step if arena_size_step % 2 == 0 else 2
+    if step != arena_size_step:
+        print(f"Warning: arena_size_step must be even, using {step} instead of {arena_size_step}")
     
     # Calculate delay between commands based on rate limit
     cmd_delay = (1.0 / arena_auto_rate_limit) if arena_auto_rate_limit > 0 else 0
@@ -244,24 +250,27 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
     cmd_count = 0
     if atype == 1:
         while run_event.is_set():
-            x = generate_even()
-            y = generate_even()
+            if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
+                print(f"Reached {arena_auto_max_commands} commands, stopping")
+                break
+            x = generate_even(2, 1024)
+            y = generate_even(2, 1024)
             controller.tap(Key.enter)
             controller.type(f"$arena size {x} {y}")
             controller.tap(Key.enter)
             cmd_count += 1
             if cmd_delay > 0:
                 time.sleep(cmd_delay)
+    elif atype == 2:
+        # x and y go from 2 to 1024 in steps of arena_size_step
+        x = 2
+        y = 2
+        direction_x = step
+        direction_y = step
+        while run_event.is_set():
             if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
                 print(f"Reached {arena_auto_max_commands} commands, stopping")
                 break
-    elif atype == 2:
-        # x and y go from 2 to 1024 in steps of 2
-        x = 2
-        y = 2
-        direction_x = 2
-        direction_y = 2
-        while run_event.is_set():
             controller.tap(Key.enter)
             controller.type(f"$arena size {x} {y}")
             controller.tap(Key.enter)
@@ -270,29 +279,29 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
             # Clamp and reverse direction if out of bounds
             if x > 1024:
                 x = 1024
-                direction_x = -2
+                direction_x = -step
             elif x < 2:
                 x = 2
-                direction_x = 2
+                direction_x = step
             if y > 1024:
                 y = 1024
-                direction_y = -2
+                direction_y = -step
             elif y < 2:
                 y = 2
-                direction_y = 2
+                direction_y = step
             cmd_count += 1
             if cmd_delay > 0:
                 time.sleep(cmd_delay)
-            if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
-                print(f"Reached {arena_auto_max_commands} commands, stopping")
-                break
     elif atype == 3:
         # x goes from 2 to 1024, y goes from 1024 to 2
         x = 2
         y = 1024
-        direction_x = 2
-        direction_y = -2
+        direction_x = step
+        direction_y = -step
         while run_event.is_set():
+            if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
+                print(f"Reached {arena_auto_max_commands} commands, stopping")
+                break
             controller.tap(Key.enter)
             controller.type(f"$arena size {x} {y}")
             controller.tap(Key.enter)
@@ -301,24 +310,19 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
             # Clamp and reverse direction if out of bounds
             if x > 1024:
                 x = 1024
-                direction_x = -2
+                direction_x = -step
             elif x < 2:
                 x = 2
-                direction_x = 2
+                direction_x = step
             if y > 1024:
                 y = 1024
-                direction_y = -2
+                direction_y = -step
             elif y < 2:
                 y = 2
-                direction_y = 2
+                direction_y = step
             cmd_count += 1
             if cmd_delay > 0:
                 time.sleep(cmd_delay)
-            if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
-                print(f"Reached {arena_auto_max_commands} commands, stopping")
-                break
-            if y >= 1024 or y <= 2:
-                direction_y *= -1
         
 def click_positions(pos_list, delay=0.5):
     mouse = MouseController()
@@ -900,23 +904,25 @@ def stopallthreads():
             mcrash_proc.terminate()
         mcrash_proc = None
 
-    # Reset all process references
-    automation_process = None
-    engispam_process = None
-    art_process = None
-    braindamage_process = None
-    tail_process = None
-    circle_mouse_process = None
-    softwallstack_process = None
-    circlecrash_process = None
-    mcrash_process = None
-    """
-    Platform-specific:
-    - macOS: Option (alt)
-    - Windows/Linux: Alt
-    - Android: Alt (if supported)
-    """
-    return is_alt(k)
+        # Reset all process references
+        automation_process = None
+        engispam_process = None
+        art_process = None
+        braindamage_process = None
+        tail_process = None
+        circle_mouse_process = None
+        softwallstack_process = None
+        circlecrash_process = None
+        mcrash_process = None
+    
+    def is_modifier_for_arrow_nudge(k):
+        """
+        Platform-specific:
+        - macOS: Option (alt)
+        - Windows/Linux: Alt
+        - Android: Alt (if supported)
+        """
+        return is_alt(k)
 
 def on_press(key):
     global automation_working, braindamage_working, circlecrash_working, art_working, engispam_working, mcrash_working
