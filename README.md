@@ -4,6 +4,20 @@
 
 Desktop automation tools and a PPO-based AI for Arras.io gameplay. Cross-platform support for macOS, Linux, and Windows.
 
+> [!TIP]
+> **Python 3.14 is recommended** for optimal performance and compatibility.
+> ```bash
+> # Create a Python 3.14 virtual environment
+> python3.14 -m venv .venv314
+> 
+> # Activate it
+> source .venv314/bin/activate  # Linux/macOS
+> .venv314\Scripts\activate     # Windows
+> ```
+
+> [!WARNING]
+> This tool automates keyboard and mouse input. Use responsibly and ensure compliance with game terms of service.
+
 ## Features
 
 - **Hotkey-driven automation** (`arrastools.py`, `arrastools2.py`): Control gameplay with keyboard shortcuts
@@ -54,6 +68,9 @@ sudo pacman -S tk tesseract
 
 ## Installation
 
+> [!IMPORTANT]
+> Ensure you have Python 3.10+ installed (3.14 recommended). Check with: `python3 --version`
+
 ### 1. Clone the repository
 ```bash
 git clone https://github.com/maple-underscore/arrastools.git
@@ -62,21 +79,34 @@ cd arrastools
 
 ### 2. Create a virtual environment (recommended)
 ```bash
-# Linux/macOS
-python3 -m venv .venv
-source .venv/bin/activate
+# Python 3.14 (recommended)
+python3.14 -m venv .venv314
+source .venv314/bin/activate  # Linux/macOS
+# OR
+.venv314\Scripts\activate     # Windows
 
-# Windows
-python -m venv .venv
-.venv\Scripts\activate
+# Or use default Python 3
+python3 -m venv .venv
+source .venv/bin/activate     # Linux/macOS
+# OR
+.venv\Scripts\activate        # Windows
 ```
+
+> [!NOTE]
+> Virtual environments isolate project dependencies from your system Python, preventing version conflicts.
 
 ### 3. Install Python dependencies
 ```bash
 pip install pynput mss numpy ping3 pillow torch shapely pytesseract
 ```
 
+> [!TIP]
+> Use `pip install -r requirements.txt` if available for easier dependency management.
+
 ### 4. Install system dependencies
+
+> [!CAUTION]
+> **Tesseract OCR is required** for text scanning features (`scan_screen_for_text`). The script will work without it but text detection will be disabled.
 
 **macOS:**
 ```bash
@@ -94,10 +124,16 @@ sudo apt install python3-tk tesseract-ocr
 
 ## Configuration
 
+> [!IMPORTANT]
+> **First-time setup**: Coordinates are configured for a specific screen resolution. You'll likely need to adjust these for your display.
+
 ### Display Scaling
 Adjust `SCALE` in `arrasbot.py` based on your display:
 - **Retina/HiDPI displays (macOS)**: `SCALE = 2`
 - **Standard displays (Windows/Linux)**: `SCALE = 1`
+
+> [!NOTE]
+> Use `arrasbot.py` command `dbgmon` to check your monitor properties and determine the correct scale.
 
 ### Game Region
 Update `GAME_REGION` coordinates in `arrasai.py` to match your screen resolution:
@@ -111,6 +147,9 @@ Use `arrasbot.py` with the `probe` command to find your coordinates.
 
 ### Click Positions
 Hard-coded positions in `arrastools.py` (e.g., `conq_quickstart()`) may need adjustment for different resolutions.
+
+> [!TIP]
+> Run `python arrasbot.py` and use the `probe` command, then hover your mouse over UI elements to get their exact coordinates.
 
 ## Project Structure
 
@@ -130,12 +169,18 @@ arrastools/
 
 ## Troubleshooting
 
+> [!NOTE]
+> Most issues stem from permissions or coordinate mismatches. Follow the steps below for your platform.
+
 ### Permission Issues
 
 **macOS:**
 - Go to System Settings > Privacy & Security
 - Enable Accessibility for your Terminal/IDE
 - Enable Screen Recording for your Terminal/IDE
+
+> [!WARNING]
+> macOS will prompt for permissions on first run. You must grant both Accessibility and Screen Recording access.
 
 **Linux:**
 - Check if running on X11 (pynput works better than Wayland)
@@ -146,19 +191,29 @@ arrastools/
 - Ensure Tesseract is in your system PATH
 
 ### Coordinate/Scaling Issues
-1. Use `arrasbot.py` command `dbgmon` to list monitor properties
-2. Use `probe` command to check pixel colors at cursor position
-3. Adjust `SCALE` variable (2 for HiDPI, 1 for standard)
-4. Re-map coordinates for your resolution
+
+> [!TIP]
+> Follow these steps to fix coordinate-related issues:
+> 1. Use `arrasbot.py` command `dbgmon` to list monitor properties
+> 2. Use `probe` command to check pixel colors at cursor position
+> 3. Adjust `SCALE` variable (2 for HiDPI, 1 for standard)
+> 4. Re-map coordinates for your resolution
 
 ### Dependency Issues
 - Ensure Tesseract OCR is installed system-wide
 - Use virtual environment to isolate Python packages
 - Check pynput documentation for platform-specific issues
 
+> [!CAUTION]
+> If you encounter `ModuleNotFoundError`, ensure your virtual environment is activated and dependencies are installed.
+
 ## Development
 
-See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detailed development guidelines, conventions, and architecture notes.
+> [!NOTE]
+> See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detailed development guidelines, conventions, and architecture notes.
+
+> [!TIP]
+> **For contributors**: All functions now have type annotations for better IDE support and type checking with Mypy.
 
 ## License
 
@@ -166,12 +221,19 @@ CC BY-NC-SA 4.0 License - See LICENSE and NOTICE files for details. Non-commerci
 
 ## Contributing
 
-Contributions welcome! Please:
-1. Test on your target platform (macOS/Linux/Windows)
-2. Use `pathlib` for file paths (cross-platform)
-3. Follow existing patterns (see copilot-instructions.md)
-4. Add platform detection for new scripts
+> [!IMPORTANT]
+> Contributions welcome! Please follow these guidelines:
+
+1. **Test on your target platform** (macOS/Linux/Windows)
+2. **Use `pathlib`** for file paths (cross-platform compatibility)
+3. **Follow existing patterns** (see copilot-instructions.md)
+4. **Add platform detection** for new scripts
+5. **Include type annotations** for all new functions
+
+> [!TIP]
+> Run `mypy --check-untyped-defs` to verify type annotations before submitting.
 
 ## Disclaimer
 
-This tool is for educational purposes. Use responsibly and in accordance with game terms of service.
+> [!WARNING]
+> This tool is for **educational purposes only**. Use responsibly and in accordance with game terms of service. The authors are not responsible for any consequences of misuse.
