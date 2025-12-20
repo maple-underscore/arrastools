@@ -15,6 +15,25 @@ import sys
 import os
 from typing import Any, TYPE_CHECKING
 
+# Detect platform early (needed for overlay decision)
+PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'android'
+
+# Optional GUI overlay (tkinter). If unavailable, overlay auto-disables.
+# On macOS, tkinter windows MUST be created on the main thread, so we disable
+# the overlay by default on macOS to avoid NSInternalInconsistencyException crashes.
+DISABLE_OVERLAY_ON_MACOS = PLATFORM == 'darwin'
+
+try:
+    import tkinter as tk
+    overlay_import_error = None
+    # If overlay would be disabled on macOS, set it to disabled now
+    if DISABLE_OVERLAY_ON_MACOS:
+        tk = None
+        overlay_import_error = "Overlay disabled on macOS (tkinter threading issue)"
+except Exception as exc:  # ModuleNotFoundError or Tcl/Tk missing
+    tk = None
+    overlay_import_error = exc
+
 if TYPE_CHECKING:
     from multiprocessing.synchronize import Event as MpEvent
 else:
@@ -28,8 +47,41 @@ except ImportError:
     print("Install with: python3 -m pip install -r requirements.txt")
     sys.exit(1)
 
-# Detect platform
-PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows', 'android'
+try:
+    import mss
+    import pytesseract
+    from PIL import Image
+    HAS_OCR = True
+except ImportError:
+    HAS_OCR = False
+    print("Warning: OCR dependencies (mss, pytesseract, Pillow) not available.")
+    print("Text scanning features will be disabled.")
+    print("Install with: pip install mss pytesseract pillow")
+
+
+class RobustKeyboardListener(KeyboardListener):
+    """Wrapper around pynput's KeyboardListener that handles Unicode decode errors.
+    
+    On macOS, certain keyboard events can trigger UnicodeDecodeError in pynput's
+    internal event handler. This wrapper catches those errors gracefully.
+    """
+    
+    def _handle_message(self, proxy: Any, event_type: Any, event: Any, refcon: Any, is_injected: Any) -> None:
+        """Override pynput's message handler to catch Unicode decode errors.
+        
+        This is called from the C callback handler and processes keyboard events.
+        On macOS, some special keys can cause UnicodeDecodeError in _event_to_key().
+        """
+        try:
+            super()._handle_message(proxy, event_type, event, refcon, is_injected)
+        except UnicodeDecodeError:
+            # Silently ignore Unicode decode errors from special keys on macOS
+            # These don't indicate a problem and shouldn't crash the listener
+            pass
+        except Exception as e:
+            # Log but don't crash on other unexpected errors
+            print(f"Keyboard listener error (suppressed): {type(e).__name__}: {e}")
+
 
 # Platform notes:
 # - macOS: Ctrl hotkeys work; Option+Arrow for 1px nudges
@@ -83,6 +135,12 @@ engispam_process = None
 circlecrash_process = None
 mcrash_process: Process | None = None
 mcrash_proc: subprocess.Popen | None = None
+overlay_thread: threading.Thread | None = None
+overlay_stop_event = threading.Event()
+overlay_visible = False
+overlay_user_disabled = False
+overlay_refresh_ms = 250
+arena_current_type = 1
 
 # Shared multiprocessing primitives so worker processes can mirror thread-like behavior.
 automation_event = multiprocessing.Event()
@@ -114,10 +172,10 @@ ctrl1_first_time = 0.0
 art_shift_bind = False
 mcrash_shift_bind = False
 
-def generate_even(low=2, high=1024):
+def generate_even(low: int = 2, high: int = 1024) -> int:
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
 
-def run_cpp_macro(command, *args):
+def run_cpp_macro(command: str, *args: Any) -> bool:
     """Run a C++ macro if available, return True if successful, False if need Python fallback."""
     global use_cpp_macros
     if not use_cpp_macros:
@@ -132,7 +190,150 @@ def run_cpp_macro(command, *args):
             return False
     return False
 
-def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3):
+
+# -------- Overlay helpers -------- #
+def _overlay_lines() -> list[str]:
+    """Build overlay text for long-running macros."""
+    dir_text = 'cw' if circle_mouse_direction_value.value >= 0 else 'ccw'
+    rate_text = '∞' if arena_auto_rate_limit == 0 else str(arena_auto_rate_limit)
+    lines: list[str] = [
+        "Arras macro HUD (Ctrl+0 to hide)",
+        f"Arena: {'ON' if automation_event.is_set() else 'off'} type={arena_current_type} step={arena_size_step} rate={rate_text}/s",
+        f"Engispam: {'ON' if engispam_event.is_set() else 'off'}",
+        f"Art: {'ON' if art_event.is_set() else 'off'} (shift-bind={'ON' if art_shift_bind else 'off'})",
+        f"Mcrash: {'ON' if (mcrash_event.is_set() or mcrash_working) else 'off'} (shift-bind={'ON' if mcrash_shift_bind else 'off'})",
+        f"Brain damage: {'ON' if braindamage_event.is_set() else 'off'}",
+        f"Circle mouse: {'ON' if circle_mouse_event.is_set() else 'off'} r={circle_mouse_radius_value.value} v={circle_mouse_speed_value.value:.3f} dir={dir_text}",
+        f"Tail: {'ON' if (tail_process is not None and tail_process.is_alive()) else 'off'}",
+        f"Softwall: {'ON' if (softwallstack_process is not None and softwallstack_process.is_alive()) else 'off'}",
+        f"Armed: circle={'YES' if ctrl6_armed else 'no'} wall={'YES' if ctrl7_armed else 'no'}",
+        f"Ctrl swap: {'Cmd' if ctrlswap and PLATFORM == 'darwin' else 'Ctrl'}",
+    ]
+    return lines
+
+
+def _overlay_worker() -> None:
+    """Background TK loop that draws the overlay."""
+    global overlay_visible, overlay_user_disabled
+    if tk is None:
+        print(f"Overlay disabled (tk unavailable): {overlay_import_error}")
+        overlay_visible = False
+        overlay_user_disabled = True
+        return
+    
+    # On macOS, we need to handle Tkinter carefully. Create a new root window in this thread.
+    # This thread is separate from the main thread, so we create a new event loop here.
+    root = None
+    try:
+        # On macOS with tkinter from Homebrew, we need to be in a separate thread from the keyboard listener
+        root = tk.Tk()
+        root.withdraw()
+        root.title("Arras HUD")
+        root.overrideredirect(True)
+        root.attributes("-topmost", True)
+        try:
+            root.attributes("-alpha", 0.85)
+        except Exception:
+            pass
+        root.configure(bg="black")
+
+        label = tk.Label(root, text="", fg="#8cff8c", bg="black", font=("Menlo", 12), justify="left")
+        label.pack(anchor="w", padx=6, pady=6)
+        root.geometry("360x220+20+20")
+        root.deiconify()
+
+        def refresh():
+            if overlay_stop_event.is_set():
+                try:
+                    root.destroy()
+                except Exception:
+                    pass
+                return
+            try:
+                label.configure(text="\n".join(_overlay_lines()))
+            except Exception:
+                pass
+            try:
+                root.after(overlay_refresh_ms, refresh)
+            except Exception:
+                pass
+
+        refresh()
+        overlay_visible = True
+        try:
+            root.mainloop()
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            print(f"Overlay mainloop error: {e}")
+    except Exception as exc:
+        print(f"Overlay disabled (tk init failed): {exc}")
+        overlay_visible = False
+        overlay_user_disabled = True
+    finally:
+        overlay_visible = False
+        try:
+            if root is not None:
+                root.destroy()
+        except Exception:
+            pass
+
+
+def start_overlay() -> None:
+    """Show the overlay unless the user explicitly disabled it."""
+    global overlay_thread, overlay_visible, overlay_user_disabled
+    if overlay_user_disabled:
+        return
+    if tk is None:
+        print(f"Overlay disabled (tk unavailable): {overlay_import_error}")
+        overlay_user_disabled = True
+        return
+    if overlay_thread is not None and overlay_thread.is_alive():
+        overlay_visible = True
+        return
+    overlay_stop_event.clear()
+    overlay_thread = threading.Thread(target=_overlay_worker, daemon=True)
+    overlay_thread.start()
+
+
+def stop_overlay(user_request: bool = True) -> None:
+    """Hide the overlay. If user-requested, prevent auto-respawn."""
+    global overlay_thread, overlay_visible, overlay_user_disabled
+    overlay_stop_event.set()
+    if user_request:
+        overlay_user_disabled = True
+    if overlay_thread is not None:
+        overlay_thread.join(timeout=1.5)
+        overlay_thread = None
+    overlay_visible = False
+
+
+def ensure_overlay_running(reason: str = "") -> None:
+    """Start overlay when a long-running macro kicks in (unless user hid it)."""
+    if overlay_user_disabled:
+        return
+    if not overlay_visible:
+        start_overlay()
+        if reason:
+            print(f"overlay on ({reason})")
+
+
+def toggle_overlay() -> None:
+    """User-facing toggle used by hotkeys."""
+    global overlay_user_disabled
+    if overlay_visible:
+        stop_overlay(user_request=True)
+        print("overlay off")
+    else:
+        if tk is None:
+            print(f"overlay unavailable (tk not installed): {overlay_import_error}")
+            overlay_user_disabled = True
+            return
+        overlay_user_disabled = False
+        start_overlay()
+        print("overlay on")
+
+def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3) -> None:
     """Type a sequence of Unicode characters encoded as 4-hex-digit code points.
 
     Format examples:
@@ -188,7 +389,7 @@ def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3):
     print(f"unicode blocks: {' '.join(groups)} -> '{out}'")
     controller.type(out)
 
-def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
+def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> None:
     """Spam $arena commands using ultra-optimized native C++ implementation.
     
     Falls back to Python implementation if C++ binary not found.
@@ -324,7 +525,7 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None):
             if cmd_delay > 0:
                 time.sleep(cmd_delay)
         
-def click_positions(pos_list, delay=0.5):
+def click_positions(pos_list: list[tuple[float, float]], delay: float = 0.5) -> None:
     mouse = MouseController()
     for x, y in pos_list:
         mouse.position = (x, y)
@@ -333,7 +534,7 @@ def click_positions(pos_list, delay=0.5):
         print(f"Clicked at {x}, {y}")
         time.sleep(delay)
 
-def conq_quickstart():
+def conq_quickstart() -> None:
     for _ in range(50):
         controller.tap("n")
     controller.type("kyyv")
@@ -350,28 +551,28 @@ def conq_quickstart():
     ], 0)
     mouse.position=pos
 
-def wallcrash():
+def wallcrash() -> None:
     if run_cpp_macro("wallcrash"):
         return
     controller.press("`")
     controller.type("x"*1800)
     controller.release("`")
 
-def nuke():
+def nuke() -> None:
     if run_cpp_macro("nuke"):
         return
     controller.press("`")
     controller.type("wk"*100)
     controller.release("`")
 
-def shape():
+def shape() -> None:
     if run_cpp_macro("shape"):
         return
     controller.press("`")
     controller.type("f"*5000)
     controller.release("`")
 
-def shape2():
+def shape2() -> None:
     if run_cpp_macro("shape2"):
         return
     controller.press("`")
@@ -379,7 +580,7 @@ def shape2():
     controller.press("w")
     controller.release("`")
 
-def circlecrash():
+def circlecrash() -> None:
     if run_cpp_macro("circlecrash"):
         return
     controller.press("`")
@@ -389,7 +590,7 @@ def circlecrash():
             controller.tap("h")
     controller.release("`")
 
-def minicirclecrash():
+def minicirclecrash() -> None:
     if run_cpp_macro("minicirclecrash"):
         return
     controller.press("`")
@@ -399,7 +600,7 @@ def minicirclecrash():
             controller.tap("h")
     controller.release("`")
 
-def circles(amt = 210):
+def circles(amt: int = 210) -> None:
     if run_cpp_macro("circles", amt):
         return
     controller.press("`")
@@ -408,14 +609,14 @@ def circles(amt = 210):
         controller.tap("h")
     controller.release("`")
 
-def walls():
+def walls() -> None:
     if run_cpp_macro("walls"):
         return
     controller.press("`")
     controller.type("x"*210)
     controller.release("`")
 
-def art(run_event: MpEvent):
+def art(run_event: MpEvent) -> None:
     controller.press("`")
     while run_event.is_set():
         controller.tap("c")
@@ -423,14 +624,14 @@ def art(run_event: MpEvent):
         time.sleep(0.02)
     controller.release("`")
 
-def mcrash(run_event: MpEvent):
+def mcrash(run_event: MpEvent) -> None:
     controller.press("`")
     while run_event.is_set():
         controller.tap("c")
         controller.tap("h")
     controller.release("`")
 
-def tail():
+def tail() -> None:
     controller.press("`")
     mouse = MouseController()
     init = mouse.position
@@ -511,7 +712,7 @@ def tail():
         down = not down
     controller.release("`")
 
-def brain_damage(run_event: MpEvent):
+def brain_damage(run_event: MpEvent) -> None:
     mouse = MouseController()
     while run_event.is_set():
         mouse.position = (random.randint(0, 1710), random.randint(168, 1112))
@@ -522,14 +723,14 @@ def circle_mouse(
     radius_value: Any,
     speed_value: Any,
     direction_value: Any,
-):
+) -> None:
     """Move mouse in circles around a center point. Press '\\' to reverse direction."""
     import math
 
     print("Click anywhere to set the center point for circular motion...")
     temp_points: list[tuple[int, int]] = []
 
-    def temp_click_handler(x, y, button, pressed):
+    def temp_click_handler(x: int, y: int, button: Button, pressed: bool) -> None:
         if pressed and button == Button.left and run_event.is_set():
             temp_points.append((x, y))
 
@@ -569,19 +770,19 @@ def circle_mouse(
 
         time.sleep(speed)
 
-def score():
+def score() -> None:
     if run_cpp_macro("score"):
         return
     controller.press("`")
     controller.type("n"*20000)
     controller.release("`")
 
-def benchmark(amt = 5000):
+def benchmark(amt: int = 5000) -> None:
     if run_cpp_macro("benchmark", amt):
         return
     shift_pressed = threading.Event()
 
-    def on_press(key):
+    def on_press(key: Key) -> None:
         if key == Key.shift or key == Key.shift_r:
             shift_pressed.set()
             print("Benchmark stopped by Shift key press.")
@@ -609,12 +810,12 @@ def benchmark(amt = 5000):
     controller.tap(Key.enter)
     time.sleep(0.1)
 
-def score50m():
+def score50m() -> None:
     controller.press("`")
     controller.type("f"*20)
     controller.release("`")
 
-def engispam(run_event: MpEvent):
+def engispam(run_event: MpEvent) -> None:
     while run_event.is_set():
         controller.tap(",")
         controller.tap("y")
@@ -630,19 +831,19 @@ def engispam(run_event: MpEvent):
         controller.press("q")
         controller.release("`")
 
-def circle():
+def circle() -> None:
     controller.press("`")
     controller.type("ch")
     controller.release("`")
         
-def slowwall():
+def slowwall() -> None:
     controller.press("`")
     for _ in range(50):
         controller.tap("x")
         time.sleep(0.08)
     controller.release("`")
 
-def softwallstack():
+def softwallstack() -> None:
     walls()
     start = mouse.position
     stackpos = (start[0] - s, start[1] + 4 * s)
@@ -664,7 +865,7 @@ def softwallstack():
     controller.release("`")
 
 
-def simpletail(amt=20):
+def simpletail(amt: int = 20) -> None:
     controller.press("`")
     delay = 0.04
     s2 = 25
@@ -692,7 +893,7 @@ def simpletail(amt=20):
         time.sleep(delay)
         controller.release("j")
 
-def controllednuke():
+def controllednuke() -> None:
     global step
     mouse = MouseController()
     print("Controlled Nuke: You have 10 seconds to select two points.")
@@ -700,7 +901,7 @@ def controllednuke():
 
     selected: list[tuple[int, int]] = []
 
-    def click_handler(x, y, button, pressed):
+    def click_handler(x: int, y: int, button: Button, pressed: bool) -> None:
         if pressed and button == Button.left:
             selected.append((int(x), int(y)))
             print(f"cnuke point: {len(selected)} at ({int(x)}, {int(y)})")
@@ -732,10 +933,13 @@ def controllednuke():
     print("Controlled Nuke complete.")
     controller.release("`")
 
-def start_arena_automation(atype = 1):
+def start_arena_automation(atype: int = 1) -> None:
     global automation_process, automation_working
+    global arena_current_type
+    arena_current_type = int(atype)
     automation_working = True
     automation_event.set()
+    ensure_overlay_running("arena")
     if automation_process is None or not automation_process.is_alive():
         automation_process = multiprocessing.Process(
             target=arena_size_automation,
@@ -744,35 +948,39 @@ def start_arena_automation(atype = 1):
         automation_process.daemon = True
         automation_process.start()
 
-def start_engispam():
+def start_engispam() -> None:
     global engispam_process
     engispam_event.set()
+    ensure_overlay_running("engispam")
     if engispam_process is None or not engispam_process.is_alive():
         engispam_process = multiprocessing.Process(target=engispam, args=(engispam_event,))
         engispam_process.daemon = True
         engispam_process.start()
 
-def start_brain_damage():
+def start_brain_damage() -> None:
     global braindamage_process
     braindamage_event.set()
+    ensure_overlay_running("brain damage")
     if braindamage_process is None or not braindamage_process.is_alive():
         braindamage_process = multiprocessing.Process(target=brain_damage, args=(braindamage_event,))
         braindamage_process.daemon = True
         braindamage_process.start()
 
-def start_tail():
+def start_tail() -> None:
     global tail_process
     if tail_process is None or not tail_process.is_alive():
         tail_process = multiprocessing.Process(target=tail)
         tail_process.daemon = True
         tail_process.start()
+        ensure_overlay_running("tail")
 
-def start_circle_mouse():
+def start_circle_mouse() -> None:
     global circle_mouse_process
     circle_mouse_event.set()
     circle_mouse_radius_value.value = circle_mouse_radius
     circle_mouse_speed_value.value = circle_mouse_speed
     circle_mouse_direction_value.value = circle_mouse_direction
+    ensure_overlay_running("circle mouse")
     if circle_mouse_process is None or not circle_mouse_process.is_alive():
         circle_mouse_process = multiprocessing.Process(
             target=circle_mouse,
@@ -789,7 +997,7 @@ def start_circle_mouse():
         monitor.daemon = True
         monitor.start()
 
-def stop_circle_mouse():
+def stop_circle_mouse() -> None:
     """Gracefully stop the circle mouse process."""
     global circle_mouse_process
     circle_mouse_event.clear()
@@ -799,7 +1007,7 @@ def stop_circle_mouse():
             circle_mouse_process.terminate()
         circle_mouse_process = None
 
-def _monitor_circle_mouse(proc: Process):
+def _monitor_circle_mouse(proc: Process) -> None:
     """Reset circle-mouse state when its process exits."""
     global circle_mouse_process, circle_mouse_active
     if proc is None:
@@ -810,30 +1018,33 @@ def _monitor_circle_mouse(proc: Process):
         circle_mouse_active = False
         circle_mouse_process = None
 
-def start_art():
+def start_art() -> None:
     global art_process
     art_event.set()
+    ensure_overlay_running("art")
     if art_process is None or not art_process.is_alive():
         art_process = multiprocessing.Process(target=art, args=(art_event,))
         art_process.daemon = True
         art_process.start()
 
-def start_softwallstack():
+def start_softwallstack() -> None:
     global softwallstack_process
     if softwallstack_process is None or not softwallstack_process.is_alive():
         softwallstack_process = multiprocessing.Process(target=softwallstack)
         softwallstack_process.daemon = True
         softwallstack_process.start()
+        ensure_overlay_running("softwall")
 
-def start_controllednuke():
+def start_controllednuke() -> None:
     proc = multiprocessing.Process(target=controllednuke)
     proc.daemon = True
     proc.start()
 
-def start_mcrash():
+def start_mcrash() -> None:
     global mcrash_process, mcrash_working, mcrash_proc
     mcrash_event.set()
     mcrash_working = True
+    ensure_overlay_running("mcrash")
     cpp_binary = os.path.join(os.path.dirname(__file__), "..", "macro_tools")
     if use_cpp_macros and os.path.exists(cpp_binary):
         if mcrash_proc is None or mcrash_proc.poll() is not None:
@@ -844,7 +1055,7 @@ def start_mcrash():
         mcrash_process.daemon = True
         mcrash_process.start()
 
-def _ctrl1_waiter():
+def _ctrl1_waiter() -> None:
     global ctrl1_count, ctrl1_first_time
     # wait 2 seconds from first press, then act on count
     first = ctrl1_first_time
@@ -858,7 +1069,7 @@ def _ctrl1_waiter():
         ctrl1_first_time = 0.0
 
 # Normalize modifier detection across platforms
-def is_ctrl(k):
+def is_ctrl(k: Key) -> bool:
     """Check if key is Ctrl (or Cmd if ctrlswap=True on macOS)"""
     global ctrlswap
     if ctrlswap and PLATFORM == 'darwin':
@@ -868,11 +1079,91 @@ def is_ctrl(k):
         # Use Ctrl key normally
         return k in (Key.ctrl, Key.ctrl_l, Key.ctrl_r)
 
-def is_alt(k):
+def is_alt(k: Key) -> bool:
     # On macOS, Option is alt; on other platforms, Alt is alt
     return k in (Key.alt, Key.alt_l, Key.alt_r)
 
-def stopallthreads():
+def scan_screen_for_text(search_text: str, monitor_index: int = 1) -> tuple[bool, tuple[int, int] | None]:
+    """Scan the screen for the given text using OCR.
+    
+    Args:
+        search_text: The text to search for on screen (case-insensitive)
+        monitor_index: Monitor index to capture (1 = primary, 2 = secondary, etc.)
+    
+    Returns:
+        A tuple of (found: bool, center: tuple[int, int] | None)
+        - found: True if text was found, False otherwise
+        - center: (x, y) coordinates of the center of the text bounding box, or None if not found
+    
+    Example:
+        found, center = scan_screen_for_text("Hello World")
+        if found:
+            print(f"Text found at center: {center}")
+            # Can use mouse.position = center to move mouse to text
+    """
+    if not HAS_OCR:
+        print("Error: OCR dependencies not installed. Cannot scan screen for text.")
+        print("Install with: pip install mss pytesseract pillow")
+        return (False, None)
+    
+    try:
+        with mss.mss() as sct:
+            # Get the monitor (1-indexed for user, 0-indexed for mss)
+            if monitor_index < 1 or monitor_index > len(sct.monitors) - 1:
+                print(f"Error: Monitor index {monitor_index} out of range (1 to {len(sct.monitors) - 1})")
+                return (False, None)
+            
+            monitor = sct.monitors[monitor_index]
+            
+            # Capture the screen
+            screenshot = sct.grab(monitor)
+            
+            # Convert to PIL Image
+            img = Image.frombytes('RGB', screenshot.size, screenshot.rgb)
+            
+            # Perform OCR to get bounding boxes and text
+            ocr_data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+            
+            # Search for the text (case-insensitive)
+            search_lower = search_text.lower().strip()
+            
+            # Try to find the text in the OCR results
+            for i, text in enumerate(ocr_data['text']):
+                if text.lower().strip() == search_lower:
+                    # Found exact match
+                    x = ocr_data['left'][i]
+                    y = ocr_data['top'][i]
+                    w = ocr_data['width'][i]
+                    h = ocr_data['height'][i]
+                    
+                    # Calculate center point
+                    # Add monitor offset to get absolute screen coordinates
+                    center_x = monitor['left'] + x + w // 2
+                    center_y = monitor['top'] + y + h // 2
+                    
+                    return (True, (center_x, center_y))
+            
+            # Also try partial matching (in case search_text is part of a larger word)
+            for i, text in enumerate(ocr_data['text']):
+                if search_lower in text.lower():
+                    x = ocr_data['left'][i]
+                    y = ocr_data['top'][i]
+                    w = ocr_data['width'][i]
+                    h = ocr_data['height'][i]
+                    
+                    center_x = monitor['left'] + x + w // 2
+                    center_y = monitor['top'] + y + h // 2
+                    
+                    return (True, (center_x, center_y))
+            
+            # Text not found
+            return (False, None)
+            
+    except Exception as e:
+        print(f"Error scanning screen for text: {e}")
+        return (False, None)
+
+def stopallthreads() -> None:
     global automation_process, engispam_process, art_process, braindamage_process
     global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process, mcrash_process
     global automation_working, engispam_working, art_working, braindamage_working, mcrash_working
@@ -915,7 +1206,7 @@ def stopallthreads():
         circlecrash_process = None
         mcrash_process = None
     
-    def is_modifier_for_arrow_nudge(k):
+    def is_modifier_for_arrow_nudge(k: Key) -> bool:
         """
         Platform-specific:
         - macOS: Option (alt)
@@ -924,7 +1215,7 @@ def stopallthreads():
         """
         return is_alt(k)
 
-def on_press(key):
+def on_press(key: Key | None) -> None:
     global automation_working, braindamage_working, circlecrash_working, art_working, engispam_working, mcrash_working
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
     global ctrl1_count, ctrl1_first_time
@@ -1190,7 +1481,7 @@ def on_press(key):
                 if not run_cpp_macro("shape_q"):
                     controller.press("`")
                     controller.tap("d")
-                    controller.type("fy"*2)
+                    controller.type("fy"*10)
                     controller.type(("f"*50+"h")*2)
                     controller.release("`")
                     controller.press("`")
@@ -1202,7 +1493,7 @@ def on_press(key):
                 if not run_cpp_macro("shape_a"):
                     controller.press("`")
                     controller.tap("d")
-                    controller.type("fy"*2)
+                    controller.type("fy"*10)
                     controller.type(("f"*50+"h")*6)
                     controller.release("`")
                     controller.press("`")
@@ -1214,7 +1505,7 @@ def on_press(key):
                 if not run_cpp_macro("shape_z"):
                     controller.press("`")
                     controller.tap("d")
-                    controller.type("fy"*2)
+                    controller.type("fy"*10)
                     controller.type(("f"*50+"h")*10)
                     controller.release("`")
                     controller.press("`")
@@ -1226,7 +1517,7 @@ def on_press(key):
                 if not run_cpp_macro("shape_y"):
                     controller.press("`")
                     controller.tap("d")
-                    controller.type("fy"*2)
+                    controller.type("fy"*10)
                     controller.type(("f"*50+"h")*2)
                     controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='u':
@@ -1234,7 +1525,7 @@ def on_press(key):
                 if not run_cpp_macro("shape_u"):
                     controller.press("`")
                     controller.tap("d")
-                    controller.type("fy"*2)
+                    controller.type("fy"*10)
                     controller.type(("f"*50+"h")*6)
                     controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='i':
@@ -1242,7 +1533,7 @@ def on_press(key):
                 if not run_cpp_macro("shape_i"):
                     controller.press("`")
                     controller.tap("d")
-                    controller.type("fy"*2)
+                    controller.type("fy"*10)
                     controller.type(("f"*50+"h")*10)
                     controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='[':
@@ -1278,6 +1569,9 @@ def on_press(key):
                 else:
                     print("circle mouse off")
                     stop_circle_mouse()
+        elif hasattr(key, 'char') and key.char and key.char=='0':
+            if 'ctrl' in pressed_keys:
+                toggle_overlay()
         elif hasattr(key, 'char') and key.char and key.char=='\\':
             # Toggle direction of circle while active
             if circle_mouse_active:
@@ -1309,7 +1603,7 @@ def on_press(key):
     except Exception as e:
         print(f"Error: {e}")
     
-def on_release(key):
+def on_release(key: Key | None) -> None:
     global art_working, art_shift_bind, mcrash_working, mcrash_shift_bind
     try:
         # Workaround for pynput macOS Unicode decode bug
@@ -1351,19 +1645,19 @@ if __name__ == '__main__':
         print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
     
     # Wrapper to suppress pynput Unicode decode errors on macOS
-    def safe_on_press(key):
+    def safe_on_press(key: Key | None) -> None:
         try:
             on_press(key)
         except UnicodeDecodeError:
             pass  # Ignore Unicode decode errors from special keys
     
-    def safe_on_release(key):
+    def safe_on_release(key: Key | None) -> None:
         try:
             on_release(key)
         except UnicodeDecodeError:
             pass  # Ignore Unicode decode errors from special keys
     
-    listener = KeyboardListener(on_press=safe_on_press, on_release=safe_on_release)
+    listener = RobustKeyboardListener(on_press=safe_on_press, on_release=safe_on_release)
     listener.start()
     
     try:

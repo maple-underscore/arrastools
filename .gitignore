@@ -23,3 +23,19 @@ logs/*.log
 
 # Cache
 *.cache/
+
+# etc
+if
+logs
+logsk
+or
+prefer
+py314_env
+python.org
+snake_models
+typings
+you
+\#
+3.12
+arras_models
+.mypy_cache
