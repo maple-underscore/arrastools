@@ -104,12 +104,9 @@ circle_mouse_speed = 0.02  # Time delay between updates (lower = faster)
 circle_mouse_radius = 100  # Radius in pixels
 circle_mouse_direction = 1  # 1 for clockwise, -1 for counterclockwise
 
-# C++ macro optimization
-use_cpp_macros = False  # If False, use Python implementation even if C++ binary exists
-
 # Arena automation limits
 arena_auto_terminate = True  # If True, stop after arena_auto_max_commands
-arena_auto_max_commands = 6000  # Number of commands before auto-termination
+arena_auto_max_commands = 576  # Number of commands before auto-termination
 arena_auto_rate_limit = 150  # Maximum commands per second (0 = unlimited)
 arena_size_step = 8  # Step size for arena size changes (must be even, default: 2)
 
@@ -134,7 +131,6 @@ circle_mouse_process = None
 engispam_process = None
 circlecrash_process = None
 mcrash_process: Process | None = None
-mcrash_proc: subprocess.Popen | None = None
 overlay_thread: threading.Thread | None = None
 overlay_stop_event = threading.Event()
 overlay_visible = False
@@ -174,21 +170,6 @@ mcrash_shift_bind = False
 
 def generate_even(low: int = 2, high: int = 1024) -> int:
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
-
-def run_cpp_macro(command: str, *args: Any) -> bool:
-    """Run a C++ macro if available, return True if successful, False if need Python fallback."""
-    global use_cpp_macros
-    if not use_cpp_macros:
-        return False
-    cpp_binary = os.path.join(os.path.dirname(__file__), "..", "macro_tools")
-    if os.path.exists(cpp_binary):
-        try:
-            cmd = [cpp_binary, command] + list(map(str, args))
-            subprocess.run(cmd, check=True)
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
-    return False
 
 
 # -------- Overlay helpers -------- #
@@ -390,15 +371,13 @@ def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3) -> None:
     controller.type(out)
 
 def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> None:
-    """Spam $arena commands using ultra-optimized native C++ implementation.
+    """Spam $arena commands to resize the arena.
     
-    Falls back to Python implementation if C++ binary not found.
-    Compile C++ version with: make
+    Args:
+        atype: Type of automation (1=random, 2=bouncing, 3=inverse bouncing)
+        run_event: Multiprocessing event to control when to stop
     """
-    import os
-    import subprocess
-    
-    global arena_auto_terminate, arena_auto_max_commands, arena_auto_rate_limit, use_cpp_macros, arena_size_step
+    global arena_auto_terminate, arena_auto_max_commands, arena_auto_rate_limit, arena_size_step
     
     # Ensure step is even
     step = arena_size_step if arena_size_step % 2 == 0 else 2
@@ -408,37 +387,7 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> N
     # Calculate delay between commands based on rate limit
     cmd_delay = (1.0 / arena_auto_rate_limit) if arena_auto_rate_limit > 0 else 0
     
-    # Try to use the C++ binary for maximum performance (only if no rate limit)
-    # C++ binary doesn't support rate limiting yet, so use Python when rate limit is set
-    cpp_binary = os.path.join(os.path.dirname(__file__), "..", "arena_automation")
-    
-    if use_cpp_macros and os.path.exists(cpp_binary) and arena_auto_rate_limit == 0:
-        print(f"Using optimized C++ implementation (type {atype})")
-        if arena_auto_terminate:
-            print(f"Will terminate after {arena_auto_max_commands} commands")
-        try:
-            # Run C++ binary in subprocess - it will run until Ctrl+C or process killed
-            proc = subprocess.Popen([cpp_binary, str(atype)])
-            
-            # Monitor run_event and terminate when cleared or max commands reached
-            if run_event is not None:
-                cmd_count = 0
-                while run_event.is_set():
-                    time.sleep(0.1)
-                    if arena_auto_terminate:
-                        cmd_count += 1  # Approximation: ~10 commands per 0.1s
-                        if cmd_count >= arena_auto_max_commands // 10:
-                            break
-                proc.terminate()
-                proc.wait(timeout=2)
-            else:
-                proc.wait()
-            return
-        except Exception as e:
-            print(f"C++ binary failed: {e}, falling back to Python")
-    
-    # Fallback to Python implementation
-    print(f"Using Python implementation (type {atype}). Compile C++ for 10-100x speedup: make")
+    print(f"Arena automation type {atype} (step={step})")
     if arena_auto_terminate:
         print(f"Will terminate after {arena_auto_max_commands} commands")
     if arena_auto_rate_limit > 0:
@@ -552,29 +501,21 @@ def conq_quickstart() -> None:
     mouse.position=pos
 
 def wallcrash() -> None:
-    if run_cpp_macro("wallcrash"):
-        return
     controller.press("`")
     controller.type("x"*1800)
     controller.release("`")
 
 def nuke() -> None:
-    if run_cpp_macro("nuke"):
-        return
     controller.press("`")
     controller.type("wk"*100)
     controller.release("`")
 
 def shape() -> None:
-    if run_cpp_macro("shape"):
-        return
     controller.press("`")
     controller.type("f"*5000)
     controller.release("`")
 
 def circlecrash() -> None:
-    if run_cpp_macro("circlecrash"):
-        return
     controller.press("`")
     for _ in range(180):
         for _ in range(180):
@@ -583,8 +524,6 @@ def circlecrash() -> None:
     controller.release("`")
 
 def minicirclecrash() -> None:
-    if run_cpp_macro("minicirclecrash"):
-        return
     controller.press("`")
     for _ in range(50):
         for _ in range(100):
@@ -593,8 +532,6 @@ def minicirclecrash() -> None:
     controller.release("`")
 
 def circles(amt: int = 210) -> None:
-    if run_cpp_macro("circles", amt):
-        return
     controller.press("`")
     for _ in range(amt):
         controller.tap("c")
@@ -602,8 +539,6 @@ def circles(amt: int = 210) -> None:
     controller.release("`")
 
 def walls() -> None:
-    if run_cpp_macro("walls"):
-        return
     controller.press("`")
     controller.type("x"*210)
     controller.release("`")
@@ -763,15 +698,11 @@ def circle_mouse(
         time.sleep(speed)
 
 def score() -> None:
-    if run_cpp_macro("score"):
-        return
     controller.press("`")
     controller.type("n"*20000)
     controller.release("`")
 
 def benchmark(amt: int = 5000) -> None:
-    if run_cpp_macro("benchmark", amt):
-        return
     shift_pressed = threading.Event()
 
     def on_press(key: Key) -> None:
@@ -1033,15 +964,10 @@ def start_controllednuke() -> None:
     proc.start()
 
 def start_mcrash() -> None:
-    global mcrash_process, mcrash_working, mcrash_proc
+    global mcrash_process, mcrash_working
     mcrash_event.set()
     mcrash_working = True
     ensure_overlay_running("mcrash")
-    cpp_binary = os.path.join(os.path.dirname(__file__), "..", "macro_tools")
-    if use_cpp_macros and os.path.exists(cpp_binary):
-        if mcrash_proc is None or mcrash_proc.poll() is not None:
-            mcrash_proc = subprocess.Popen([cpp_binary, "mcrash"])
-        return
     if mcrash_process is None or not mcrash_process.is_alive():
         mcrash_process = multiprocessing.Process(target=mcrash, args=(mcrash_event,))
         mcrash_process.daemon = True
@@ -1159,7 +1085,7 @@ def stopallthreads() -> None:
     global automation_process, engispam_process, art_process, braindamage_process
     global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process, mcrash_process
     global automation_working, engispam_working, art_working, braindamage_working, mcrash_working
-    global circle_mouse_active, mcrash_proc
+    global circle_mouse_active
     
     # Set all flags to False
     automation_working = False
@@ -1176,27 +1102,32 @@ def stopallthreads() -> None:
     mcrash_event.clear()
     stop_circle_mouse()
     
-    # Terminate all processes
+    # Terminate all processes and clean up resources
     for proc in [automation_process, engispam_process, art_process, braindamage_process,
                  tail_process, softwallstack_process, circlecrash_process, mcrash_process]:
-        if proc is not None and proc.is_alive():
-            proc.terminate()
-            proc.join(timeout=1)
-    if mcrash_proc is not None:
-        if mcrash_proc.poll() is None:
-            mcrash_proc.terminate()
-        mcrash_proc = None
+        if proc is not None:
+            if proc.is_alive():
+                proc.terminate()
+                proc.join(timeout=1)
+                if proc.is_alive():
+                    proc.kill()
+                    proc.join(timeout=0.5)
+            # Close the process to release resources (semaphores, etc.)
+            try:
+                proc.close()
+            except Exception:
+                pass
 
-        # Reset all process references
-        automation_process = None
-        engispam_process = None
-        art_process = None
-        braindamage_process = None
-        tail_process = None
-        circle_mouse_process = None
-        softwallstack_process = None
-        circlecrash_process = None
-        mcrash_process = None
+    # Reset all process references
+    automation_process = None
+    engispam_process = None
+    art_process = None
+    braindamage_process = None
+    tail_process = None
+    circle_mouse_process = None
+    softwallstack_process = None
+    circlecrash_process = None
+    mcrash_process = None
     
     def is_modifier_for_arrow_nudge(k: Key) -> bool:
         """
@@ -1420,11 +1351,10 @@ def on_press(key: Key | None) -> None:
                 score50m()
         elif hasattr(key, 'char') and key.char and key.char=='h':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("heal"):
-                    controller.press("`")
-                    for _ in range(3000):
-                        controller.tap("h")
-                    controller.release("`")
+                controller.press("`")
+                for _ in range(3000):
+                    controller.tap("h")
+                controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='r':
             if 'ctrl' in pressed_keys:
                 for _ in range(200):
@@ -1475,82 +1405,74 @@ def on_press(key: Key | None) -> None:
                 controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='q':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("shape_q"):
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.type("fy"*10)
-                    controller.type(("f"*50+"h")*2)
-                    controller.release("`")
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.press("d")
-                    controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.type("fy"*10)
+                controller.type(("f"*50+"h")*2)
+                controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.press("d")
+                controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='a':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("shape_a"):
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.type("fy"*10)
-                    controller.type(("f"*50+"h")*6)
-                    controller.release("`")
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.press("d")
-                    controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.type("fy"*10)
+                controller.type(("f"*50+"h")*6)
+                controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.press("d")
+                controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='z':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("shape_z"):
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.type("fy"*10)
-                    controller.type(("f"*50+"h")*10)
-                    controller.release("`")
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.press("d")
-                    controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.type("fy"*10)
+                controller.type(("f"*50+"h")*10)
+                controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.press("d")
+                controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='y':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("shape_y"):
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.type("fy"*10)
-                    controller.type(("f"*50+"h")*2)
-                    controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.type("fy"*10)
+                controller.type(("f"*50+"h")*2)
+                controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='u':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("shape_u"):
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.type("fy"*10)
-                    controller.type(("f"*50+"h")*6)
-                    controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.type("fy"*10)
+                controller.type(("f"*50+"h")*6)
+                controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='i':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("shape_i"):
-                    controller.press("`")
-                    controller.tap("d")
-                    controller.type("fy"*10)
-                    controller.type(("f"*50+"h")*10)
-                    controller.release("`")
+                controller.press("`")
+                controller.tap("d")
+                controller.type("fy"*10)
+                controller.type(("f"*50+"h")*10)
+                controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='[':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("shape_small"):
-                    controller.press("`")
-                    for _ in range(100):
-                        controller.tap("f")
-                    controller.release("`")
+                controller.press("`")
+                for _ in range(100):
+                    controller.tap("f")
+                controller.release("`")
             else:
                 circle_mouse_radius = max(circle_mouse_radius - 5, 5)
                 circle_mouse_radius_value.value = circle_mouse_radius
                 print(f"circle radius: {circle_mouse_radius}")
         elif hasattr(key, 'char') and key.char and key.char==']':
             if 'ctrl' in pressed_keys:
-                if not run_cpp_macro("shape_large"):
-                    controller.press("`")
-                    for _ in range(500):
-                        controller.tap("f")
-                    controller.release("`")
+                controller.press("`")
+                for _ in range(500):
+                    controller.tap("f")
+                controller.release("`")
             else:
                 circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
                 circle_mouse_radius_value.value = circle_mouse_radius
@@ -1664,4 +1586,9 @@ if __name__ == '__main__':
         print("\nShutting down...")
         listener.stop()
         stopallthreads()
+        
+        # Clean up overlay thread if running
+        if overlay_thread is not None and overlay_thread.is_alive():
+            overlay_stop_event.set()
+            overlay_thread.join(timeout=1.0)
 

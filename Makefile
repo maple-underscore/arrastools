@@ -1,4 +1,4 @@
-# Makefile for arena_automation and macro_tools
+# Makefile for arrastools
 # Supports macOS, Linux, and Windows (via MinGW)
 
 UNAME_S := $(shell uname -s)
@@ -7,43 +7,39 @@ UNAME_S := $(shell uname -s)
 CXX = clang++
 CXXFLAGS = -std=c++17 -O3 -Wall
 
+# Source file (uses special Unicode characters in path)
+SRC = ««««« CORE »»»»»/arrastools.cpp
+
 # Platform-specific settings
 ifeq ($(UNAME_S),Darwin)
     # macOS
-    LDFLAGS = -framework CoreGraphics -framework ApplicationServices
-    TARGET1 = arena_automation
-    TARGET2 = macro_tools
+    LDFLAGS = -framework CoreGraphics -framework ApplicationServices -framework Carbon
+    TARGET = arrastools
 else ifeq ($(UNAME_S),Linux)
     # Linux (requires X11)
     LDFLAGS = -lX11 -lXtst
-    TARGET1 = arena_automation
-    TARGET2 = macro_tools
+    TARGET = arrastools
     # Switch to g++ on Linux if clang++ not available
     CXX = g++
 else
     # Windows (MinGW)
     LDFLAGS = -luser32
-    TARGET1 = arena_automation.exe
-    TARGET2 = macro_tools.exe
+    TARGET = arrastools.exe
     CXX = g++
 endif
 
-# Build all targets
-all: $(TARGET1) $(TARGET2)
+# Build target
+all: $(TARGET)
 
-$(TARGET1): arena_automation.cpp
-	$(CXX) $(CXXFLAGS) -o $(TARGET1) arena_automation.cpp $(LDFLAGS)
-
-$(TARGET2): macro_tools.cpp
-	$(CXX) $(CXXFLAGS) -o $(TARGET2) macro_tools.cpp $(LDFLAGS)
+$(TARGET):
+	$(CXX) $(CXXFLAGS) -o $(TARGET) "$(SRC)" $(LDFLAGS)
 
 # Clean
 clean:
-	rm -f $(TARGET1) $(TARGET2) arena_automation.exe macro_tools.exe arena_automation macro_tools
+	rm -f $(TARGET) arrastools arrastools.exe
 
 # Install (optional - copies to /usr/local/bin)
-install: $(TARGET1) $(TARGET2)
-	install -m 755 $(TARGET1) /usr/local/bin/
-	install -m 755 $(TARGET2) /usr/local/bin/
+install: $(TARGET)
+	install -m 755 $(TARGET) /usr/local/bin/
 
 .PHONY: all clean install

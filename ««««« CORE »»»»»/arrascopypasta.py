@@ -15,7 +15,8 @@ def _lazy_import_pynput():
     from pynput.keyboard import Controller as KeyboardController, Key
     from pynput.mouse import Controller as MouseController, Button
 
-# Placeholder globals - will be populated by lazy import
+# Placeholder globals - will 
+# be populated by lazy import
 keyboard = None
 KeyboardController = None
 Key = None
@@ -374,19 +375,19 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
             size_kb = file_size_bytes / 1024
         
         safe_tap(Key.enter)
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
         safe_type(f"Arras Copypasta Utility [ACU] > v02.04.11-beta.4 < loading")
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
         for _ in range(2):
             safe_tap(Key.enter)
-            interruptible_sleep(0.3)
+            interruptible_sleep(0.1)
         safe_type(f"Source: > {source_text} < | Loaded > {leng} chars <")
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
         for _ in range(2):
             safe_tap(Key.enter)
-            interruptible_sleep(0.3)
+            interruptible_sleep(0.1)
         safe_type(f"Size: > [{size_kb:.2f}KB] < | Time taken > [{round((end-start)*1000, 3)}ms] <")
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
         safe_tap(Key.enter)
         interruptible_sleep(10)
     
@@ -398,23 +399,23 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
             pause_event.wait()  # Wait here if paused (only for file mode)
         safe_tap(Key.enter)
         if is_ai_mode:
-            time.sleep(0.3)
+            time.sleep(0.1)
         else:
-            interruptible_sleep(0.3)
+            interruptible_sleep(0.1)
         sentence_no_emoji = replace_emojis(sentence)
         safe_type(sentence_no_emoji)
         if is_ai_mode:
-            time.sleep(0.3)
+            time.sleep(0.1)
         else:
-            interruptible_sleep(0.3)
+            interruptible_sleep(0.1)
         safe_tap(Key.enter)
         pos += len(sentence_no_emoji)
         current_chars = pos
         current_percent = (current_chars / leng) * 100 if leng > 0 else 0
         if is_ai_mode:
-            time.sleep(3.3)
+            time.sleep(3)
         else:
-            interruptible_sleep(3.3)
+            interruptible_sleep(3)
         endf = True
     
     # After loop ends, print/type summary
@@ -423,30 +424,30 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
     if not endf:  # Force stop by Escape
         print(f"Forced stop at > [{chars_typed}] characters [{percent_typed:.2f}%]")
         safe_tap(Key.enter)
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
         safe_type(f"Forced stop at > [{chars_typed}] characters [{percent_typed:.2f}%]")
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
     else:
         if not disable_finish_text:
             print(f"Copypasta of > [{leng}] characters < finished")
             safe_tap(Key.enter)
-            interruptible_sleep(0.3)
+            interruptible_sleep(0.1)
             safe_type(f"Copypasta of > [{leng}] characters < finished")
-            interruptible_sleep(0.3)
+            interruptible_sleep(0.1)
         else:
             print(f"Copypasta of > [{leng}] characters < finished (without finish text)")
     
     if not disable_finish_text:
         safe_tap(Key.enter)
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
         time.sleep(3.5)
         safe_tap(Key.enter)
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
         print(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
         safe_type(f"Time taken: > [{round(1000*(time.time()-start), 3)}ms] <")
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
         safe_tap(Key.enter)
-        interruptible_sleep(0.3)
+        interruptible_sleep(0.1)
     
     copypastaing = False
 
@@ -462,24 +463,24 @@ def on_press(key):
         elif hasattr(key, 'char') and key.char == 'p' and copypastaing and not is_ai_mode:
             if pause_event.is_set():
                 pause_event.clear()
-                time.sleep(3.3)
+                time.sleep(3)
                 print(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
                 safe_tap(Key.enter)
-                interruptible_sleep(0.3)
+                interruptible_sleep(0.1)
                 safe_type(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                interruptible_sleep(0.3)
+                interruptible_sleep(0.1)
                 safe_tap(Key.enter)
-                interruptible_sleep(0.3)
+                interruptible_sleep(0.1)
             else:
                 pause_event.set()
-                time.sleep(3.3)
+                time.sleep(3)
                 print(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
                 safe_tap(Key.enter)
-                interruptible_sleep(0.3)
+                interruptible_sleep(0.1)
                 safe_type(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                interruptible_sleep(0.3)
+                interruptible_sleep(0.1)
                 safe_tap(Key.enter)
-                interruptible_sleep(0.3)
+                interruptible_sleep(0.1)
     except UnicodeDecodeError:
         print("UnicodeDecodeError: Non-standard key (emoji?) pressed. Ignored.")
 
@@ -591,4 +592,4 @@ while True:
     while not done:
         if thread is not None and not thread.is_alive():
             done = True
-        time.sleep(0.3)
+        time.sleep(0.1)

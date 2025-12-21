@@ -1,6 +1,8 @@
-import mss, numpy as np
+import mss, numpy as np, time
 from pynput import mouse
 from PIL import Image
+from pynput.keyboard import Controller, Key
+controller = Controller()
 
 def get_pixel_rgb(x, y):
     bbox = {"top": int(y), "left": int(x), "width": 1, "height": 1}
@@ -11,6 +13,11 @@ def on_click(x, y, button, pressed):
     if pressed:
         rgb = get_pixel_rgb(x, y)
         print(f"Clicked at ({x}, {y}) | sRGB: {rgb}")
+        controller.tap(Key.enter)
+        time.sleep(0.1)
+        controller.type(str(rgb))
+        time.sleep(0.1)
+        controller.tap(Key.enter)
 
 # Capture screen once using mss
 with mss.mss() as sct:
