@@ -150,32 +150,6 @@ void shape() {
 }
 
 /**
- * shape2 - Python equivalent:
- *   controller.press("`")
- *   controller.type("f"*1000)
- *   controller.press("w")
- *   controller.release("`")
- * 
- * Note: In Python, "w" is pressed but never released explicitly.
- * The backtick is released while w remains held.
- */
-void shape2() {
-    std::cout << "shape2: press(`), type(f*1000), press(w), release(`)" << std::endl;
-    #ifdef __APPLE__
-    pressKey(kVK_ANSI_Grave);
-    usleep(10000);
-    for (int i = 0; i < 1000 && running; i++) {
-        typeCharacter('f');
-    }
-    // Press w (but don't release - matches Python behavior)
-    pressKey(kVK_ANSI_W);
-    usleep(5000);
-    releaseKey(kVK_ANSI_Grave);
-    // Note: w key is left pressed, matching Python behavior
-    #endif
-}
-
-/**
  * score - Python equivalent:
  *   controller.press("`")
  *   controller.type("n"*20000)
@@ -663,7 +637,6 @@ void printUsage(const char* progName) {
     std::cerr << "  wallcrash       - press(`), type(x*1800), release(`)\n";
     std::cerr << "  nuke            - press(`), type(wk*100), release(`)\n";
     std::cerr << "  shape           - press(`), type(f*5000), release(`)\n";
-    std::cerr << "  shape2          - press(`), type(f*1000), press(w), release(`)\n";
     std::cerr << "  shape_q         - press(`), type(fy*100), press(w), release(`) [Ctrl+Q]\n";
     std::cerr << "  shape_a         - press(`), type(fy*300), press(w), release(`) [Ctrl+A]\n";
     std::cerr << "  shape_z         - press(`), type(fy*500), press(w), release(`) [Ctrl+Z]\n";
@@ -715,8 +688,6 @@ int main(int argc, char* argv[]) {
         nuke();
     } else if (command == "shape") {
         shape();
-    } else if (command == "shape2") {
-        shape2();
     } else if (command == "score") {
         score();
     } else if (command == "circles") {

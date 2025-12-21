@@ -572,14 +572,6 @@ def shape() -> None:
     controller.type("f"*5000)
     controller.release("`")
 
-def shape2() -> None:
-    if run_cpp_macro("shape2"):
-        return
-    controller.press("`")
-    controller.type("f"*1000)
-    controller.press("w")
-    controller.release("`")
-
 def circlecrash() -> None:
     if run_cpp_macro("circlecrash"):
         return
@@ -1391,10 +1383,6 @@ def on_press(key: Key | None) -> None:
             if 'ctrl' in pressed_keys:
                 print("shape nuke")
                 shape()
-        elif hasattr(key, 'char') and key.char and key.char=='j':
-            if 'ctrl' in pressed_keys:
-                print("shape nuke2")
-                shape2()
         elif hasattr(key, 'char') and key.char and key.char=='n':
             if 'ctrl' in pressed_keys:
                 print("score")
