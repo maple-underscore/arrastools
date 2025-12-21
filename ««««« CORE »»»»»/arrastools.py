@@ -159,9 +159,9 @@ for process in processes:
     exec(f"global {process}_process, {process}_working")
 
 # Add these globals near the top
-ctrl6_last_time = 0
+ctrl6_last_time = 0.0
 ctrl6_armed = False
-ctrl7_last_time = 0
+ctrl7_last_time = 0.0
 ctrl7_armed = False
 
 # new ctrl+1 multi-press globals
@@ -1326,29 +1326,25 @@ def on_press(key: Key | None) -> None:
                         waiter.daemon = True
                         waiter.start()
                         print("arena script")
-        elif hasattr(key, 'char') and key.char and key.char=='2':
-            if 'ctrl' in pressed_keys:
-                print("conq")
-                conq_quickstart()
         elif hasattr(key, 'char') and key.char and key.char=='v':
             if 'ctrl' in pressed_keys:
                 mcrash_shift_bind = True
                 mcrash_working = False
                 mcrash_event.clear()
                 print("toggle mcrash")
-        elif hasattr(key, 'char') and key.char and key.char=='3':
+        elif hasattr(key, 'char') and key.char and key.char=='2':
             if 'ctrl' in pressed_keys:
                 braindamage_working = True
                 print("bdmg")
                 start_brain_damage()
-        elif hasattr(key, 'char') and key.char and key.char=='4':
+        elif hasattr(key, 'char') and key.char and key.char=='3':
             if 'ctrl' in pressed_keys:
                 circle()
-        elif hasattr(key, 'char') and key.char and key.char=='5':
+        elif hasattr(key, 'char') and key.char and key.char=='4':
             if 'ctrl' in pressed_keys:
                 print("circle square")
                 start_tail()
-        elif hasattr(key, 'char') and key.char and key.char=='6':
+        elif hasattr(key, 'char') and key.char and key.char=='5':
             if 'ctrl' in pressed_keys:
                 now = time.time()
                 if ctrl6_armed and (now - ctrl6_last_time <= 5):
@@ -1409,7 +1405,7 @@ def on_press(key: Key | None) -> None:
             if 'ctrl' in pressed_keys:
                 print("benchmarking...")
                 benchmark()
-        elif hasattr(key, 'char') and key.char and key.char=='p':
+        elif hasattr(key, 'char') and key.char and key.char=='6':
             if 'ctrl' in pressed_keys:
                 print("minicirclecrash")
                 minicirclecrash()
@@ -1438,6 +1434,19 @@ def on_press(key: Key | None) -> None:
         elif hasattr(key, 'char') and key.char and key.char=='g':
             if 'ctrl' in pressed_keys:
                 start_softwallstack()
+        elif hasattr(key, 'char') and key.char and key.char=='j':
+            if 'ctrl' in pressed_keys:
+                start = mouse.position
+                controller.press("`")
+                for _ in range(400):
+                    mouse.position = (start[0] + random.randint(-25, 25), start[1] + random.randint(-25, 25))
+                    time.sleep(0.01)
+                    controller.press("j")
+                    mouse.position = (start[0] + random.randint(-25, 25), start[1] + random.randint(-25, 25))
+                    time.sleep(0.01)
+                    controller.release("j")
+                controller.release("`")
+                mouse.position = start
         elif hasattr(key, 'char') and key.char and key.char=='s':
             if 'ctrl' in pressed_keys:
                 time.sleep(0.1)
