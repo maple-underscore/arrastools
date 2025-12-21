@@ -72,7 +72,17 @@ void tapKey(CGKeyCode keyCode) {
     CGEventRef keyDown = CGEventCreateKeyboardEvent(NULL, keyCode, true);
     CGEventRef keyUp = CGEventCreateKeyboardEvent(NULL, keyCode, false);
     CGEventPost(kCGHIDEventTap, keyDown);
-    usleep(5000);  // 5ms delay
+    usleep(1000);  // 1ms delay
+    CGEventPost(kCGHIDEventTap, keyUp);
+    CFRelease(keyDown);
+    CFRelease(keyUp);
+}
+
+void holdKey(CGKeyCode keyCode) {
+    CGEventRef keyDown = CGEventCreateKeyboardEvent(NULL, keyCode, true);
+    CGEventRef keyUp = CGEventCreateKeyboardEvent(NULL, keyCode, false);
+    CGEventPost(kCGHIDEventTap, keyDown);
+    usleep(100000);  // Hold for 100ms
     CGEventPost(kCGHIDEventTap, keyUp);
     CFRelease(keyDown);
     CFRelease(keyUp);
