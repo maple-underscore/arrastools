@@ -13,17 +13,33 @@ import platform
 PLATFORM = platform.system().lower()
 print(f"Snake AI running on: {PLATFORM}")
 
-# Try to import pygame, but make it optional
+# Try to import pygame, but make it optional and verify font availability
+PYGAME_AVAILABLE = False
 try:
     import pygame
-    PYGAME_AVAILABLE = True
+    # Try to initialize pygame and the font subsystem; if font isn't available
+    # disable visualization gracefully.
+    try:
+        pygame.init()
+        try:
+            pygame.font.init()
+        except Exception:
+            # Some pygame builds may not have font support (or SDL_ttf missing)
+            raise
+        if not getattr(pygame, 'font', None) or not pygame.font.get_init():
+            raise ImportError('pygame.font not available')
+    except Exception as e:
+        print(f"pygame imported but font subsystem unavailable: {e}")
+        PYGAME_AVAILABLE = False
+    else:
+        PYGAME_AVAILABLE = True
 except ImportError:
     PYGAME_AVAILABLE = False
     print("pygame not installed. Running in headless mode (no visualization).")
     print("To enable visualization: pip install pygame")
 
 # Load configuration
-def load_config(config_path="snake_config.json"):
+def load_config(config_path="random/snake_config.json"):
     with open(config_path, 'r') as f:
         return json.load(f)
 
@@ -425,10 +441,15 @@ class SnakeVisualizer:
         y = offset_y + game.apple[1] * self.cell_size
         pygame.draw.rect(self.screen, APPLE_COLOR, (x, y, self.cell_size-1, self.cell_size-1))
         
-        # Draw info text
-        font = pygame.font.Font(None, 36)
-        text = font.render(f'Episode: {episode} | Score: {score} | ε: {epsilon:.3f}', True, (255, 255, 255))
-        self.screen.blit(text, (10, 10))
+        # Draw info text (if font subsystem available)
+        try:
+            if getattr(pygame, 'font', None) and pygame.font.get_init():
+                font = pygame.font.Font(None, 36)
+                text = font.render(f'Episode: {episode} | Score: {score} | ε: {epsilon:.3f}', True, (255, 255, 255))
+                self.screen.blit(text, (10, 10))
+        except Exception:
+            # If rendering fails for any reason, skip text rendering silently
+            pass
         
         pygame.display.flip()
         self.clock.tick(GAME_SPEED)

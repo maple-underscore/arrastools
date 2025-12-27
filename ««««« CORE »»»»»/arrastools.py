@@ -13,6 +13,7 @@ import subprocess
 import platform
 import sys
 import os
+import math
 from typing import Any, TYPE_CHECKING
 
 # Detect platform early (needed for overlay decision)
@@ -94,7 +95,7 @@ length = 4
 # Function
 # Centralized set of flags/shared state used across macro helpers. Values are
 # kept as globals because listeners spin up background threads that need access.
-global automation_working, controller, circlecrash_working, mouse, art_working, step, ctrlswap, mcrash_working
+global automation_working, controller, circlecrash_working, mouse, circle_art_working, step, ctrlswap, mcrash_working, custom_reload_spam_working
 global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
 step = 20
 s = 25 #circle spacing in px
@@ -111,24 +112,135 @@ arena_auto_rate_limit = 150  # Maximum commands per second (0 = unlimited)
 arena_size_step = 8  # Step size for arena size changes (must be even, default: 2)
 
 automation_working = False
-engispam_working = False
+engineer_spam_working = False
 mcrash_working = False
 mcrash_thread = None
-engispam_thread = None
-art_working = False
+engineer_spam_thread = None
+custom_reload_spam_working = False
+circle_art_working = False
 circlecrash_working = False
 circlecrash_thread = None
 braindamage_working = False
 controller = KeyboardController()
 mouse = MouseController()
 pressed_keys = set()
+
+
+# -------- Input Helper Functions -------- #
+def press_with_delay(key: str | Key, wait: float = 0.1, count: int = 2) -> None:
+    """Press a key multiple times with delay between presses.
+    
+    Args:
+        key: The key to press
+        wait: Delay in seconds between presses (default: 0.1)
+        count: Number of times to press (default: 2)
+    """
+    for i in range(count):
+        controller.tap(key)
+        if i < count - 1:  # Don't sleep after last tap
+            time.sleep(wait)
+
+
+def type_with_enter(text: str, wait: float = 0) -> None:
+    """Type text wrapped with Enter key presses.
+    
+    Args:
+        text: The text to type
+        wait: Optional delay after first enter and before final enter (default: 0)
+    """
+    controller.tap(Key.enter)
+    if wait > 0:
+        time.sleep(wait)
+    controller.type(text)
+    if wait > 0:
+        time.sleep(wait)
+    controller.tap(Key.enter)
+
+
+def type_in_console(text: str, hold_backtick: bool = True) -> None:
+    """Type text in the game console (backtick-wrapped).
+    
+    Args:
+        text: The text to type
+        hold_backtick: If True, hold backtick during typing for speed (default: True)
+    """
+    if hold_backtick:
+        controller.press("`")
+        controller.type(text)
+        controller.release("`")
+    else:
+        controller.tap("`")
+        controller.type(text)
+        controller.tap("`")
+
+
+def tap_in_console(keys: str, hold_backtick: bool = True) -> None:
+    """Tap individual keys in the game console (backtick-wrapped).
+    
+    Args:
+        keys: String of keys to tap individually (e.g., "ch" taps 'c' then 'h')
+        hold_backtick: If True, hold backtick during tapping for speed (default: True)
+    """
+    if hold_backtick:
+        controller.press("`")
+        for k in keys:
+            controller.tap(k)
+        controller.release("`")
+    else:
+        for k in keys:
+            controller.tap("`")
+            controller.tap(k)
+            controller.tap("`")
+
+
+def repeat_tap_in_console(key: str, count: int, hold_backtick: bool = True) -> None:
+    """Tap a key multiple times in the game console.
+    
+    Args:
+        key: The key to tap
+        count: Number of times to tap
+        hold_backtick: If True, hold backtick during tapping for speed (default: True)
+    """
+    if hold_backtick:
+        controller.press("`")
+        for _ in range(count):
+            controller.tap(key)
+        controller.release("`")
+    else:
+        for _ in range(count):
+            controller.tap("`")
+            controller.tap(key)
+            controller.tap("`")
+
+
+def repeat_tap_pattern_in_console(pattern: str, count: int, hold_backtick: bool = True) -> None:
+    """Repeat a pattern of key taps in the game console.
+    
+    Args:
+        pattern: String of keys to tap as a pattern (e.g., "ch" taps 'c' then 'h')
+        count: Number of times to repeat the pattern
+        hold_backtick: If True, hold backtick during tapping for speed (default: True)
+    """
+    if hold_backtick:
+        controller.press("`")
+        for _ in range(count):
+            for k in pattern:
+                controller.tap(k)
+        controller.release("`")
+    else:
+        for _ in range(count):
+            for k in pattern:
+                controller.tap("`")
+                controller.tap(k)
+                controller.tap("`")
 automation_process = None
 softwallstack_process = None
-art_process = None
+circle_art_process = None
 braindamage_process = None
 tail_process = None
 circle_mouse_process = None
-engispam_process = None
+custom_reload_spam_process = None
+engineer_spam_process = None
 circlecrash_process = None
 mcrash_process: Process | None = None
 overlay_thread: threading.Thread | None = None
@@ -140,16 +252,17 @@ arena_current_type = 1
 
 # Shared multiprocessing primitives so worker processes can mirror thread-like behavior.
 automation_event = multiprocessing.Event()
-engispam_event = multiprocessing.Event()
-art_event = multiprocessing.Event()
+engineer_spam_event = multiprocessing.Event()
+circle_art_event = multiprocessing.Event()
 braindamage_event = multiprocessing.Event()
 circle_mouse_event = multiprocessing.Event()
 mcrash_event = multiprocessing.Event()
+custom_reload_spam_event = multiprocessing.Event()
 circle_mouse_radius_value = multiprocessing.Value('i', circle_mouse_radius)
 circle_mouse_speed_value = multiprocessing.Value('d', circle_mouse_speed)
 circle_mouse_direction_value = multiprocessing.Value('i', circle_mouse_direction)
 
-processes = ["automation", "engispam", "art", "braindamage_working", "tail", "circle_mouse", "softwallstack", "circlecrash", "mcrash"]
+processes = ["automation", "engineer_spam", "circle_art", "braindamage_working", "tail", "circle_mouse", "softwallstack", "circlecrash", "mcrash", "custom_reload_spam"]
 for process in processes:
     exec(f"{process}_process = None")
     exec(f"global {process}_process, {process}_working")
@@ -164,8 +277,24 @@ ctrl7_armed = False
 ctrl1_count = 0
 ctrl1_first_time = 0.0
 
-# NEW: bind art_working to Left Shift when enabled via Ctrl+C
-art_shift_bind = False
+# double-lock globals for q, a, z, y, u, i, g
+ctrlq_last_time = 0.0
+ctrlq_armed = False
+ctrla_last_time = 0.0
+ctrla_armed = False
+ctrlz_last_time = 0.0
+ctrlz_armed = False
+ctrly_last_time = 0.0
+ctrly_armed = False
+ctrlu_last_time = 0.0
+ctrlu_armed = False
+ctrli_last_time = 0.0
+ctrli_armed = False
+ctrlg_last_time = 0.0
+ctrlg_armed = False
+
+# NEW: bind circle_art_working to Left Shift when enabled via Ctrl+C
+circle_art_shift_bind = False
 mcrash_shift_bind = False
 
 def generate_even(low: int = 2, high: int = 1024) -> int:
@@ -180,9 +309,10 @@ def _overlay_lines() -> list[str]:
     lines: list[str] = [
         "Arras macro HUD (Ctrl+0 to hide)",
         f"Arena: {'ON' if automation_event.is_set() else 'off'} type={arena_current_type} step={arena_size_step} rate={rate_text}/s",
-        f"Engispam: {'ON' if engispam_event.is_set() else 'off'}",
-        f"Art: {'ON' if art_event.is_set() else 'off'} (shift-bind={'ON' if art_shift_bind else 'off'})",
+        f"engineer_spam: {'ON' if engineer_spam_event.is_set() else 'off'}",
+        f"circle_art: {'ON' if circle_art_event.is_set() else 'off'} (shift-bind={'ON' if circle_art_shift_bind else 'off'})",
         f"Mcrash: {'ON' if (mcrash_event.is_set() or mcrash_working) else 'off'} (shift-bind={'ON' if mcrash_shift_bind else 'off'})",
+        f"custom_reload_spam: {'ON' if custom_reload_spam_event.is_set() else 'off'}",
         f"Brain damage: {'ON' if braindamage_event.is_set() else 'off'}",
         f"Circle mouse: {'ON' if circle_mouse_event.is_set() else 'off'} r={circle_mouse_radius_value.value} v={circle_mouse_speed_value.value:.3f} dir={dir_text}",
         f"Tail: {'ON' if (tail_process is not None and tail_process.is_alive()) else 'off'}",
@@ -290,7 +420,7 @@ def stop_overlay(user_request: bool = True) -> None:
 
 
 def ensure_overlay_running(reason: str = "") -> None:
-    """Start overlay when a long-running macro kicks in (unless user hid it)."""
+    """start overlay when a long-running macro kicks in (unless user hid it)."""
     if overlay_user_disabled:
         return
     if not overlay_visible:
@@ -370,6 +500,25 @@ def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3) -> None:
     print(f"unicode blocks: {' '.join(groups)} -> '{out}'")
     controller.type(out)
 
+def custom_reload_spam(run_event: MpEvent) -> None:
+    chars = "kyu"
+    controller.press("`")
+    while run_event.is_set(): 
+        controller.tap("q")
+        controller.press("a")
+        controller.press("r")
+        controller.release("`")
+        time.sleep(0.02)
+        for char in chars:
+            controller.tap(char)
+            controller.press("`")
+            controller.press("a")
+            controller.press("r")
+            controller.release("`")
+            time.sleep(0.05)
+        controller.press("`")
+    controller.release("`")
+
 def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> None:
     """Spam $arena commands to resize the arena.
     
@@ -405,9 +554,7 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> N
                 break
             x = generate_even(2, 1024)
             y = generate_even(2, 1024)
-            controller.tap(Key.enter)
-            controller.type(f"$arena size {x} {y}")
-            controller.tap(Key.enter)
+            type_with_enter(f"$arena size {x} {y}")
             cmd_count += 1
             if cmd_delay > 0:
                 time.sleep(cmd_delay)
@@ -421,9 +568,7 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> N
             if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
                 print(f"Reached {arena_auto_max_commands} commands, stopping")
                 break
-            controller.tap(Key.enter)
-            controller.type(f"$arena size {x} {y}")
-            controller.tap(Key.enter)
+            type_with_enter(f"$arena size {x} {y}")
             x += direction_x
             y += direction_y
             # Clamp and reverse direction if out of bounds
@@ -452,9 +597,7 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> N
             if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
                 print(f"Reached {arena_auto_max_commands} commands, stopping")
                 break
-            controller.tap(Key.enter)
-            controller.type(f"$arena size {x} {y}")
-            controller.tap(Key.enter)
+            type_with_enter(f"$arena size {x} {y}")
             x += direction_x
             y += direction_y
             # Clamp and reverse direction if out of bounds
@@ -501,49 +644,27 @@ def conq_quickstart() -> None:
     mouse.position=pos
 
 def wallcrash() -> None:
-    controller.press("`")
-    controller.type("x"*1800)
-    controller.release("`")
+    type_in_console("x"*1800)
 
 def nuke() -> None:
-    controller.press("`")
-    controller.type("wk"*100)
-    controller.release("`")
+    type_in_console("wk"*100)
 
 def shape() -> None:
-    controller.press("`")
-    controller.type("f"*5000)
-    controller.release("`")
+    type_in_console("f"*5000)
 
 def circlecrash() -> None:
-    controller.press("`")
-    for _ in range(180):
-        for _ in range(180):
-            controller.tap("c")
-            controller.tap("h")
-    controller.release("`")
+    repeat_tap_pattern_in_console("ch", 180 * 180)
 
 def minicirclecrash() -> None:
-    controller.press("`")
-    for _ in range(50):
-        for _ in range(100):
-            controller.tap("c")
-            controller.tap("h")
-    controller.release("`")
+    repeat_tap_pattern_in_console("ch", 50 * 100)
 
 def circles(amt: int = 210) -> None:
-    controller.press("`")
-    for _ in range(amt):
-        controller.tap("c")
-        controller.tap("h")
-    controller.release("`")
+    repeat_tap_pattern_in_console("ch", amt)
 
 def walls() -> None:
-    controller.press("`")
-    controller.type("x"*210)
-    controller.release("`")
+    type_in_console("x"*210)
 
-def art(run_event: MpEvent) -> None:
+def circle_art(run_event: MpEvent) -> None:
     controller.press("`")
     while run_event.is_set():
         controller.tap("c")
@@ -698,9 +819,7 @@ def circle_mouse(
         time.sleep(speed)
 
 def score() -> None:
-    controller.press("`")
-    controller.type("n"*20000)
-    controller.release("`")
+    type_in_console("n"*20000)
 
 def benchmark(amt: int = 5000) -> None:
     shift_pressed = threading.Event()
@@ -710,35 +829,26 @@ def benchmark(amt: int = 5000) -> None:
             shift_pressed.set()
             print("Benchmark stopped by Shift key press.")
 
-    # Start the benchmark
+    # start the benchmark
     start = time.time()
     circles(amt)
     print("Press any Shift key to stop the benchmark timer...")
-    # Start keyboard listener
+    # start keyboard listener
     with KeyboardListener(on_press=on_press) as listener:
         shift_pressed.wait()  # Wait until Shift is pressed
         listener.stop()
     elapsed = time.time() - start
     print(f"{amt} circles in {round(elapsed*1000, 3)} ms")
-    controller.tap(Key.enter)
-    time.sleep(0.15)
-    controller.type(f"> [{round(elapsed * 1000, 3)}ms] <")
+    type_with_enter(f"> [{round(elapsed * 1000, 3)}ms] <", 0.1)
     time.sleep(0.1)
-    for _ in range(2):
-        controller.tap(Key.enter)
-        time.sleep(0.1)
+    press_with_delay(Key.enter, 0.1, 2)
     bps = round(amt * (1 / elapsed), 3) if elapsed > 0 else 0
-    controller.type(f"> [{bps}] <")
-    time.sleep(0.1)
-    controller.tap(Key.enter)
-    time.sleep(0.1)
+    type_with_enter(f"> [{bps}] <", 0.1)
 
 def score50m() -> None:
-    controller.press("`")
-    controller.type("f"*20)
-    controller.release("`")
+    type_in_console("f"*20)
 
-def engispam(run_event: MpEvent) -> None:
+def engineer_spam(run_event: MpEvent) -> None:
     while run_event.is_set():
         controller.tap(",")
         controller.tap("y")
@@ -755,16 +865,7 @@ def engispam(run_event: MpEvent) -> None:
         controller.release("`")
 
 def circle() -> None:
-    controller.press("`")
-    controller.type("ch")
-    controller.release("`")
-        
-def slowwall() -> None:
-    controller.press("`")
-    for _ in range(50):
-        controller.tap("x")
-        time.sleep(0.08)
-    controller.release("`")
+    tap_in_console("ch")
 
 def softwallstack() -> None:
     walls()
@@ -871,14 +972,14 @@ def start_arena_automation(atype: int = 1) -> None:
         automation_process.daemon = True
         automation_process.start()
 
-def start_engispam() -> None:
-    global engispam_process
-    engispam_event.set()
-    ensure_overlay_running("engispam")
-    if engispam_process is None or not engispam_process.is_alive():
-        engispam_process = multiprocessing.Process(target=engispam, args=(engispam_event,))
-        engispam_process.daemon = True
-        engispam_process.start()
+def start_engineer_spam() -> None:
+    global engineer_spam_process
+    engineer_spam_event.set()
+    ensure_overlay_running("engineer_spam")
+    if engineer_spam_process is None or not engineer_spam_process.is_alive():
+        engineer_spam_process = multiprocessing.Process(target=engineer_spam, args=(engineer_spam_event,))
+        engineer_spam_process.daemon = True
+        engineer_spam_process.start()
 
 def start_brain_damage() -> None:
     global braindamage_process
@@ -941,14 +1042,14 @@ def _monitor_circle_mouse(proc: Process) -> None:
         circle_mouse_active = False
         circle_mouse_process = None
 
-def start_art() -> None:
-    global art_process
-    art_event.set()
-    ensure_overlay_running("art")
-    if art_process is None or not art_process.is_alive():
-        art_process = multiprocessing.Process(target=art, args=(art_event,))
-        art_process.daemon = True
-        art_process.start()
+def start_circle_art() -> None:
+    global circle_art_process
+    circle_art_event.set()
+    ensure_overlay_running("circle_art")
+    if circle_art_process is None or not circle_art_process.is_alive():
+        circle_art_process = multiprocessing.Process(target=circle_art, args=(circle_art_event,))
+        circle_art_process.daemon = True
+        circle_art_process.start()
 
 def start_softwallstack() -> None:
     global softwallstack_process
@@ -972,6 +1073,15 @@ def start_mcrash() -> None:
         mcrash_process = multiprocessing.Process(target=mcrash, args=(mcrash_event,))
         mcrash_process.daemon = True
         mcrash_process.start()
+
+def start_custom_reload_spam() -> None:
+    global custom_reload_spam_process
+    custom_reload_spam_event.set()
+    ensure_overlay_running("custom_reload_spam")
+    if custom_reload_spam_process is None or not custom_reload_spam_process.is_alive():
+        custom_reload_spam_process = multiprocessing.Process(target=custom_reload_spam, args=(custom_reload_spam_event,))
+        custom_reload_spam_process.daemon = True
+        custom_reload_spam_process.start()
 
 def _ctrl1_waiter() -> None:
     global ctrl1_count, ctrl1_first_time
@@ -1061,7 +1171,7 @@ def scan_screen_for_text(search_text: str, monitor_index: int = 1) -> tuple[bool
                     
                     return (True, (center_x, center_y))
             
-            # Also try partial matching (in case search_text is part of a larger word)
+            # Also try pcircle_artial matching (in case search_text is pcircle_art of a larger word)
             for i, text in enumerate(ocr_data['text']):
                 if search_lower in text.lower():
                     x = ocr_data['left'][i]
@@ -1081,30 +1191,50 @@ def scan_screen_for_text(search_text: str, monitor_index: int = 1) -> tuple[bool
         print(f"Error scanning screen for text: {e}")
         return (False, None)
 
+def cleanup_multiprocessing_resources() -> None:
+    """Clean up multiprocessing Events and Values to prevent semaphore leaks."""
+    global automation_event, engineer_spam_event, circle_art_event, braindamage_event
+    global circle_mouse_event, mcrash_event, custom_reload_spam_event
+    global circle_mouse_radius_value, circle_mouse_speed_value, circle_mouse_direction_value
+    
+    # Clear all events first
+    for event in [automation_event, engineer_spam_event, circle_art_event, braindamage_event,
+                  circle_mouse_event, mcrash_event, custom_reload_spam_event]:
+        try:
+            event.clear()
+        except Exception:
+            pass
+    
+    # Note: multiprocessing.Event and Value objects don't have explicit close methods
+    # in the public API, but clearing them helps signal child processes to stop.
+    # The actual cleanup happens when the main process exits.
+
 def stopallthreads() -> None:
-    global automation_process, engispam_process, art_process, braindamage_process
-    global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process, mcrash_process
-    global automation_working, engispam_working, art_working, braindamage_working, mcrash_working
+    global automation_process, engineer_spam_process, circle_art_process, braindamage_process
+    global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process
+    global automation_working, engineer_spam_working, circle_art_working, braindamage_working, mcrash_working, custom_reload_spam_working
     global circle_mouse_active
     
     # Set all flags to False
     automation_working = False
-    engispam_working = False
-    art_working = False
+    engineer_spam_working = False
+    circle_art_working = False
     braindamage_working = False
     circle_mouse_active = False
     mcrash_working = False
+    custom_reload_spam_working = False
     automation_event.clear()
-    engispam_event.clear()
-    art_event.clear()
+    engineer_spam_event.clear()
+    circle_art_event.clear()
     braindamage_event.clear()
     circle_mouse_event.clear()
     mcrash_event.clear()
+    custom_reload_spam_event.clear()
     stop_circle_mouse()
     
     # Terminate all processes and clean up resources
-    for proc in [automation_process, engispam_process, art_process, braindamage_process,
-                 tail_process, softwallstack_process, circlecrash_process, mcrash_process]:
+    for proc in [automation_process, engineer_spam_process, circle_art_process, braindamage_process,
+                 tail_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process]:
         if proc is not None:
             if proc.is_alive():
                 proc.terminate()
@@ -1120,14 +1250,18 @@ def stopallthreads() -> None:
 
     # Reset all process references
     automation_process = None
-    engispam_process = None
-    art_process = None
+    engineer_spam_process = None
+    circle_art_process = None
     braindamage_process = None
     tail_process = None
     circle_mouse_process = None
     softwallstack_process = None
     circlecrash_process = None
     mcrash_process = None
+    custom_reload_spam_process = None
+    
+    # Clean up multiprocessing resources
+    cleanup_multiprocessing_resources()
     
     def is_modifier_for_arrow_nudge(k: Key) -> bool:
         """
@@ -1139,10 +1273,13 @@ def stopallthreads() -> None:
         return is_alt(k)
 
 def on_press(key: Key | None) -> None:
-    global automation_working, braindamage_working, circlecrash_working, art_working, engispam_working, mcrash_working
+    global automation_working, braindamage_working, circlecrash_working, circle_art_working, engineer_spam_working, mcrash_working
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
-    global ctrl1_count, ctrl1_first_time
-    global art_shift_bind, mcrash_shift_bind, ctrlswap
+    global ctrl1_count, ctrl1_first_time, ctrlg_armed, ctrlg_last_time
+    global ctrlq_last_time, ctrlq_armed, ctrla_last_time, ctrla_armed
+    global ctrlz_last_time, ctrlz_armed, ctrly_last_time, ctrly_armed
+    global ctrlu_last_time, ctrlu_armed, ctrli_last_time, ctrli_armed
+    global circle_art_shift_bind, mcrash_shift_bind, ctrlswap
     global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
     try:
         # Workaround for pynput macOS Unicode decode bug - some special keys trigger this
@@ -1156,9 +1293,9 @@ def on_press(key: Key | None) -> None:
             else:
                 automation_working = False
                 braindamage_working = False
-                art_working = False
-                engispam_working = False
-                art_shift_bind = False
+                circle_art_working = False
+                engineer_spam_working = False
+                circle_art_shift_bind = False
                 mcrash_shift_bind = False
                 circle_mouse_active = False
                 stopallthreads()
@@ -1184,13 +1321,13 @@ def on_press(key: Key | None) -> None:
                 elif key == Key.right:
                     mouse.position = (x + 1, y)
                 return
-        # NEW: pressing Left Shift starts art_working if binding is enabled
+        # NEW: pressing Left Shift starts circle_art_working if binding is enabled
         elif key == Key.shift_l:
-            if art_shift_bind:
-                if not art_working:
-                    print("art on")
-                art_working = True
-                start_art()
+            if circle_art_shift_bind:
+                if not circle_art_working:
+                    print("circle_art on")
+                circle_art_working = True
+                start_circle_art()
                 if mcrash_shift_bind:
                     if not mcrash_working:
                         print("mcrash on")
@@ -1322,16 +1459,13 @@ def on_press(key: Key | None) -> None:
             if 'ctrl' in pressed_keys:
                 print("200 walls")
                 walls()
-        elif hasattr(key, 'char') and key.char and key.char=='x':
-            if 'ctrl' in pressed_keys:
-                slowwall()
         elif hasattr(key, 'char') and key.char and key.char=='c':
             if 'ctrl' in pressed_keys:
                 # NEW: enable binding to Left Shift instead of starting immediately
-                art_shift_bind = True
-                art_working = False  # ensure idle until Left Shift is pressed
-                art_event.clear()
-                print("toggle art")
+                circle_art_shift_bind = True
+                circle_art_working = False  # ensure idle until Left Shift is pressed
+                circle_art_event.clear()
+                print("toggle circle_art")
         elif hasattr(key, 'char') and key.char and key.char=='m':
             if 'ctrl' in pressed_keys:
                 print("benchmarking...")
@@ -1342,33 +1476,57 @@ def on_press(key: Key | None) -> None:
                 minicirclecrash()
         elif hasattr(key, 'char') and key.char and key.char=='e':
             if 'ctrl' in pressed_keys:
-                print("engispam")
-                engispam_working = True
-                start_engispam()
+                print("engineer_spam")
+                engineer_spam_working = True
+                start_engineer_spam()
         elif hasattr(key, 'char') and key.char and key.char=='l':
             if 'ctrl' in pressed_keys:
                 print("50m score")
                 score50m()
         elif hasattr(key, 'char') and key.char and key.char=='h':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                for _ in range(3000):
-                    controller.tap("h")
-                controller.release("`")
+                repeat_tap_in_console("h", 3000)
         elif hasattr(key, 'char') and key.char and key.char=='r':
             if 'ctrl' in pressed_keys:
                 for _ in range(200):
-                    controller.tap(Key.enter)
-                    controller.type("$arena close")
-                    controller.tap(Key.enter)
+                    type_with_enter("$arena close")
         elif hasattr(key, 'char') and key.char and key.char=='g':
             if 'ctrl' in pressed_keys:
-                start_softwallstack()
+                now = time.time()
+                if ctrlg_armed and (now - ctrlg_last_time <= 5):
+                    print("ctrl+g executing")
+                    controller.press("`")
+                    for _ in range(500):
+                        controller.tap("f")
+                        controller.tap("b")
+                        controller.tap("b")
+                    for _ in range(20):
+                        controller.tap("b")
+                    controller.release("`")
+                    ctrlg_armed = False
+                else:
+                    print("ctrl+g armed")
+                    ctrlg_armed = True
+                    ctrlg_last_time = now
+        elif hasattr(key, 'char') and key.char and key.char=='d':
+            if 'ctrl' in pressed_keys:
+                controller.tap("k")
+                controller.press(Key.space)
+                time.sleep(0.1)
+                controller.release(Key.space)
+                controller.tap("y")
+                controller.press(Key.space)
+                time.sleep(0.1)
+                controller.release(Key.space)
+                controller.tap("u")
+                controller.press(Key.space)
+                time.sleep(0.1)
+                controller.release(Key.space)
         elif hasattr(key, 'char') and key.char and key.char=='j':
             if 'ctrl' in pressed_keys:
                 start = mouse.position
                 controller.press("`")
-                for _ in range(400):
+                for _ in range(200):
                     mouse.position = (start[0] + random.randint(-25, 25), start[1] + random.randint(-25, 25))
                     time.sleep(0.01)
                     controller.press("j")
@@ -1405,74 +1563,124 @@ def on_press(key: Key | None) -> None:
                 controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='q':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                controller.tap("d")
-                controller.type("fy"*10)
-                controller.type(("f"*50+"h")*2)
-                controller.release("`")
-                controller.press("`")
-                controller.tap("d")
-                controller.press("d")
-                controller.release("`")
+                now = time.time()
+                if ctrlq_armed and (now - ctrlq_last_time <= 5):
+                    print("ctrl+q executing")
+                    type_in_console("d" + "fy"*10 + ("f"*50+"h")*2)
+                    tap_in_console("dd")
+                    controller.press("`")
+                    time.sleep(0.1)
+                    controller.press("d")
+                    controller.release("`")
+                    ctrlq_armed = False
+                else:
+                    print("ctrl+q armed")
+                    ctrlq_armed = True
+                    ctrlq_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='a':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                controller.tap("d")
-                controller.type("fy"*10)
-                controller.type(("f"*50+"h")*6)
-                controller.release("`")
-                controller.press("`")
-                controller.tap("d")
-                controller.press("d")
-                controller.release("`")
+                now = time.time()
+                if ctrla_armed and (now - ctrla_last_time <= 5):
+                    print("ctrl+a executing")
+                    type_in_console("d" + "fy"*10 + ("f"*50+"h")*6)
+                    tap_in_console("dd")
+                    controller.press("`")
+                    time.sleep(0.1)
+                    controller.press("d")
+                    controller.release("`")
+                    ctrla_armed = False
+                else:
+                    print("ctrl+a armed")
+                    ctrla_armed = True
+                    ctrla_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='z':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                controller.tap("d")
-                controller.type("fy"*10)
-                controller.type(("f"*50+"h")*10)
-                controller.release("`")
-                controller.press("`")
-                controller.tap("d")
-                controller.press("d")
-                controller.release("`")
+                now = time.time()
+                if ctrlz_armed and (now - ctrlz_last_time <= 5):
+                    print("ctrl+z executing")
+                    type_in_console("d" + "fy"*10 + ("f"*50+"h")*10)
+                    tap_in_console("dd")
+                    controller.press("`")
+                    time.sleep(0.1)
+                    controller.press("d")
+                    controller.release("`")
+                    ctrlz_armed = False
+                else:
+                    print("ctrl+z armed")
+                    ctrlz_armed = True
+                    ctrlz_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='y':
             if 'ctrl' in pressed_keys:
+                now = time.time()
+                if ctrly_armed and (now - ctrly_last_time <= 5):
+                    print("ctrl+y executing")
+                    type_in_console("d" + "fy"*10 + ("f"*50+"h")*2)
+                    ctrly_armed = False
+                else:
+                    print("ctrl+y armed")
+                    ctrly_armed = True
+                    ctrly_last_time = now
+        elif hasattr(key, 'char') and key.char and key.char=='x':
+            if 'ctrl' in pressed_keys:
+                time.sleep(1)
+                circle()
+                circle()
+                time.sleep(0.5)
                 controller.press("`")
-                controller.tap("d")
-                controller.type("fy"*10)
-                controller.type(("f"*50+"h")*2)
+                start = mouse.position
+                # make the mouse go a random angle around start with a radius of 20px
+                for i in range(4):
+                    for _ in range(100):
+                        angle = random.uniform(0, 2 * math.pi)
+                        radius = 75
+                        x = start[0] + radius * math.cos(angle)
+                        y = start[1] + radius * math.sin(angle)
+                        mouse.position = (int(x), int(y))
+                        time.sleep(0.003)
+                        controller.tap("f")
+                        time.sleep(0.006)
+                        controller.press("j")
+                        time.sleep(0.006)
+                        mouse.position = start
+                        time.sleep(0.003)
+                        controller.release("j")
+                        time.sleep(0.003)
+                    mouse.position = (start[0] + 100, start[1])
+                    controller.tap("h")
+                    time.sleep(0.006)
                 controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='u':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                controller.tap("d")
-                controller.type("fy"*10)
-                controller.type(("f"*50+"h")*6)
-                controller.release("`")
+                now = time.time()
+                if ctrlu_armed and (now - ctrlu_last_time <= 5):
+                    print("ctrl+u executing")
+                    type_in_console("d" + "fy"*10 + ("f"*50+"h")*6)
+                    ctrlu_armed = False
+                else:
+                    print("ctrl+u armed")
+                    ctrlu_armed = True
+                    ctrlu_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='i':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                controller.tap("d")
-                controller.type("fy"*10)
-                controller.type(("f"*50+"h")*10)
-                controller.release("`")
+                now = time.time()
+                if ctrli_armed and (now - ctrli_last_time <= 5):
+                    print("ctrl+i executing")
+                    type_in_console("d" + "fy"*10 + ("f"*50+"h")*10)
+                    ctrli_armed = False
+                else:
+                    print("ctrl+i armed")
+                    ctrli_armed = True
+                    ctrli_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='[':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                for _ in range(100):
-                    controller.tap("f")
-                controller.release("`")
+                repeat_tap_in_console("f", 100)
             else:
                 circle_mouse_radius = max(circle_mouse_radius - 5, 5)
                 circle_mouse_radius_value.value = circle_mouse_radius
                 print(f"circle radius: {circle_mouse_radius}")
         elif hasattr(key, 'char') and key.char and key.char==']':
             if 'ctrl' in pressed_keys:
-                controller.press("`")
-                for _ in range(500):
-                    controller.tap("f")
-                controller.release("`")
+                repeat_tap_in_console("f", 500)
             else:
                 circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
                 circle_mouse_radius_value.value = circle_mouse_radius
@@ -1500,14 +1708,12 @@ def on_press(key: Key | None) -> None:
                 print(f"circle direction -> {dir_text}")
         elif hasattr(key, 'char') and key.char and key.char=='k':
             if 'ctrl' in pressed_keys:
-                controller.tap(Key.enter)
-                time.sleep(0.05)
-                controller.type("$arena team 1")
-                controller.tap(Key.enter)
-                controller.tap(Key.enter)
-                time.sleep(0.05)
-                controller.type("$arena spawnpoint 0 0")
-                controller.tap(Key.enter)
+                type_with_enter("$arena team 1", 0.05)
+                type_with_enter("$arena spawnpoint 0 0", 0.05)
+        elif hasattr(key, 'char') and key.char and key.char=='t':
+            if 'ctrl' in pressed_keys:
+                print("custom_reload_spam")
+                start_custom_reload_spam()
         if hasattr(key, 'char') and key.char and key.char=='-':
             circle_mouse_speed = min(circle_mouse_speed + 0.001, 0.5)
             circle_mouse_speed_value.value = circle_mouse_speed
@@ -1523,7 +1729,7 @@ def on_press(key: Key | None) -> None:
         print(f"Error: {e}")
     
 def on_release(key: Key | None) -> None:
-    global art_working, art_shift_bind, mcrash_working, mcrash_shift_bind
+    global circle_art_working, circle_art_shift_bind, mcrash_working, mcrash_shift_bind
     try:
         # Workaround for pynput macOS Unicode decode bug
         if key is None:
@@ -1539,13 +1745,13 @@ def on_release(key: Key | None) -> None:
     elif is_alt(key):
         pressed_keys.discard('alt')
         # print("alt up")  # uncomment to debug
-    # NEW: releasing Left Shift stops art_working if binding is enabled
+    # NEW: releasing Left Shift stops circle_art_working if binding is enabled
     elif key == Key.shift_l:
-        if art_shift_bind and art_working:
-            print("art off")
-        if art_shift_bind:
-            art_working = False
-            art_event.clear()
+        if circle_art_shift_bind and circle_art_working:
+            print("circle_art off")
+        if circle_art_shift_bind:
+            circle_art_working = False
+            circle_art_event.clear()
         if mcrash_shift_bind and mcrash_working:
             print("mcrash off")
         if mcrash_shift_bind:
@@ -1584,6 +1790,8 @@ if __name__ == '__main__':
             time.sleep(0.1)
     except KeyboardInterrupt:
         print("\nShutting down...")
+    finally:
+        # Ensure cleanup happens even on unexpected exit
         listener.stop()
         stopallthreads()
         
@@ -1591,4 +1799,7 @@ if __name__ == '__main__':
         if overlay_thread is not None and overlay_thread.is_alive():
             overlay_stop_event.set()
             overlay_thread.join(timeout=1.0)
+        
+        # Give processes time to fully terminate
+        time.sleep(0.2)
 

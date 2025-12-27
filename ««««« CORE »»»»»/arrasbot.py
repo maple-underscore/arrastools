@@ -252,18 +252,13 @@ Bot initialized in {round(init, 3)} seconds
                             mouse.click(Button.left, 1)
                 print(f"Disconnected at {timestamp()}")
                 log_file.write(f"Disconnected at {timestamp()}\n")
-                controller.release("w")
-                controller.release("a")
                 if not disconnected:
                     print(f"Disconnected, attempting to reconnect at {timestamp()}")
                     log_file.write(f"Disconnected, attempting to reconnect at {timestamp()}\n")
                 disconnected = True
                 mouse.position = (922, 767)
-                pingm = getping()
-                delay = pingm / 1000 if pingm else 0.05
-                for _ in range(200):
-                    mouse.click(Button.left, 1)
-                    time.sleep(delay)
+                mouse.click(Button.left, 1)
+                time.sleep(1)
         if color_close(targetcolor, (176, 100, 81)) and ((not disconnected or not died) or ((time.time() - lastdeath) > 5 and died)):
             print(f"Checking death at {timestamp()}")
             log_file.write(f"Checking death at {timestamp()}\n")
@@ -294,21 +289,8 @@ Bot initialized in {round(init, 3)} seconds
             log_file.write(f"[RECONNECTED] screenshot taken at {timestamp()}\n")
             print(f"Successfully reconnected at {timestamp()}")
             log_file.write(f"Successfully reconnected at {timestamp()}\n")
-            if disconnected:
-                controller.tap(Key.enter)
-                time.sleep(0.1)
-                controller.type("$arena close")
-                time.sleep(0.1)
-                controller.tap(Key.enter)
             disconnected = False
             died = False
-            booster = True
-            if booster:
-                controller.tap("h")
-                controller.tap("u")
-                controller.tap("u")
-            else:
-                controller.tap("i")
             controller.tap("c")
             time.sleep(0.1)
             controller.press("`")

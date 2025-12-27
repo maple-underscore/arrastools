@@ -39,14 +39,22 @@ print(f"Logging keypresses to: {LOG_FILE}")
 running = True
 
 def format_key(key):
-    """Format key for logging."""
+    """Format key for logging with pynput code representation."""
     try:
         # Regular character keys
-        return key.char
+        char = key.char
+        # Generate pynput code for character keys
+        if char:
+            pynput_code = f"'{char}'"
+        else:
+            pynput_code = "None"
+        return f"{char} (pynput: {pynput_code})"
     except AttributeError:
-        # Special keys
+        # Special keys - these are Key enum values
         key_str = str(key).replace("Key.", "")
-        return f"[{key_str}]"
+        # Generate pynput code for special keys
+        pynput_code = f"Key.{key_str.lower()}"
+        return f"[{key_str}] (pynput: {pynput_code})"
 
 def on_press(key):
     """Handle key press events."""
