@@ -796,9 +796,19 @@ def circle_mouse(
         return
 
     center_x, center_y = temp_points[0]
+    
+    # Calculate rotations per second
+    # angle_step_base = 5.0 / max(radius, 10) per iteration
+    # Each full rotation = 2π radians
+    # Rotations per second = (angle_step_base / (2π)) / sleep_time
+    radius_for_calc = max(radius_value.value, 5)
+    speed_for_calc = max(speed_value.value, 0.001)
+    angle_step_base = 5.0 / max(radius_for_calc, 10)
+    rotations_per_second = (angle_step_base / (2 * math.pi)) / speed_for_calc
+    
     print(
-        "Circle mouse: center (%s, %s), radius %s, speed %.4f"
-        % (center_x, center_y, radius_value.value, speed_value.value)
+        "Circle mouse: center (%s, %s), radius %s, speed %.4f, %.2f rotations/sec"
+        % (center_x, center_y, radius_value.value, speed_value.value, rotations_per_second)
     )
 
     angle = 0.0
@@ -1026,9 +1036,12 @@ def stop_circle_mouse() -> None:
     global circle_mouse_process
     circle_mouse_event.clear()
     if circle_mouse_process is not None:
-        circle_mouse_process.join(timeout=1)
-        if circle_mouse_process.is_alive():
-            circle_mouse_process.terminate()
+        try:
+            circle_mouse_process.join(timeout=1)
+            if circle_mouse_process is not None and circle_mouse_process.is_alive():
+                circle_mouse_process.terminate()
+        except Exception:
+            pass
         circle_mouse_process = None
 
 def _monitor_circle_mouse(proc: Process) -> None:
@@ -1236,14 +1249,14 @@ def stopallthreads() -> None:
     for proc in [automation_process, engineer_spam_process, circle_art_process, braindamage_process,
                  tail_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process]:
         if proc is not None:
-            if proc.is_alive():
-                proc.terminate()
-                proc.join(timeout=1)
-                if proc.is_alive():
-                    proc.kill()
-                    proc.join(timeout=0.5)
-            # Close the process to release resources (semaphores, etc.)
             try:
+                if proc.is_alive():
+                    proc.terminate()
+                    proc.join(timeout=1)
+                    if proc.is_alive():
+                        proc.kill()
+                        proc.join(timeout=0.5)
+                # Close the process to release resources (semaphores, etc.)
                 proc.close()
             except Exception:
                 pass
@@ -1677,14 +1690,22 @@ def on_press(key: Key | None) -> None:
             else:
                 circle_mouse_radius = max(circle_mouse_radius - 5, 5)
                 circle_mouse_radius_value.value = circle_mouse_radius
-                print(f"circle radius: {circle_mouse_radius}")
+                # Calculate rotations per second
+                import math
+                angle_step = 5.0 / max(circle_mouse_radius, 10)
+                rps = (angle_step / (2 * math.pi)) / max(circle_mouse_speed, 0.001)
+                print(f"circle radius: {circle_mouse_radius} | {rps:.2f} rotations/sec")
         elif hasattr(key, 'char') and key.char and key.char==']':
             if 'ctrl' in pressed_keys:
                 repeat_tap_in_console("f", 500)
             else:
                 circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
                 circle_mouse_radius_value.value = circle_mouse_radius
-                print(f"circle radius: {circle_mouse_radius}")
+                # Calculate rotations per second
+                import math
+                angle_step = 5.0 / max(circle_mouse_radius, 10)
+                rps = (angle_step / (2 * math.pi)) / max(circle_mouse_speed, 0.001)
+                print(f"circle radius: {circle_mouse_radius} | {rps:.2f} rotations/sec")
         elif hasattr(key, 'char') and key.char and key.char=='o':
             if 'ctrl' in pressed_keys:
                 circle_mouse_active = not circle_mouse_active
@@ -1717,11 +1738,19 @@ def on_press(key: Key | None) -> None:
         if hasattr(key, 'char') and key.char and key.char=='-':
             circle_mouse_speed = min(circle_mouse_speed + 0.001, 0.5)
             circle_mouse_speed_value.value = circle_mouse_speed
-            print(f"circle speed: {round(circle_mouse_speed, 4)} (slower)")
+            # Calculate rotations per second
+            import math
+            angle_step = 5.0 / max(circle_mouse_radius, 10)
+            rps = (angle_step / (2 * math.pi)) / max(circle_mouse_speed, 0.001)
+            print(f"circle speed: {round(circle_mouse_speed, 4)} (slower) | {rps:.2f} rotations/sec")
         if hasattr(key, 'char') and key.char and key.char=='=':
             circle_mouse_speed = max(circle_mouse_speed - 0.001, 0.001)
             circle_mouse_speed_value.value = circle_mouse_speed
-            print(f"circle speed: {round(circle_mouse_speed, 4)} (faster)")
+            # Calculate rotations per second
+            import math
+            angle_step = 5.0 / max(circle_mouse_radius, 10)
+            rps = (angle_step / (2 * math.pi)) / max(circle_mouse_speed, 0.001)
+            print(f"circle speed: {round(circle_mouse_speed, 4)} (faster) | {rps:.2f} rotations/sec")
     except UnicodeDecodeError:
         # Silently ignore pynput Unicode decode errors (macOS keyboard event bug)
         pass
