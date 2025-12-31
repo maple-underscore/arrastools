@@ -773,7 +773,6 @@ def circle_mouse(
     direction_value: Any,
 ) -> None:
     """Move mouse in circles around a center point. Press '\\' to reverse direction."""
-    import math
 
     print("Click anywhere to set the center point for circular motion...")
     temp_points: list[tuple[int, int]] = []
@@ -831,7 +830,7 @@ def circle_mouse(
 def score() -> None:
     type_in_console("n"*20000)
 
-def benchmark(amt: int = 5000) -> None:
+def benchmark(amt: int = 10000) -> None:
     shift_pressed = threading.Event()
 
     def on_press(key: Key) -> None:
@@ -926,46 +925,6 @@ def simpletail(amt: int = 20) -> None:
         mouse.position = (mouse.position[0] - s2, mouse.position[1])
         time.sleep(delay)
         controller.release("j")
-
-def controllednuke() -> None:
-    global step
-    mouse = MouseController()
-    print("Controlled Nuke: You have 10 seconds to select two points.")
-    print(f"Click two points with the left mouse button. Step size: {step}")
-
-    selected: list[tuple[int, int]] = []
-
-    def click_handler(x: int, y: int, button: Button, pressed: bool) -> None:
-        if pressed and button == Button.left:
-            selected.append((int(x), int(y)))
-            print(f"cnuke point: {len(selected)} at ({int(x)}, {int(y)})")
-
-    listener = MouseListener(on_click=click_handler)
-    listener.start()
-
-    start_time = time.time()
-    while len(selected) < 2 and time.time() - start_time < 10:
-        time.sleep(0.01)
-
-    listener.stop()
-    if len(selected) < 2:
-        print("Timed out waiting for points.")
-        return
-
-    (x1, y1), (x2, y2) = selected
-    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-    print(f"Controlled Nuke: Rectangle from ({x1}, {y1}) to ({x2}, {y2}) with step {step}")
-    controller.press("`")
-    time.sleep(2)
-    min_x, max_x = sorted([x1, x2])
-    min_y, max_y = sorted([y1, y2])
-    for x in range(min_x, max_x + 1, step):
-        for y in range(min_y, max_y + 1, step):
-            mouse.position = (x, y)
-            time.sleep(0.05)
-            controller.tap("k")
-    print("Controlled Nuke complete.")
-    controller.release("`")
 
 def start_arena_automation(atype: int = 1) -> None:
     global automation_process, automation_working
@@ -1071,11 +1030,6 @@ def start_softwallstack() -> None:
         softwallstack_process.daemon = True
         softwallstack_process.start()
         ensure_overlay_running("softwall")
-
-def start_controllednuke() -> None:
-    proc = multiprocessing.Process(target=controllednuke)
-    proc.daemon = True
-    proc.start()
 
 def start_mcrash() -> None:
     global mcrash_process, mcrash_working
@@ -1312,7 +1266,7 @@ def on_press(key: Key | None) -> None:
                 mcrash_shift_bind = False
                 circle_mouse_active = False
                 stopallthreads()
-                print("nstop")
+                print("softstop")
         elif is_ctrl(key):
             pressed_keys.add('ctrl')
         elif is_alt(key):
@@ -1691,7 +1645,6 @@ def on_press(key: Key | None) -> None:
                 circle_mouse_radius = max(circle_mouse_radius - 5, 5)
                 circle_mouse_radius_value.value = circle_mouse_radius
                 # Calculate rotations per second
-                import math
                 angle_step = 5.0 / max(circle_mouse_radius, 10)
                 rps = (angle_step / (2 * math.pi)) / max(circle_mouse_speed, 0.001)
                 print(f"circle radius: {circle_mouse_radius} | {rps:.2f} rotations/sec")
@@ -1702,7 +1655,6 @@ def on_press(key: Key | None) -> None:
                 circle_mouse_radius = min(circle_mouse_radius + 5, 1000)
                 circle_mouse_radius_value.value = circle_mouse_radius
                 # Calculate rotations per second
-                import math
                 angle_step = 5.0 / max(circle_mouse_radius, 10)
                 rps = (angle_step / (2 * math.pi)) / max(circle_mouse_speed, 0.001)
                 print(f"circle radius: {circle_mouse_radius} | {rps:.2f} rotations/sec")
@@ -1739,7 +1691,6 @@ def on_press(key: Key | None) -> None:
             circle_mouse_speed = min(circle_mouse_speed + 0.001, 0.5)
             circle_mouse_speed_value.value = circle_mouse_speed
             # Calculate rotations per second
-            import math
             angle_step = 5.0 / max(circle_mouse_radius, 10)
             rps = (angle_step / (2 * math.pi)) / max(circle_mouse_speed, 0.001)
             print(f"circle speed: {round(circle_mouse_speed, 4)} (slower) | {rps:.2f} rotations/sec")
@@ -1747,7 +1698,6 @@ def on_press(key: Key | None) -> None:
             circle_mouse_speed = max(circle_mouse_speed - 0.001, 0.001)
             circle_mouse_speed_value.value = circle_mouse_speed
             # Calculate rotations per second
-            import math
             angle_step = 5.0 / max(circle_mouse_radius, 10)
             rps = (angle_step / (2 * math.pi)) / max(circle_mouse_speed, 0.001)
             print(f"circle speed: {round(circle_mouse_speed, 4)} (faster) | {rps:.2f} rotations/sec")
