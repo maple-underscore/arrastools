@@ -4,12 +4,14 @@ import time, random
 import math
 import mss
 import numpy as np
+import signal
+import sys
 
 tier_thresholds = []
 quantity_thresholds = []
 stars = 0.00
 rarest = 100.00
-name = "1x T1"
+name = "1 × T1"
 index = 0
 start = time.time()
 count = 0
@@ -22,7 +24,7 @@ step_mode = False
 last_esc_time = 0
 esc_press_count = 0
 load = False
-simulate = True  # Set to True to simulate rolls without typing in-game
+simulate = False  # Set to True to simulate rolls without typing in-game
 simulate_count = 20000  # Number of rolls to simulate before stopping
 firefox = False  # Set to True if using Firefox, False for other browsers
 MONITOR_INDEX = 1  # Adjust if needed
@@ -37,6 +39,23 @@ last_tier = 0  # Last rolled tier (0 means no previous roll)
 combo_quantity = 0  # Cumulative quantity for current combo
 highest_combo_quantity = 0  # Highest combo quantity achieved
 highest_combo_tier = 0  # Tier of the highest combo
+
+def signal_handler(sig, frame):
+    """Handle Ctrl+C by saving progress before exit"""
+    global tier_data, stars, count
+    print("\n\n⚠️  Ctrl+C detected - saving progress before exit...")
+    try:
+        with open("/Users/alexoh/Documents/GitHub/arrastools/««««« CORE »»»»»/rollbotsave.txt", "w") as save_file:
+            save_file.write(",".join(map(str, tier_data)) + "\n")
+            save_file.write(str(int(stars)) + "\n")
+        print(f"✅ Progress saved ({count} rolls, {stars} ★)")
+    except Exception as e:
+        print(f"❌ Error saving: {e}")
+    print("Exiting...")
+    sys.exit(0)
+
+# Register signal handler for Ctrl+C
+signal.signal(signal.SIGINT, signal_handler)
 
 def type2(text):
     for char in text:
