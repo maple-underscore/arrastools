@@ -93,6 +93,9 @@ current_chart_id = None
 current_difficulty = None
 music_playing = False
 
+# Particle system for hit effects
+active_particles = []  # List of (x, y, size, color, end_time) tuples
+
 # Settings
 settings = {
     'scroll_speed_multiplier': 1.0,  # Global scroll speed multiplier (0.1 to 10)
@@ -488,6 +491,78 @@ def show_judgment(judgment, offset_ms=None, auto_miss=False):
     end_time = time.time() + 0.4  # 400ms
     judgment_display = (display_text, end_time, colors.get(judgment, 'white'))
 
+def spawn_particle(lane, judgment):
+    """Spawn a hit particle effect at the hit bar in the given lane"""
+    global active_particles
+    
+    colors = {
+        'PERFECT': 'cyan',
+        'GREAT': 'lime',
+        'GOOD': 'yellow',
+        'BAD': 'orange',
+        'MISS': 'red'
+    }
+    
+    x = LANE_MARGIN + lane * LANE_WIDTH + LANE_WIDTH // 2
+    y = BAR_Y
+    color = colors.get(judgment, 'white')
+    end_time = time.time() + 0.3  # 300ms lifetime
+    
+    # Create particle as (x, y, initial_size, color, end_time, spawn_time)
+    active_particles.append((x, y, 20, color, end_time, time.time()))
+
+def draw_particles():
+    """Draw all active particles with expanding/fading animation"""
+    current_time = time.time()
+    particles_to_remove = []
+    
+    for i, particle in enumerate(active_particles):
+        x, y, initial_size, color, end_time, spawn_time = particle
+        
+        if current_time >= end_time:
+            particles_to_remove.append(i)
+            continue
+        
+        # Calculate animation progress (0.0 to 1.0)
+        progress = (current_time - spawn_time) / 0.3
+        
+        # Expand size over time
+        size = int(initial_size + (60 * progress))
+        
+        # Calculate opacity (fade out)
+        opacity = int(255 * (1.0 - progress))
+        
+        # Draw particle as expanding circle
+        # Use stipple pattern to simulate transparency (tkinter limitation)
+        stipple_patterns = ['', 'gray75', 'gray50', 'gray25']
+        stipple_index = min(int(progress * 4), 3)
+        stipple = stipple_patterns[stipple_index]
+        
+        if stipple:
+            canvas.create_oval(x - size, y - size, x + size, y + size,
+                             outline=color, width=2, fill='', 
+                             stipple=stipple, tags='particle')
+        else:
+            canvas.create_oval(x - size, y - size, x + size, y + size,
+                             outline=color, width=2, fill='',
+                             tags='particle')
+    
+    # Remove expired particles
+    for i in reversed(particles_to_remove):
+        active_particles.pop(i)
+
+def calculate_accuracy():
+    """Calculate current accuracy percentage"""
+    total_notes_hit = perfect_count + great_count + good_count + bad_count
+    if total_notes_hit == 0:
+        return 100.0
+    
+    # Formula: (perfect*100 + great*70 + good*40 + bad*10) / (total notes hit * 100)
+    weighted_score = (perfect_count * 100 + great_count * 70 + 
+                     good_count * 40 + bad_count * 10)
+    accuracy = weighted_score / (total_notes_hit * 100.0)
+    return accuracy * 100.0
+
 def judge_timing(time_diff):
     """Return judgment, score, and offset in ms based on timing difference"""
     global perfect_count, great_count, good_count, bad_count, miss_count
@@ -545,6 +620,7 @@ def check_hit(lane, current_time):
         best_note['hit'] = True
         best_note['judgment'] = judgment
         show_judgment(judgment, offset_ms)
+        spawn_particle(lane, judgment)  # Add particle effect
         return hit
     
     # Check slide notes
@@ -567,11 +643,13 @@ def check_hit(lane, current_time):
                         combo += 1
                         max_combo = max(max_combo, combo)
                         show_judgment(judgment, offset_ms)
+                        spawn_particle(lane, judgment)  # Add particle effect
                         hit = True
                     else: 
                         combo = 0
                         slide['hit'] = True  # Mark for deletion
                         show_judgment('MISS')
+                        spawn_particle(lane, 'MISS')  # Add particle effect for miss
     
     return hit
 
@@ -628,12 +706,14 @@ def check_slide_hold(lane, current_time, is_holding):
                     max_combo = max(max_combo, combo)
                     slide['remove'] = True  # Mark for removal
                     show_judgment(judgment, offset_ms)
+                    spawn_particle(lane, judgment)  # Add particle effect
                 else:
                     # Released too early
                     combo = 0
                     miss_count += 1
                     slide['remove'] = True  # Mark for removal
                     show_judgment('MISS')
+                    spawn_particle(lane, 'MISS')  # Add particle effect
 
 def on_press(key):
     """Handle key press - only register if key wasn't already down"""
@@ -768,13 +848,27 @@ def get_rank_color(rank):
     return colors.get(rank, 'white')
 
 def draw_ui():
-    """Draw score bar and judgment"""
+    """Draw score bar, accuracy, combo, and judgment"""
     canvas.delete('ui')
+    canvas.delete('particle')  # Clear old particles
     draw_key_labels()  # Update key press feedback
+    draw_particles()  # Draw active particles
     
     # Score at top left
     canvas.create_text(80, 30, text=f"Score: {score}",
                       fill='white', font=('Arial', 24, 'bold'), tags='ui', anchor='w')
+    
+    # Accuracy percentage at top left (below score)
+    accuracy = calculate_accuracy()
+    canvas.create_text(80, 65, text=f"Accuracy: {accuracy:.2f}%",
+                      fill='cyan', font=('Arial', 20, 'bold'), tags='ui', anchor='w')
+    
+    # Combo counter at top right
+    if combo > 0:
+        canvas.create_text(width - 80, 30, text=f"{combo}",
+                          fill='yellow', font=('Arial', 48, 'bold'), tags='ui', anchor='e')
+        canvas.create_text(width - 80, 75, text="COMBO",
+                          fill='yellow', font=('Arial', 20, 'bold'), tags='ui', anchor='e')
     
     # Draw judgment display (centered at top)
     if judgment_display:
@@ -904,7 +998,10 @@ def show_countdown():
 
 def game_loop():
     """Main game loop"""
-    global start_time, game_running, chart, music_playing
+    global start_time, game_running, chart, music_playing, active_particles
+    
+    # Reset particles
+    active_particles = []
     
     # Show countdown
     show_countdown()
@@ -1054,7 +1151,7 @@ def play_replay():
     """Play back the recorded replay"""
     global is_replay, replay_index, game_running, start_time
     global score, combo, max_combo, perfect_count, great_count, good_count, bad_count, miss_count
-    global active_notes, active_slides, chart, key_is_down, key_pressed_flags
+    global active_notes, active_slides, chart, key_is_down, key_pressed_flags, active_particles
     
     # Reset game state
     is_replay = True
@@ -1066,6 +1163,8 @@ def play_replay():
     great_count = 0
     good_count = 0
     bad_count = 0
+    miss_count = 0
+    active_particles = []  # Reset particles
     miss_count = 0
     active_notes = []
     active_slides = []
