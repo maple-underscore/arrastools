@@ -46,6 +46,35 @@ TIMING_GOOD = 0.15
 TIMING_BAD = 0.20
 TIMING_MISS = 0.25
 
+def get_timing_windows():
+    """Get timing windows based on settings"""
+    mode = settings.get('timing_windows', 'normal')
+    
+    if mode == 'strict':
+        return {
+            'PERFECT': 0.035,
+            'GREAT': 0.075,
+            'GOOD': 0.115,
+            'BAD': 0.155,
+            'MISS': 0.20
+        }
+    elif mode == 'lenient':
+        return {
+            'PERFECT': 0.065,
+            'GREAT': 0.125,
+            'GOOD': 0.185,
+            'BAD': 0.245,
+            'MISS': 0.30
+        }
+    else:  # normal
+        return {
+            'PERFECT': 0.05,
+            'GREAT': 0.10,
+            'GOOD': 0.15,
+            'BAD': 0.20,
+            'MISS': 0.25
+        }
+
 # Scoring
 SCORE_PERFECT = 1000
 SCORE_GREAT = 700
@@ -106,7 +135,18 @@ active_particles = []  # List of (x, y, size, color, end_time) tuples
 # Settings
 settings = {
     'scroll_speed_multiplier': 1.0,  # Global scroll speed multiplier (0.1 to 10)
-    'key_bindings': ['q', 'w', 'e', 'r', 'u', 'i', 'o', 'p']  # Customizable keys
+    'key_bindings': ['q', 'w', 'e', 'r', 'u', 'i', 'o', 'p'],  # Customizable keys
+    # Visual settings
+    'note_size_multiplier': 1.0,  # Note size multiplier (0.5 to 2.0)
+    'hit_bar_position': 0.9,  # Hit bar Y position as fraction of height (0.7 to 0.95)
+    'background_dim': 0,  # Background dimness (0 to 255)
+    'show_fps': False,  # Show FPS counter
+    # Audio settings
+    'music_volume': 100,  # Music volume (0 to 100)
+    'sfx_volume': 100,  # SFX volume (0 to 100)
+    'global_offset': 0,  # Global offset in milliseconds (-200 to 200)
+    # Gameplay settings
+    'timing_windows': 'normal',  # 'strict', 'normal', or 'lenient'
 }
 
 # Key mappings (will be rebuilt from settings)
@@ -574,19 +614,22 @@ def judge_timing(time_diff):
     """Return judgment, score, and offset in ms based on timing difference"""
     global perfect_count, great_count, good_count, bad_count, miss_count
     
+    # Get timing windows from settings
+    windows = get_timing_windows()
+    
     abs_diff = abs(time_diff)
     offset_ms = time_diff * 1000  # Convert to ms
     
-    if abs_diff <= TIMING_PERFECT:
+    if abs_diff <= windows['PERFECT']:
         perfect_count += 1
         return 'PERFECT', SCORE_PERFECT, offset_ms
-    elif abs_diff <= TIMING_GREAT:
+    elif abs_diff <= windows['GREAT']:
         great_count += 1
         return 'GREAT', SCORE_GREAT, offset_ms
-    elif abs_diff <= TIMING_GOOD: 
+    elif abs_diff <= windows['GOOD']: 
         good_count += 1
         return 'GOOD', SCORE_GOOD, offset_ms
-    elif abs_diff <= TIMING_BAD:
+    elif abs_diff <= windows['BAD']:
         bad_count += 1
         return 'BAD', SCORE_BAD, offset_ms
     else:
@@ -2287,7 +2330,13 @@ def show_options_menu():
     """Display options menu for changing settings"""
     menu_running = True
     selected_option = 0
-    options = ['Change Keys', 'Scroll Speed', 'Save & Back']
+    current_page = 0  # 0 = Main, 1 = Visual, 2 = Audio, 3 = Gameplay
+    options_pages = {
+        0: ['Visual Settings', 'Audio Settings', 'Gameplay Settings', 'Change Keys', 'Scroll Speed', 'Export Settings', 'Import Settings', 'Save & Back'],
+        1: ['Note Size', 'Hit Bar Position', 'Background Dim', 'Show FPS', 'Back'],
+        2: ['Music Volume', 'SFX Volume', 'Global Offset', 'Back'],
+        3: ['Timing Windows', 'Back']
+    }
     
     # State for key remapping
     remapping_index = None
@@ -2296,7 +2345,8 @@ def show_options_menu():
         canvas.delete('all')
         canvas.configure(bg='black')
         
-        canvas.create_text(width // 2, 50, text="OPTIONS",
+        page_titles = {0: 'OPTIONS', 1: 'VISUAL SETTINGS', 2: 'AUDIO SETTINGS', 3: 'GAMEPLAY SETTINGS'}
+        canvas.create_text(width // 2, 50, text=page_titles.get(current_page, 'OPTIONS'),
                          fill='white', font=('Arial', 48, 'bold'))
         
         if remapping_index is not None:
@@ -2308,23 +2358,42 @@ def show_options_menu():
                              fill='gray', font=('Arial', 16))
         else:
             # Normal menu
-            canvas.create_text(width // 2, 120, text="Use ↑↓ to navigate, ENTER or click to select, ESC to go back",
-                             fill='gray', font=('Arial', 16))
+            canvas.create_text(width // 2, 120, text="Use ↑↓ to navigate, ENTER or click to select, ←→ to adjust values, ESC to go back",
+                             fill='gray', font=('Arial', 14))
             
             y_pos = 200
+            options = options_pages[current_page]
             for i, option in enumerate(options):
                 color = 'yellow' if i == selected_option else 'white'
+                
+                # Format text based on option
                 if option == 'Change Keys':
                     keys_text = ''.join(settings['key_bindings'])
                     text = f"{option}: {keys_text}"
                 elif option == 'Scroll Speed':
-                    text = f"{option}: {settings['scroll_speed_multiplier']:.1f}x (←→ to adjust)"
+                    text = f"{option}: {settings['scroll_speed_multiplier']:.1f}x"
+                elif option == 'Note Size':
+                    text = f"{option}: {settings.get('note_size_multiplier', 1.0):.1f}x"
+                elif option == 'Hit Bar Position':
+                    text = f"{option}: {settings.get('hit_bar_position', 0.9):.2f}"
+                elif option == 'Background Dim':
+                    text = f"{option}: {settings.get('background_dim', 0)}"
+                elif option == 'Show FPS':
+                    text = f"{option}: {'ON' if settings.get('show_fps', False) else 'OFF'}"
+                elif option == 'Music Volume':
+                    text = f"{option}: {settings.get('music_volume', 100)}%"
+                elif option == 'SFX Volume':
+                    text = f"{option}: {settings.get('sfx_volume', 100)}%"
+                elif option == 'Global Offset':
+                    text = f"{option}: {settings.get('global_offset', 0)}ms"
+                elif option == 'Timing Windows':
+                    text = f"{option}: {settings.get('timing_windows', 'normal').upper()}"
                 else:
                     text = option
                 
                 canvas.create_text(width // 2, y_pos, text=text,
-                                 fill=color, font=('Arial', 24), tags=f'option_{i}')
-                y_pos += 60
+                                 fill=color, font=('Arial', 22), tags=f'option_{i}')
+                y_pos += 50
         
         root.update()
     
