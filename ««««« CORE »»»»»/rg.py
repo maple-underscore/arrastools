@@ -68,6 +68,7 @@ slide_sprite_images = [None, None, None, None]
 chart = []
 bpm_changes = []  # List of (beat, bpm) tuples
 initial_bpm = 60
+speed_changes = []  # List of (beat, speed_multiplier) tuples for spd% option
 fps = 60
 active_notes = []
 active_slides = []
@@ -92,17 +93,23 @@ current_chart_id = None
 current_difficulty = None
 music_playing = False
 
-# Key mappings
-KEY_MAPPINGS = {
-    'q': 0,
-    'w': 1,
-    'e': 2,
-    'r': 3,
-    'u': 4,
-    'i': 5,
-    'o': 6,
-    'p': 7,
+# Settings
+settings = {
+    'scroll_speed_multiplier': 1.0,  # Global scroll speed multiplier (0.1 to 10)
+    'key_bindings': ['q', 'w', 'e', 'r', 'u', 'i', 'o', 'p']  # Customizable keys
 }
+
+# Key mappings (will be rebuilt from settings)
+KEY_MAPPINGS = {}
+
+def rebuild_key_mappings():
+    """Rebuild KEY_MAPPINGS from settings"""
+    global KEY_MAPPINGS
+    KEY_MAPPINGS = {}
+    for i, key in enumerate(settings['key_bindings']):
+        KEY_MAPPINGS[key] = i
+
+rebuild_key_mappings()  # Initialize mappings
 
 # Arrow key support
 from pynput.keyboard import Key
@@ -151,6 +158,16 @@ def get_current_bpm(beat, bpm_changes_list, initial_bpm):
             break
     return current_bpm
 
+def get_current_speed_multiplier(beat, speed_changes_list):
+    """Get the speed multiplier at a specific beat (from spd% option)"""
+    speed_mult = 1.0
+    for change_beat, new_speed in sorted(speed_changes_list):
+        if beat >= change_beat:
+            speed_mult = new_speed
+        else:
+            break
+    return speed_mult
+
 def seconds_to_beats(seconds, bpm_changes_list, initial_bpm):
     """Convert seconds to beat position (approximate)"""
     if not bpm_changes_list:
@@ -196,12 +213,13 @@ def calculate_max_score():
             max_possible_score += SCORE_PERFECT * multiplier
 
 def load_chart(id, difficulty):
-    global chart, bpm_changes, initial_bpm
+    global chart, bpm_changes, speed_changes, initial_bpm
     with open(f"{CHART_DIRECTORY}/{id}_{difficulty}.txt", "r") as f:
         f.seek(0)
         lines = f.readlines()
         chart = []
         bpm_changes = []
+        speed_changes = []
         initial_bpm = float(id.split("_")[1])
         
         slide_starts = {}  # Track slide start positions by lane:  {lane:  (beat, multiplier)}
@@ -223,6 +241,16 @@ def load_chart(id, difficulty):
                 except:
                     pass
             
+            # Check for speed change (format: spd%{percentage})
+            if parts[0].strip() == "spd":
+                try:
+                    speed_percent = float(parts[1].strip())
+                    # Speed changes at the last processed beat
+                    speed_changes.append((last_beat, speed_percent / 100.0))
+                    continue
+                except:
+                    pass
+            
             beat = float(parts[0])
             last_beat = beat  # Update last beat
             note_data = parts[1] if len(parts) > 1 else ""
@@ -235,6 +263,16 @@ def load_chart(id, difficulty):
                     bpm_changes.append((beat, new_bpm))
                     continue
                 except: 
+                    pass
+            
+            # Check for speed change at specific beat (format: {beat}%spd{percentage})
+            if note_data.strip().startswith("spd"):
+                # Format: {beat}%spd{percentage}
+                try:
+                    speed_percent = float(note_data.strip().replace("spd", "").strip())
+                    speed_changes.append((beat, speed_percent / 100.0))
+                    continue
+                except:
                     pass
             
             char_index = 0
@@ -336,7 +374,8 @@ def draw_key_labels():
     """Draw key labels at top of lanes (updates with key presses)"""
     canvas.delete('keylabel')
     colors = ['red', 'orange', 'yellow', 'lime', 'cyan', 'blue', 'purple', 'magenta']
-    key_labels = ['W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O']
+    # Use custom key bindings from settings
+    key_labels = [key.upper() for key in settings['key_bindings']]
     for i in range(LANE_COUNT):
         x = LANE_MARGIN + i * LANE_WIDTH + LANE_WIDTH // 2
         # Dim the label if key is pressed
@@ -383,14 +422,22 @@ def draw_slide(lane, y_start, y_end, note_id, is_holding=False, multiplier=1):
         hold_rgb = (144, 238, 144)  # Light green with 50% opacity
         outline_color = '#00CC00'
     
-    # Draw the translucent hold area (entire slide length) with true 50% opacity
+    # When not holding, draw from hit bar to end marker
+    # When holding, draw from start position (locked at hit bar) to end marker
+    if not is_holding:
+        # Clamp y_start to not go below hit bar
+        display_y_start = min(y_start, BAR_Y)
+    else:
+        display_y_start = y_start
+    
+    # Draw the translucent hold area with true 50% opacity
     rect_width = NOTE_WIDTH
-    if y_end < y_start:
-        rect_height = int(y_start - y_end)
+    if y_end < display_y_start:
+        rect_height = int(display_y_start - y_end)
         rect_y = int(y_end)
     else:
-        rect_height = int(y_end - y_start)
-        rect_y = int(y_start)
+        rect_height = int(y_end - display_y_start)
+        rect_y = int(display_y_start)
     
     if rect_height > 0 and rect_width > 0:
         # Create semi-transparent image
@@ -402,10 +449,16 @@ def draw_slide(lane, y_start, y_end, note_id, is_holding=False, multiplier=1):
             canvas._slide_images = {}
         canvas._slide_images[note_id] = photo
     
-    # Draw start marker (thick bar) - ONLY if not being held
-    if not is_holding:
+    # Draw start marker (thick bar) - ONLY if not being held AND above hit bar
+    if not is_holding and y_start < BAR_Y:
         canvas.create_rectangle(x - NOTE_WIDTH//2, y_start - NOTE_HEIGHT//2,
                               x + NOTE_WIDTH//2, y_start + NOTE_HEIGHT//2,
+                              fill=bar_color, outline=outline_color, width=3, tags=f'note_{note_id}')
+    
+    # If holding, draw a marker at the hit bar
+    if is_holding:
+        canvas.create_rectangle(x - NOTE_WIDTH//2, int(BAR_Y) - NOTE_HEIGHT//2,
+                              x + NOTE_WIDTH//2, int(BAR_Y) + NOTE_HEIGHT//2,
                               fill=bar_color, outline=outline_color, width=3, tags=f'note_{note_id}')
     
     # Draw end marker (thick bar)
@@ -547,11 +600,14 @@ def update_slide_combo(current_time):
                     score += int(SCORE_PERFECT * 0.1 * multiplier)
                     slide['next_tick'] += 1.0
                 else:
-                    # Register miss for not holding
-                    combo = 0
-                    miss_count += 1
-                    show_judgment('MISS')
-                    slide['remove'] = True  # Mark for deletion
+                    # Only register miss if we haven't reached the end yet
+                    # Don't mark slides for removal if they're past all beat ticks but before end time
+                    if current_time < slide['end_time']:
+                        # Released too early during the slide
+                        combo = 0
+                        miss_count += 1
+                        show_judgment('MISS')
+                        slide['remove'] = True  # Mark for deletion
                     break  # Stop processing this slide
 
 def check_slide_hold(lane, current_time, is_holding):
@@ -728,28 +784,19 @@ def draw_ui():
                              fill=color, font=('Arial', 48, 'bold'), tags='ui')
 
 def get_pixel_speed(current_beat):
-    """Get the current pixel speed based on BPM"""
+    """Get the current pixel speed based on BPM, spd% changes, and global multiplier"""
     current_bpm = get_current_bpm(current_beat, bpm_changes, initial_bpm)
-    return current_bpm * 10
+    speed_mult = get_current_speed_multiplier(current_beat, speed_changes)
+    global_mult = settings['scroll_speed_multiplier']
+    return current_bpm * 10 * speed_mult * global_mult
 
 def update_notes(current_time):
     """Update note positions and spawn new notes"""
     global active_notes, active_slides, chart, combo
     
     # Calculate current beat for pixel speed
-    current_bpm = initial_bpm
-    if bpm_changes:
-        for change_beat, new_bpm in bpm_changes:
-            change_time = beats_to_seconds(change_beat, bpm_changes, initial_bpm)
-            if current_time >= change_time: 
-                current_bpm = new_bpm
-    
-    pixel_ps = current_bpm * 10
-    
-    # Update slide combo (per beat)
-    update_slide_combo(current_time)
-    
-    # Spawn new notes
+    current_beat = seconds_to_beats(current_time, bpm_changes, initial_bpm)
+    pixel_ps = get_pixel_speed(current_beat)
     while chart and chart[0]['time'] <= current_time + 2:
         note = chart.pop(0)
         if note['type'] == 'tap':
@@ -795,23 +842,25 @@ def update_notes(current_time):
             active_slides.remove(slide)
             continue
         
-        # Calculate pixel speed based on slide's BPM
-        slide_bpm = get_current_bpm(slide['beat'], bpm_changes, initial_bpm)
-        pixel_ps = slide_bpm * 10
+        # Calculate pixel speed based on slide's beat position
+        slide_pixel_ps = get_pixel_speed(slide['beat'])
             
         # If slide is being held, lock the start position to the hit bar
         if slide.get('holding', False):
             y_start = int(BAR_Y)
-            y_end = BAR_Y - ((slide['end_time'] - current_time) * pixel_ps)
+            y_end = BAR_Y - ((slide['end_time'] - current_time) * slide_pixel_ps)
         else:
-            y_start = BAR_Y - ((slide['time'] - current_time) * pixel_ps)
-            y_end = BAR_Y - ((slide['end_time'] - current_time) * pixel_ps)
+            y_start = BAR_Y - ((slide['time'] - current_time) * slide_pixel_ps)
+            y_end = BAR_Y - ((slide['end_time'] - current_time) * slide_pixel_ps)
         
         # Check if slide is complete
         if slide.get('holding', False) and current_time >= slide['end_time']:
             # Auto-complete if still holding at the end
             if key_is_down[slide['lane']]: 
                 check_slide_hold(slide['lane'], current_time, False)
+            # If already marked for removal after auto-complete, skip to next iteration
+            if slide.get('remove', False):
+                continue
         
         # Remove unhit slides that scrolled past
         if not slide.get('holding', False) and not slide.get('hit_start', False) and y_start > height + 100:
@@ -824,8 +873,9 @@ def update_notes(current_time):
             show_judgment('MISS', auto_miss=True)
             continue
         
-        # Always redraw if holding, OR if any part is visible on screen
-        if slide.get('holding', False) or (0 <= y_start <= height or 0 <= y_end <= height):
+        # Always redraw if holding, OR if any part is visible on screen, OR if slide was just completed (has remove flag but not yet removed)
+        # This ensures the final state is drawn before removal
+        if slide.get('holding', False) or (0 <= y_start <= height or 0 <= y_end <= height) or slide.get('remove', False):
             canvas.delete(f"note_{slide['id']}")
             if hasattr(canvas, '_slide_images') and slide['id'] in canvas._slide_images:
                 del canvas._slide_images[slide['id']]
@@ -1107,13 +1157,14 @@ def show_chart_menu():
     selected_chart = None
     selected_difficulty = None
     menu_running = True
-    scroll_offset = 0
+    current_page = 0
+    charts_per_page = 10
     refresh_text_alpha = 0  # For fading effect
     refresh_text_time = 0
     
     def refresh_menu():
-        nonlocal scroll_offset, refresh_text_alpha, refresh_text_time
-        scroll_offset = 0
+        nonlocal current_page, refresh_text_alpha, refresh_text_time
+        current_page = 0
         refresh_text_alpha = 1.0
         refresh_text_time = time.time()
         draw_menu()
@@ -1127,7 +1178,7 @@ def show_chart_menu():
                          fill='white', font=('Arial', 48, 'bold'))
         
         # Instructions
-        canvas.create_text(width // 2, 120, text="Use number keys to select | R to refresh | ESC to quit",
+        canvas.create_text(width // 2, 120, text="Use number keys or click to select | R to refresh | ←→ to change page | ESC to quit",
                          fill='gray', font=('Arial', 16))
         
         # Fading refresh text
@@ -1150,13 +1201,25 @@ def show_chart_menu():
             root.update()
             return
         
+        # Calculate pagination
+        chart_list = sorted(charts.keys())
+        total_pages = (len(chart_list) + charts_per_page - 1) // charts_per_page
+        nonlocal current_page
+        current_page = max(0, min(current_page, total_pages - 1))
+        
+        start_idx = current_page * charts_per_page
+        end_idx = min(start_idx + charts_per_page, len(chart_list))
+        page_charts = chart_list[start_idx:end_idx]
+        
+        # Display page indicator
+        if total_pages > 1:
+            canvas.create_text(width // 2, 150, text=f"Page {current_page + 1} of {total_pages}",
+                             fill='white', font=('Arial', 18))
+        
         # Display charts
-        y_pos = 180
+        y_pos = 200
         index = 0
-        for chart_id in sorted(charts.keys())[scroll_offset:]:
-            if y_pos > height - 100:
-                break
-            
+        for chart_id in page_charts:
             difficulties = sorted(charts[chart_id])
             diff_text = ", ".join(difficulties)
             
@@ -1170,7 +1233,7 @@ def show_chart_menu():
             
             text = f"{index + 1}. {chart_id} [{diff_text}]{audio_icon}"
             canvas.create_text(width // 2, y_pos, text=text,
-                             fill='cyan', font=('Arial', 20))
+                             fill='cyan', font=('Arial', 20), tags=f'chart_{index}')
             y_pos += 40
             index += 1
         
@@ -1178,7 +1241,7 @@ def show_chart_menu():
     
     def on_tkinter_key(event):
         """Handle tkinter key events for menu"""
-        nonlocal menu_running, selected_chart, selected_difficulty, scroll_offset
+        nonlocal menu_running, selected_chart, selected_difficulty, current_page
         
         print(f"DEBUG tkinter_key: {event.keysym}, {event.char}")
         
@@ -1190,16 +1253,55 @@ def show_chart_menu():
             refresh_menu()
             return
         
+        # Left/Right arrows for pagination
+        if event.keysym == 'Left':
+            charts = get_available_charts()
+            total_pages = (len(charts) + charts_per_page - 1) // charts_per_page
+            if current_page > 0:
+                current_page -= 1
+                draw_menu()
+            return
+        
+        if event.keysym == 'Right':
+            charts = get_available_charts()
+            total_pages = (len(charts) + charts_per_page - 1) // charts_per_page
+            if current_page < total_pages - 1:
+                current_page += 1
+                draw_menu()
+            return
+        
         # Number key selection
         if event.char and event.char.isdigit():
             num = int(event.char)
             if num > 0:
                 charts = get_available_charts()
-                chart_list = sorted(charts.keys())[scroll_offset:]
-                if num <= len(chart_list):
-                    selected_chart = chart_list[num - 1]
+                chart_list = sorted(charts.keys())
+                start_idx = current_page * charts_per_page
+                page_charts = chart_list[start_idx:start_idx + charts_per_page]
+                if num <= len(page_charts):
+                    selected_chart = page_charts[num - 1]
                     # Show difficulty selection
                     select_difficulty(selected_chart, charts[selected_chart])
+    
+    def on_mouse_click(event):
+        """Handle mouse clicks in chart menu"""
+        nonlocal selected_chart
+        
+        # Get clicked item
+        items = canvas.find_overlapping(event.x - 10, event.y - 10, event.x + 10, event.y + 10)
+        for item in items:
+            tags = canvas.gettags(item)
+            for tag in tags:
+                if tag.startswith('chart_'):
+                    chart_index = int(tag.split('_')[1])
+                    charts = get_available_charts()
+                    chart_list = sorted(charts.keys())
+                    start_idx = current_page * charts_per_page
+                    page_charts = chart_list[start_idx:start_idx + charts_per_page]
+                    if chart_index < len(page_charts):
+                        selected_chart = page_charts[chart_index]
+                        select_difficulty(selected_chart, charts[selected_chart])
+                    return
 
     def select_difficulty(chart_id, difficulties):
         nonlocal menu_running, selected_chart, selected_difficulty
@@ -1255,6 +1357,7 @@ def show_chart_menu():
     # Bind tkinter keys for menu
     print("DEBUG: Binding tkinter keys for menu...")
     root.bind('<KeyPress>', on_tkinter_key)
+    root.bind('<Button-1>', on_mouse_click)
     
     while menu_running:
         # Redraw if refresh text is fading
@@ -1265,9 +1368,231 @@ def show_chart_menu():
     
     # Unbind menu keys
     root.unbind('<KeyPress>')
+    root.unbind('<Button-1>')
     print(f"DEBUG: Returning from menu, chart_id={current_chart_id}")
     
     return current_chart_id is not None
+
+def save_settings():
+    """Save settings to file"""
+    import json
+    settings_file = "settings.json"
+    try:
+        with open(settings_file, 'w') as f:
+            json.dump(settings, f, indent=2)
+        print(f"Settings saved to {settings_file}")
+    except Exception as e:
+        print(f"Error saving settings: {e}")
+
+def load_settings():
+    """Load settings from file"""
+    import json
+    settings_file = "settings.json"
+    if os.path.exists(settings_file):
+        try:
+            with open(settings_file, 'r') as f:
+                loaded = json.load(f)
+                settings.update(loaded)
+                rebuild_key_mappings()
+            print(f"Settings loaded from {settings_file}")
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+
+def show_options_menu():
+    """Display options menu for changing settings"""
+    menu_running = True
+    selected_option = 0
+    options = ['Change Keys', 'Scroll Speed', 'Save & Back']
+    
+    # State for key remapping
+    remapping_index = None
+    
+    def draw_options():
+        canvas.delete('all')
+        canvas.configure(bg='black')
+        
+        canvas.create_text(width // 2, 50, text="OPTIONS",
+                         fill='white', font=('Arial', 48, 'bold'))
+        
+        if remapping_index is not None:
+            # Key remapping mode
+            canvas.create_text(width // 2, 150, 
+                             text=f"Press key for lane {remapping_index + 1} (currently: {settings['key_bindings'][remapping_index]})",
+                             fill='yellow', font=('Arial', 20))
+            canvas.create_text(width // 2, 200, text="Press ESC to cancel",
+                             fill='gray', font=('Arial', 16))
+        else:
+            # Normal menu
+            canvas.create_text(width // 2, 120, text="Use ↑↓ to navigate, ENTER to select, ESC to go back",
+                             fill='gray', font=('Arial', 16))
+            
+            y_pos = 200
+            for i, option in enumerate(options):
+                color = 'yellow' if i == selected_option else 'white'
+                if option == 'Change Keys':
+                    keys_text = ''.join(settings['key_bindings'])
+                    text = f"{option}: {keys_text}"
+                elif option == 'Scroll Speed':
+                    text = f"{option}: {settings['scroll_speed_multiplier']:.1f}x (←→ to adjust)"
+                else:
+                    text = option
+                
+                canvas.create_text(width // 2, y_pos, text=text,
+                                 fill=color, font=('Arial', 24))
+                y_pos += 60
+        
+        root.update()
+    
+    def on_options_key(event):
+        nonlocal menu_running, selected_option, remapping_index
+        
+        if remapping_index is not None:
+            # Key remapping mode
+            if event.keysym == 'Escape':
+                remapping_index = None
+                draw_options()
+                return
+            
+            # Check if key is a valid single character
+            if len(event.char) == 1 and event.char.isprintable():
+                new_key = event.char.lower()
+                # Check if key is already used (except in current slot)
+                if new_key not in [settings['key_bindings'][i] for i in range(8) if i != remapping_index]:
+                    settings['key_bindings'][remapping_index] = new_key
+                    rebuild_key_mappings()
+                    remapping_index = None
+                    draw_options()
+            return
+        
+        # Normal menu navigation
+        if event.keysym == 'Escape':
+            menu_running = False
+            return
+        
+        if event.keysym == 'Up':
+            selected_option = (selected_option - 1) % len(options)
+            draw_options()
+        elif event.keysym == 'Down':
+            selected_option = (selected_option + 1) % len(options)
+            draw_options()
+        elif event.keysym == 'Return':
+            if options[selected_option] == 'Change Keys':
+                # Start key remapping for each lane
+                show_key_remap_screen()
+            elif options[selected_option] == 'Scroll Speed':
+                # This is handled by left/right in the menu itself
+                pass
+            elif options[selected_option] == 'Save & Back':
+                save_settings()
+                menu_running = False
+        elif event.keysym == 'Left' and selected_option == 1:  # Scroll Speed
+            settings['scroll_speed_multiplier'] = max(0.1, settings['scroll_speed_multiplier'] - 0.1)
+            draw_options()
+        elif event.keysym == 'Right' and selected_option == 1:  # Scroll Speed
+            settings['scroll_speed_multiplier'] = min(10.0, settings['scroll_speed_multiplier'] + 0.1)
+            draw_options()
+    
+    def show_key_remap_screen():
+        """Show screen for remapping all keys"""
+        nonlocal remapping_index
+        for i in range(8):
+            remapping_index = i
+            draw_options()
+            
+            # Wait for key press
+            waiting = True
+            def wait_key(event):
+                nonlocal waiting, remapping_index
+                if event.keysym == 'Escape':
+                    remapping_index = None
+                    waiting = False
+                    return
+                
+                if len(event.char) == 1 and event.char.isprintable():
+                    new_key = event.char.lower()
+                    # Check if key is already used
+                    if new_key not in [settings['key_bindings'][j] for j in range(8) if j != i]:
+                        settings['key_bindings'][i] = new_key
+                        rebuild_key_mappings()
+                        waiting = False
+            
+            root.unbind('<KeyPress>')
+            root.bind('<KeyPress>', wait_key)
+            
+            while waiting:
+                root.update()
+                time.sleep(0.01)
+            
+            if remapping_index is None:
+                # User cancelled
+                break
+        
+        remapping_index = None
+        root.unbind('<KeyPress>')
+        root.bind('<KeyPress>', on_options_key)
+        draw_options()
+    
+    draw_options()
+    root.bind('<KeyPress>', on_options_key)
+    
+    while menu_running:
+        root.update()
+        time.sleep(0.01)
+    
+    root.unbind('<KeyPress>')
+
+def show_main_menu():
+    """Display main menu"""
+    menu_running = True
+    selected_option = 0
+    options = ['Play', 'Options', 'Quit']
+    
+    def draw_menu():
+        canvas.delete('all')
+        canvas.configure(bg='black')
+        
+        canvas.create_text(width // 2, 100, text="RHYTHM GAME",
+                         fill='white', font=('Arial', 64, 'bold'))
+        
+        canvas.create_text(width // 2, 200, text="Use ↑↓ to navigate, ENTER to select",
+                         fill='gray', font=('Arial', 16))
+        
+        y_pos = 300
+        for i, option in enumerate(options):
+            color = 'yellow' if i == selected_option else 'white'
+            canvas.create_text(width // 2, y_pos, text=option,
+                             fill=color, font=('Arial', 36))
+            y_pos += 80
+        
+        root.update()
+    
+    def on_main_key(event):
+        nonlocal menu_running, selected_option
+        
+        if event.keysym == 'Escape':
+            selected_option = 2  # Quit
+            menu_running = False
+            return
+        
+        if event.keysym == 'Up':
+            selected_option = (selected_option - 1) % len(options)
+            draw_menu()
+        elif event.keysym == 'Down':
+            selected_option = (selected_option + 1) % len(options)
+            draw_menu()
+        elif event.keysym == 'Return':
+            menu_running = False
+    
+    draw_menu()
+    root.bind('<KeyPress>', on_main_key)
+    
+    while menu_running:
+        root.update()
+        time.sleep(0.01)
+    
+    root.unbind('<KeyPress>')
+    
+    return options[selected_option]
 
 def start_game(chart_id, difficulty):
     """Initialize and start the game"""
@@ -1297,9 +1622,17 @@ def start_game(chart_id, difficulty):
 
 # Example usage
 if __name__ == "__main__":
+    load_settings()  # Load settings at startup
+    
     while True:
-        # Show chart selection menu
-        if show_chart_menu():
-            start_game(current_chart_id, current_difficulty)
-        else:
-            break  # User pressed ESC to quit
+        # Show main menu
+        choice = show_main_menu()
+        
+        if choice == 'Play':
+            # Show chart selection menu
+            if show_chart_menu():
+                start_game(current_chart_id, current_difficulty)
+        elif choice == 'Options':
+            show_options_menu()
+        elif choice == 'Quit':
+            break
