@@ -1075,10 +1075,19 @@ def play_replay():
     # Reload chart
     load_chart(current_chart_id, current_difficulty)
     
+    # Calculate total duration from last note/replay event
+    total_duration = 0
+    if replay_data:
+        total_duration = replay_data[-1][0] + 2.0  # Add buffer
+    elif chart:
+        # Fallback to chart duration
+        total_duration = max(note['time'] for note in chart) + 2.0
+    
     # Start replay game loop
     frame_dur = 1 / fps
     start_time = time.time()
     game_running = True
+    replay_exit = False
     
     canvas.delete('all')
     canvas.configure(bg='black')
@@ -1087,6 +1096,72 @@ def play_replay():
     draw_lane_separators()
     draw_hit_bar()
     draw_key_labels()
+    
+    # Replay control state
+    def seek_to_time(target_time):
+        """Seek replay to a specific time"""
+        global replay_index, score, combo, max_combo
+        global perfect_count, great_count, good_count, bad_count, miss_count
+        global active_notes, active_slides, key_is_down, key_pressed_flags
+        
+        # Reset state
+        replay_index = 0
+        score = 0
+        combo = 0
+        max_combo = 0
+        perfect_count = 0
+        great_count = 0
+        good_count = 0
+        bad_count = 0
+        miss_count = 0
+        active_notes = []
+        active_slides = []
+        key_is_down = {0: False, 1: False, 2: False, 3: False}
+        key_pressed_flags = {0: False, 1: False, 2: False, 3: False}
+        
+        # Reload chart
+        load_chart(current_chart_id, current_difficulty)
+        
+        # Fast-forward to target time
+        while replay_index < len(replay_data) and replay_data[replay_index][0] <= target_time:
+            event_time, event_type, lane = replay_data[replay_index]
+            
+            if event_type == 'press':
+                key_is_down[lane] = True
+                key_pressed_flags[lane] = True
+                check_hit(lane, event_time)
+            elif event_type == 'release':
+                key_is_down[lane] = False
+                key_pressed_flags[lane] = False
+                check_slide_hold(lane, event_time, False)
+            
+            replay_index += 1
+        
+        # Update notes to current time
+        update_notes(target_time)
+    
+    def on_replay_key(event):
+        """Handle key presses during replay"""
+        global game_running, start_time
+        nonlocal replay_exit
+        
+        if event.keysym == 'Escape':
+            game_running = False
+            replay_exit = True
+        elif event.keysym == 'Left':
+            # Jump back 5 seconds
+            current_time = time.time() - start_time
+            new_time = max(0, current_time - 5.0)
+            seek_to_time(new_time)
+            start_time = time.time() - new_time
+        elif event.keysym == 'Right':
+            # Jump forward 5 seconds
+            current_time = time.time() - start_time
+            new_time = min(total_duration, current_time + 5.0)
+            seek_to_time(new_time)
+            start_time = time.time() - new_time
+    
+    root.bind('<KeyPress>', on_replay_key)
     
     while game_running and (chart or active_notes or active_slides):
         frame_start = time.time()
@@ -1115,8 +1190,36 @@ def play_replay():
         draw_ui()
         
         # Add "REPLAY" watermark
-        canvas.create_text(width // 2, height - 30, text="REPLAY",
+        canvas.create_text(width // 2, height - 80, text="REPLAY",
                          fill='#666666', font=('Arial', 24, 'bold'), tags='ui')
+        
+        # Draw playback bar at bottom
+        bar_width = width - 200
+        bar_x = 100
+        bar_y = height - 40
+        bar_height = 10
+        
+        # Background bar
+        canvas.create_rectangle(bar_x, bar_y - bar_height // 2,
+                              bar_x + bar_width, bar_y + bar_height // 2,
+                              fill='#333333', outline='#666666', width=2, tags='ui')
+        
+        # Progress bar
+        if total_duration > 0:
+            progress = min(1.0, current_time / total_duration)
+            progress_width = int(bar_width * progress)
+            canvas.create_rectangle(bar_x, bar_y - bar_height // 2,
+                                  bar_x + progress_width, bar_y + bar_height // 2,
+                                  fill='#00AAFF', outline='', tags='ui')
+        
+        # Time display
+        time_text = f"{int(current_time // 60):02d}:{int(current_time % 60):02d} / {int(total_duration // 60):02d}:{int(total_duration % 60):02d}"
+        canvas.create_text(width // 2, bar_y + 20, text=time_text,
+                         fill='white', font=('Arial', 16), tags='ui')
+        
+        # Controls hint
+        canvas.create_text(width // 2, height - 10, text="← Jump Back 5s  |  → Jump Forward 5s  |  ESC Exit Replay",
+                         fill='#888888', font=('Arial', 14), tags='ui')
         
         # Maintain frame rate
         elapsed = time.time() - frame_start
@@ -1126,9 +1229,12 @@ def play_replay():
         
         root.update()
     
-    # Show game over screen again
+    root.unbind('<KeyPress>')
+    
+    # Show game over screen again (unless user pressed ESC to exit)
     is_replay = False
-    game_loop()  # This will show the results screen again
+    if not replay_exit:
+        game_loop()  # This will show the results screen again
 
 def get_available_charts():
     """Scan directory for available charts"""
@@ -1319,10 +1425,10 @@ def show_chart_menu():
             audio_icon = " ♫" if os.path.exists(mp3_file) else ""
             
             canvas.create_text(width // 2, y_pos, text=f"{i + 1}. {diff}{audio_icon}",
-                             fill='yellow', font=('Arial', 24))
+                             fill='yellow', font=('Arial', 24), tags=f'diff_{i}')
             y_pos += 60
         
-        canvas.create_text(width // 2, height - 50, text="Press number to select | ESC to go back",
+        canvas.create_text(width // 2, height - 50, text="Press number or click to select | ESC to go back",
                          fill='gray', font=('Arial', 16))
         root.update()
         
@@ -1334,8 +1440,10 @@ def show_chart_menu():
             
             if event.keysym == 'Escape':
                 root.unbind('<KeyPress>')
+                root.unbind('<Button-1>')
                 draw_menu()
                 root.bind('<KeyPress>', on_tkinter_key)
+                root.bind('<Button-1>', on_mouse_click)
                 return
             
             if event.char.isdigit():
@@ -1346,11 +1454,35 @@ def show_chart_menu():
                     current_difficulty = selected_difficulty
                     menu_running = False
                     root.unbind('<KeyPress>')
+                    root.unbind('<Button-1>')
                     print(f"DEBUG: Selected chart_id={current_chart_id}, difficulty={current_difficulty}")
+        
+        def on_diff_mouse_click(event):
+            nonlocal selected_difficulty, menu_running
+            global current_chart_id, current_difficulty
+            
+            # Get clicked item
+            items = canvas.find_overlapping(event.x - 10, event.y - 10, event.x + 10, event.y + 10)
+            for item in items:
+                tags = canvas.gettags(item)
+                for tag in tags:
+                    if tag.startswith('diff_'):
+                        diff_index = int(tag.split('_')[1])
+                        if diff_index < len(difficulties):
+                            selected_difficulty = sorted(difficulties)[diff_index]
+                            current_chart_id = chart_id
+                            current_difficulty = selected_difficulty
+                            menu_running = False
+                            root.unbind('<KeyPress>')
+                            root.unbind('<Button-1>')
+                            print(f"DEBUG: Selected chart_id={current_chart_id}, difficulty={current_difficulty}")
+                        return
         
         # Unbind menu keys and bind difficulty keys
         root.unbind('<KeyPress>')
+        root.unbind('<Button-1>')
         root.bind('<KeyPress>', on_diff_tkinter_key)
+        root.bind('<Button-1>', on_diff_mouse_click)
     
     draw_menu()
     
@@ -1423,7 +1555,7 @@ def show_options_menu():
                              fill='gray', font=('Arial', 16))
         else:
             # Normal menu
-            canvas.create_text(width // 2, 120, text="Use ↑↓ to navigate, ENTER to select, ESC to go back",
+            canvas.create_text(width // 2, 120, text="Use ↑↓ to navigate, ENTER or click to select, ESC to go back",
                              fill='gray', font=('Arial', 16))
             
             y_pos = 200
@@ -1438,7 +1570,7 @@ def show_options_menu():
                     text = option
                 
                 canvas.create_text(width // 2, y_pos, text=text,
-                                 fill=color, font=('Arial', 24))
+                                 fill=color, font=('Arial', 24), tags=f'option_{i}')
                 y_pos += 60
         
         root.update()
@@ -1492,6 +1624,37 @@ def show_options_menu():
             settings['scroll_speed_multiplier'] = min(10.0, settings['scroll_speed_multiplier'] + 0.1)
             draw_options()
     
+    def on_options_mouse_click(event):
+        nonlocal menu_running, selected_option, remapping_index
+        
+        if remapping_index is not None:
+            # Ignore clicks during key remapping
+            return
+        
+        # Get clicked item
+        items = canvas.find_overlapping(event.x - 10, event.y - 10, event.x + 10, event.y + 10)
+        for item in items:
+            tags = canvas.gettags(item)
+            for tag in tags:
+                if tag.startswith('option_'):
+                    option_index = int(tag.split('_')[1])
+                    if options[option_index] == 'Change Keys':
+                        show_key_remap_screen()
+                    elif options[option_index] == 'Scroll Speed':
+                        # Toggle through some common values on click
+                        current = settings['scroll_speed_multiplier']
+                        presets = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+                        if current in presets:
+                            idx = (presets.index(current) + 1) % len(presets)
+                            settings['scroll_speed_multiplier'] = presets[idx]
+                        else:
+                            settings['scroll_speed_multiplier'] = 1.0
+                        draw_options()
+                    elif options[option_index] == 'Save & Back':
+                        save_settings()
+                        menu_running = False
+                    return
+    
     def show_key_remap_screen():
         """Show screen for remapping all keys"""
         nonlocal remapping_index
@@ -1534,12 +1697,14 @@ def show_options_menu():
     
     draw_options()
     root.bind('<KeyPress>', on_options_key)
+    root.bind('<Button-1>', on_options_mouse_click)
     
     while menu_running:
         root.update()
         time.sleep(0.01)
     
     root.unbind('<KeyPress>')
+    root.unbind('<Button-1>')
 
 def show_main_menu():
     """Display main menu"""
@@ -1551,17 +1716,17 @@ def show_main_menu():
         canvas.delete('all')
         canvas.configure(bg='black')
         
-        canvas.create_text(width // 2, 100, text="RHYTHM GAME",
-                         fill='white', font=('Arial', 64, 'bold'))
+        canvas.create_text(width // 2, 100, text="random game",
+                         fill='white', font=('Arial', 32, 'bold'))
         
-        canvas.create_text(width // 2, 200, text="Use ↑↓ to navigate, ENTER to select",
+        canvas.create_text(width // 2, 200, text="Use ↑↓ to navigate, ENTER or click to select",
                          fill='gray', font=('Arial', 16))
         
         y_pos = 300
         for i, option in enumerate(options):
             color = 'yellow' if i == selected_option else 'white'
             canvas.create_text(width // 2, y_pos, text=option,
-                             fill=color, font=('Arial', 36))
+                             fill=color, font=('Arial', 36), tags=f'main_{i}')
             y_pos += 80
         
         root.update()
@@ -1583,14 +1748,29 @@ def show_main_menu():
         elif event.keysym == 'Return':
             menu_running = False
     
+    def on_main_mouse_click(event):
+        nonlocal menu_running, selected_option
+        
+        # Get clicked item
+        items = canvas.find_overlapping(event.x - 10, event.y - 10, event.x + 10, event.y + 10)
+        for item in items:
+            tags = canvas.gettags(item)
+            for tag in tags:
+                if tag.startswith('main_'):
+                    selected_option = int(tag.split('_')[1])
+                    menu_running = False
+                    return
+    
     draw_menu()
     root.bind('<KeyPress>', on_main_key)
+    root.bind('<Button-1>', on_main_mouse_click)
     
     while menu_running:
         root.update()
         time.sleep(0.01)
     
     root.unbind('<KeyPress>')
+    root.unbind('<Button-1>')
     
     return options[selected_option]
 
