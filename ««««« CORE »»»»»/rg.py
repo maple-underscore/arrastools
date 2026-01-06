@@ -996,6 +996,77 @@ def show_countdown():
     canvas.delete('countdown')
     root.update()
 
+def save_replay(chart_id, difficulty, score, accuracy, inputs, rank):
+    """Save replay data to file in JSON format"""
+    import json
+    from datetime import datetime
+    
+    # Create replays directory if it doesn't exist
+    replay_dir = os.path.join(os.path.dirname(__file__), "replays")
+    os.makedirs(replay_dir, exist_ok=True)
+    
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{chart_id}_{difficulty}_{timestamp}.replay"
+    filepath = os.path.join(replay_dir, filename)
+    
+    # Prepare replay data
+    replay_info = {
+        "chart_id": chart_id,
+        "difficulty": difficulty,
+        "score": score,
+        "accuracy": accuracy,
+        "rank": rank,
+        "max_combo": max_combo,
+        "perfect": perfect_count,
+        "great": great_count,
+        "good": good_count,
+        "bad": bad_count,
+        "miss": miss_count,
+        "timestamp": timestamp,
+        "inputs": inputs  # List of (time, event_type, lane) tuples
+    }
+    
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(replay_info, f, indent=2)
+        print(f"Replay saved to {filepath}")
+    except Exception as e:
+        print(f"Error saving replay: {e}")
+
+def load_replay_file(filepath):
+    """Load replay data from file"""
+    import json
+    
+    try:
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading replay: {e}")
+        return None
+
+def get_available_replays():
+    """Scan replays directory and return list of replay files"""
+    replay_dir = os.path.join(os.path.dirname(__file__), "replays")
+    if not os.path.exists(replay_dir):
+        return []
+    
+    replays = []
+    for filename in os.listdir(replay_dir):
+        if filename.endswith('.replay'):
+            filepath = os.path.join(replay_dir, filename)
+            replay_data = load_replay_file(filepath)
+            if replay_data:
+                replays.append({
+                    'filename': filename,
+                    'filepath': filepath,
+                    'data': replay_data
+                })
+    
+    # Sort by timestamp (newest first)
+    replays.sort(key=lambda x: x['data'].get('timestamp', ''), reverse=True)
+    return replays
+
 def game_loop():
     """Main game loop"""
     global start_time, game_running, chart, music_playing, active_particles
@@ -1083,6 +1154,11 @@ def game_loop():
         
         root.update()
         time.sleep(2.0)  # Display for 2 seconds
+    
+    # Save replay to file (only if not already a replay)
+    if not is_replay and current_chart_id and current_difficulty:
+        save_replay(current_chart_id, current_difficulty, score, 
+                   calculate_accuracy(), replay_data, rank)
     
     # Game over screen
     canvas.delete('all')
@@ -1187,6 +1263,8 @@ def play_replay():
     start_time = time.time()
     game_running = True
     replay_exit = False
+    paused = False  # Pause state for frame-by-frame
+    current_frame = 0  # Frame counter for paused display
     
     canvas.delete('all')
     canvas.configure(bg='black')
@@ -1242,44 +1320,75 @@ def play_replay():
     def on_replay_key(event):
         """Handle key presses during replay"""
         global game_running, start_time
-        nonlocal replay_exit
+        nonlocal replay_exit, paused, current_frame
         
         if event.keysym == 'Escape':
             game_running = False
             replay_exit = True
+        elif event.char and event.char == ' ':
+            # Toggle pause
+            paused = not paused
+            if not paused:
+                # Resume - adjust start_time to account for pause
+                start_time = time.time() - (current_frame / fps)
+        elif event.char and event.char == ',':
+            # Step backward one frame (when paused)
+            if paused:
+                current_frame = max(0, current_frame - 1)
+                target_time = current_frame / fps
+                seek_to_time(target_time)
+                start_time = time.time() - target_time
+        elif event.char and event.char == '.':
+            # Step forward one frame (when paused)
+            if paused:
+                current_frame += 1
+                target_time = current_frame / fps
+                seek_to_time(target_time)
+                start_time = time.time() - target_time
         elif event.keysym == 'Left':
             # Jump back 5 seconds
             current_time = time.time() - start_time
             new_time = max(0, current_time - 5.0)
             seek_to_time(new_time)
             start_time = time.time() - new_time
+            if paused:
+                current_frame = int(new_time * fps)
         elif event.keysym == 'Right':
             # Jump forward 5 seconds
             current_time = time.time() - start_time
             new_time = min(total_duration, current_time + 5.0)
             seek_to_time(new_time)
             start_time = time.time() - new_time
+            if paused:
+                current_frame = int(new_time * fps)
     
     root.bind('<KeyPress>', on_replay_key)
     
     while game_running and (chart or active_notes or active_slides):
-        frame_start = time.time()
-        current_time = frame_start - start_time
+        if not paused:
+            frame_start = time.time()
+            current_time = frame_start - start_time
+            current_frame = int(current_time * fps)
+        else:
+            # When paused, use the stored frame number
+            frame_start = time.time()
+            current_time = current_frame / fps
         
-        # Process replay events
-        while replay_index < len(replay_data) and replay_data[replay_index][0] <= current_time:
-            event_time, event_type, lane = replay_data[replay_index]
-            
-            if event_type == 'press':
-                key_is_down[lane] = True
-                key_pressed_flags[lane] = True
-                check_hit(lane, event_time)
-            elif event_type == 'release':
-                key_is_down[lane] = False
-                key_pressed_flags[lane] = False
-                check_slide_hold(lane, event_time, False)
-            
-            replay_index += 1
+        # Process replay events (only if not paused)
+        if not paused:
+            while replay_index < len(replay_data) and replay_data[replay_index][0] <= current_time:
+                event_time, event_type, lane = replay_data[replay_index]
+                
+                if event_type == 'press':
+                    key_is_down[lane] = True
+                    key_pressed_flags[lane] = True
+                    check_hit(lane, event_time)
+                elif event_type == 'release':
+                    key_is_down[lane] = False
+                    key_pressed_flags[lane] = False
+                    check_slide_hold(lane, event_time, False)
+                
+                replay_index += 1
         
         # Clear dynamic elements
         canvas.delete('note')
@@ -1288,9 +1397,13 @@ def play_replay():
         update_notes(current_time)
         draw_ui()
         
-        # Add "REPLAY" watermark
-        canvas.create_text(width // 2, height - 80, text="REPLAY",
-                         fill='#666666', font=('Arial', 24, 'bold'), tags='ui')
+        # Add "REPLAY" watermark or "PAUSED" indicator
+        if paused:
+            canvas.create_text(width // 2, height - 80, text=f"PAUSED - Frame {current_frame}",
+                             fill='#FF6666', font=('Arial', 24, 'bold'), tags='ui')
+        else:
+            canvas.create_text(width // 2, height - 80, text="REPLAY",
+                             fill='#666666', font=('Arial', 24, 'bold'), tags='ui')
         
         # Draw playback bar at bottom
         bar_width = width - 200
@@ -1309,7 +1422,8 @@ def play_replay():
             progress_width = int(bar_width * progress)
             canvas.create_rectangle(bar_x, bar_y - bar_height // 2,
                                   bar_x + progress_width, bar_y + bar_height // 2,
-                                  fill='#00AAFF', outline='', tags='ui')
+                                  fill='#00AAFF' if not paused else '#FF6666', 
+                                  outline='', tags='ui')
         
         # Time display
         time_text = f"{int(current_time // 60):02d}:{int(current_time % 60):02d} / {int(total_duration // 60):02d}:{int(total_duration % 60):02d}"
@@ -1317,14 +1431,24 @@ def play_replay():
                          fill='white', font=('Arial', 16), tags='ui')
         
         # Controls hint
-        canvas.create_text(width // 2, height - 10, text="← Jump Back 5s  |  → Jump Forward 5s  |  ESC Exit Replay",
-                         fill='#888888', font=('Arial', 14), tags='ui')
+        if paused:
+            canvas.create_text(width // 2, height - 10, 
+                             text="SPACE Resume  |  , Previous Frame  |  . Next Frame  |  ESC Exit",
+                             fill='#888888', font=('Arial', 14), tags='ui')
+        else:
+            canvas.create_text(width // 2, height - 10, 
+                             text="SPACE Pause  |  ← Jump Back 5s  |  → Jump Forward 5s  |  ESC Exit Replay",
+                             fill='#888888', font=('Arial', 14), tags='ui')
         
-        # Maintain frame rate
-        elapsed = time.time() - frame_start
-        sleep_time = frame_dur - elapsed
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+        # Maintain frame rate (only if not paused)
+        if not paused:
+            elapsed = time.time() - frame_start
+            sleep_time = frame_dur - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+        else:
+            # When paused, just update at a lower rate
+            time.sleep(0.05)
         
         root.update()
     
@@ -1354,6 +1478,166 @@ def get_available_charts():
                 charts[chart_id].append(difficulty)
     
     return charts
+
+def show_replay_menu():
+    """Display replay selection menu"""
+    global current_chart_id, current_difficulty, replay_data, is_replay
+    
+    menu_running = True
+    current_page = 0
+    replays_per_page = 10
+    
+    def draw_menu():
+        canvas.delete('all')
+        canvas.configure(bg='black')
+        
+        # Title
+        canvas.create_text(width // 2, 50, text="WATCH REPLAY",
+                         fill='white', font=('Arial', 48, 'bold'))
+        
+        # Instructions
+        canvas.create_text(width // 2, 120, text="Use number keys or click to select | ←→ to change page | ESC to go back",
+                         fill='gray', font=('Arial', 16))
+        
+        replays = get_available_replays()
+        if not replays:
+            canvas.create_text(width // 2, height // 2,
+                             text="No replays found",
+                             fill='red', font=('Arial', 24))
+            root.update()
+            return
+        
+        # Calculate pagination
+        total_pages = (len(replays) + replays_per_page - 1) // replays_per_page
+        nonlocal current_page
+        current_page = max(0, min(current_page, total_pages - 1))
+        
+        start_idx = current_page * replays_per_page
+        end_idx = min(start_idx + replays_per_page, len(replays))
+        page_replays = replays[start_idx:end_idx]
+        
+        # Display page indicator
+        if total_pages > 1:
+            canvas.create_text(width // 2, 150, text=f"Page {current_page + 1} of {total_pages}",
+                             fill='white', font=('Arial', 18))
+        
+        # Display replays
+        y_pos = 200
+        for i, replay_info in enumerate(page_replays):
+            data = replay_info['data']
+            chart_id = data.get('chart_id', 'Unknown')
+            difficulty = data.get('difficulty', 'Unknown')
+            rank = data.get('rank', 'D')
+            score = data.get('score', 0)
+            accuracy = data.get('accuracy', 0)
+            timestamp = data.get('timestamp', '')
+            
+            # Format timestamp for display
+            if len(timestamp) >= 13:
+                date_str = f"{timestamp[4:6]}/{timestamp[6:8]}"
+                time_str = f"{timestamp[9:11]}:{timestamp[11:13]}"
+                display_time = f"{date_str} {time_str}"
+            else:
+                display_time = timestamp
+            
+            text = f"{i + 1}. {chart_id} [{difficulty}] - Rank {rank} - {accuracy:.1f}% - {display_time}"
+            canvas.create_text(width // 2, y_pos, text=text,
+                             fill='cyan', font=('Arial', 18), tags=f'replay_{i}')
+            y_pos += 35
+        
+        root.update()
+    
+    def on_tkinter_key(event):
+        """Handle tkinter key events for menu"""
+        nonlocal menu_running, current_page
+        
+        if event.keysym == 'Escape':
+            menu_running = False
+            return
+        
+        # Left/Right arrows for pagination
+        if event.keysym == 'Left':
+            replays = get_available_replays()
+            total_pages = (len(replays) + replays_per_page - 1) // replays_per_page
+            if current_page > 0:
+                current_page -= 1
+                draw_menu()
+            return
+        
+        if event.keysym == 'Right':
+            replays = get_available_replays()
+            total_pages = (len(replays) + replays_per_page - 1) // replays_per_page
+            if current_page < total_pages - 1:
+                current_page += 1
+                draw_menu()
+            return
+        
+        # Number key selection
+        if event.char and event.char.isdigit():
+            num = int(event.char)
+            if num > 0:
+                replays = get_available_replays()
+                start_idx = current_page * replays_per_page
+                page_replays = replays[start_idx:start_idx + replays_per_page]
+                if num <= len(page_replays):
+                    # Load and play selected replay
+                    replay_info = page_replays[num - 1]
+                    data = replay_info['data']
+                    
+                    current_chart_id = data['chart_id']
+                    current_difficulty = data['difficulty']
+                    replay_data = [tuple(event) for event in data['inputs']]
+                    
+                    menu_running = False
+                    root.unbind('<KeyPress>')
+                    root.unbind('<Button-1>')
+                    
+                    # Start replay
+                    load_chart(current_chart_id, current_difficulty)
+                    play_replay()
+    
+    def on_mouse_click(event):
+        """Handle mouse clicks in replay menu"""
+        # Get clicked item
+        items = canvas.find_overlapping(event.x - 10, event.y - 10, event.x + 10, event.y + 10)
+        for item in items:
+            tags = canvas.gettags(item)
+            for tag in tags:
+                if tag.startswith('replay_'):
+                    replay_index = int(tag.split('_')[1])
+                    replays = get_available_replays()
+                    start_idx = current_page * replays_per_page
+                    page_replays = replays[start_idx:start_idx + replays_per_page]
+                    if replay_index < len(page_replays):
+                        # Load and play selected replay
+                        replay_info = page_replays[replay_index]
+                        data = replay_info['data']
+                        
+                        global current_chart_id, current_difficulty, replay_data
+                        current_chart_id = data['chart_id']
+                        current_difficulty = data['difficulty']
+                        replay_data = [tuple(event) for event in data['inputs']]
+                        
+                        nonlocal menu_running
+                        menu_running = False
+                        root.unbind('<KeyPress>')
+                        root.unbind('<Button-1>')
+                        
+                        # Start replay
+                        load_chart(current_chart_id, current_difficulty)
+                        play_replay()
+                    return
+    
+    draw_menu()
+    root.bind('<KeyPress>', on_tkinter_key)
+    root.bind('<Button-1>', on_mouse_click)
+    
+    while menu_running:
+        root.update()
+        time.sleep(0.01)
+    
+    root.unbind('<KeyPress>')
+    root.unbind('<Button-1>')
 
 def show_chart_menu():
     """Display chart selection menu"""
@@ -1809,7 +2093,7 @@ def show_main_menu():
     """Display main menu"""
     menu_running = True
     selected_option = 0
-    options = ['Play', 'Options', 'Quit']
+    options = ['Play', 'Watch Replay', 'Options', 'Quit']
     
     def draw_menu():
         canvas.delete('all')
@@ -1834,7 +2118,7 @@ def show_main_menu():
         nonlocal menu_running, selected_option
         
         if event.keysym == 'Escape':
-            selected_option = 2  # Quit
+            selected_option = 3  # Quit (index updated for new menu item)
             menu_running = False
             return
         
@@ -1911,6 +2195,9 @@ if __name__ == "__main__":
             # Show chart selection menu
             if show_chart_menu():
                 start_game(current_chart_id, current_difficulty)
+        elif choice == 'Watch Replay':
+            # Show replay selection menu
+            show_replay_menu()
         elif choice == 'Options':
             show_options_menu()
         elif choice == 'Quit':
