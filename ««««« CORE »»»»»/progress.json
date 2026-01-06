@@ -1,0 +1,14 @@
+{
+  "username": "Player",
+  "total_charts_played": 0,
+  "total_score": 0,
+  "total_playtime_seconds": 0,
+  "total_perfects": 0,
+  "total_greats": 0,
+  "total_goods": 0,
+  "total_bads": 0,
+  "total_misses": 0,
+  "best_scores": {},
+  "recently_played": [],
+  "achievements": {}
+}

@@ -1087,6 +1087,157 @@ def save_replay(chart_id, difficulty, score, accuracy, inputs, rank):
     except Exception as e:
         print(f"Error saving replay: {e}")
 
+def load_progress():
+    """Load progress data from file"""
+    import json
+    
+    progress_file = os.path.join(os.path.dirname(__file__), "progress.json")
+    if not os.path.exists(progress_file):
+        # Create default progress file
+        default_progress = {
+            "username": "Player",
+            "total_charts_played": 0,
+            "total_score": 0,
+            "total_playtime_seconds": 0,
+            "total_perfects": 0,
+            "total_greats": 0,
+            "total_goods": 0,
+            "total_bads": 0,
+            "total_misses": 0,
+            "best_scores": {},
+            "recently_played": [],
+            "achievements": {}
+        }
+        try:
+            with open(progress_file, 'w') as f:
+                json.dump(default_progress, f, indent=2)
+        except:
+            pass
+        return default_progress
+    
+    try:
+        with open(progress_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading progress: {e}")
+        return None
+
+def save_progress_data(progress):
+    """Save progress data to file"""
+    import json
+    
+    progress_file = os.path.join(os.path.dirname(__file__), "progress.json")
+    try:
+        with open(progress_file, 'w') as f:
+            json.dump(progress, f, indent=2)
+        print(f"Progress saved")
+    except Exception as e:
+        print(f"Error saving progress: {e}")
+
+def update_progress(chart_id, difficulty, score, rank, accuracy, playtime_seconds):
+    """Update progress after completing a chart"""
+    from datetime import datetime
+    
+    progress = load_progress()
+    if not progress:
+        return
+    
+    # Update totals
+    progress['total_charts_played'] += 1
+    progress['total_score'] += score
+    progress['total_playtime_seconds'] += int(playtime_seconds)
+    progress['total_perfects'] += perfect_count
+    progress['total_greats'] += great_count
+    progress['total_goods'] += good_count
+    progress['total_bads'] += bad_count
+    progress['total_misses'] += miss_count
+    
+    # Update best score for this chart/difficulty
+    chart_key = f"{chart_id}_{difficulty}"
+    if 'best_scores' not in progress:
+        progress['best_scores'] = {}
+    
+    if chart_key not in progress['best_scores'] or score > progress['best_scores'][chart_key].get('score', 0):
+        progress['best_scores'][chart_key] = {
+            'score': score,
+            'rank': rank,
+            'accuracy': accuracy,
+            'max_combo': max_combo,
+            'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    
+    # Update recently played (keep last 10)
+    if 'recently_played' not in progress:
+        progress['recently_played'] = []
+    
+    recent_entry = {
+        'chart_id': chart_id,
+        'difficulty': difficulty,
+        'score': score,
+        'rank': rank,
+        'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
+    }
+    
+    # Remove if already in list
+    progress['recently_played'] = [r for r in progress['recently_played'] 
+                                   if not (r['chart_id'] == chart_id and r['difficulty'] == difficulty)]
+    
+    # Add to front
+    progress['recently_played'].insert(0, recent_entry)
+    
+    # Keep only last 10
+    progress['recently_played'] = progress['recently_played'][:10]
+    
+    # Check for achievements
+    if 'achievements' not in progress:
+        progress['achievements'] = {}
+    
+    # Achievement: First clear
+    if 'first_clear' not in progress['achievements']:
+        progress['achievements']['first_clear'] = {
+            'name': 'First Clear',
+            'description': 'Complete your first chart',
+            'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    
+    # Achievement: 10 charts played
+    if progress['total_charts_played'] >= 10 and '10_charts' not in progress['achievements']:
+        progress['achievements']['10_charts'] = {
+            'name': '10 Charts',
+            'description': 'Play 10 charts',
+            'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    
+    # Achievement: First S rank
+    if rank == 'S' and 's_rank' not in progress['achievements']:
+        progress['achievements']['s_rank'] = {
+            'name': 'S Rank',
+            'description': 'Achieve an S rank',
+            'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    
+    # Achievement: Full combo
+    if miss_count == 0 and (perfect_count + great_count + good_count + bad_count) > 0:
+        if 'full_combo' not in progress['achievements']:
+            progress['achievements']['full_combo'] = {
+                'name': 'Full Combo',
+                'description': 'Complete a chart with no misses',
+                'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+            }
+    
+    # Achievement: All perfect
+    total_notes = perfect_count + great_count + good_count + bad_count + miss_count
+    if perfect_count == total_notes and perfect_count > 0:
+        if 'all_perfect' not in progress['achievements']:
+            progress['achievements']['all_perfect'] = {
+                'name': 'All Perfect',
+                'description': 'Complete a chart with all perfect hits',
+                'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+            }
+    
+    save_progress_data(progress)
+    return progress
+
 def load_replay_file(filepath):
     """Load replay data from file"""
     import json
@@ -1271,10 +1422,49 @@ def game_loop():
         root.update()
         time.sleep(2.0)  # Display for 2 seconds
     
-    # Save replay to file (only if not already a replay)
-    if not is_replay and current_chart_id and current_difficulty:
+    # Save replay to file (only if not already a replay and not in auto mode)
+    if not is_replay and game_mode != 'auto' and current_chart_id and current_difficulty:
         save_replay(current_chart_id, current_difficulty, score, 
                    calculate_accuracy(), replay_data, rank)
+    
+    # Update progress (only if not replay and not auto mode)
+    if not is_replay and game_mode != 'auto' and current_chart_id and current_difficulty:
+        playtime = time.time() - start_time
+        updated_progress = update_progress(current_chart_id, current_difficulty, 
+                                          score, rank, calculate_accuracy(), playtime)
+        
+        # Check for new achievements
+        if updated_progress:
+            new_achievements = []
+            for ach_key, ach_data in updated_progress.get('achievements', {}).items():
+                # Check if achievement was just unlocked (within last 10 seconds)
+                from datetime import datetime, timedelta
+                unlock_time = datetime.strptime(ach_data['unlocked'], "%Y%m%d_%H%M%S")
+                if datetime.now() - unlock_time < timedelta(seconds=10):
+                    new_achievements.append(ach_data)
+            
+            # Show new achievements
+            if new_achievements:
+                canvas.delete('all')
+                canvas.configure(bg='black')
+                
+                canvas.create_text(width // 2, height // 2 - 150, 
+                                 text="ACHIEVEMENT UNLOCKED!",
+                                 fill='gold', font=('Arial', 48, 'bold'))
+                
+                y_pos = height // 2 - 50
+                for ach in new_achievements:
+                    canvas.create_text(width // 2, y_pos, 
+                                     text=ach['name'],
+                                     fill='yellow', font=('Arial', 36, 'bold'))
+                    y_pos += 50
+                    canvas.create_text(width // 2, y_pos, 
+                                     text=ach['description'],
+                                     fill='white', font=('Arial', 20))
+                    y_pos += 70
+                
+                root.update()
+                time.sleep(2.5)
     
     # Game over screen
     canvas.delete('all')
@@ -2269,11 +2459,120 @@ def show_options_menu():
     root.unbind('<KeyPress>')
     root.unbind('<Button-1>')
 
+def show_profile_menu():
+    """Display profile/stats menu"""
+    menu_running = True
+    
+    def draw_profile():
+        canvas.delete('all')
+        canvas.configure(bg='black')
+        
+        # Load progress data
+        progress = load_progress()
+        if not progress:
+            canvas.create_text(width // 2, height // 2, 
+                             text="No progress data found",
+                             fill='red', font=('Arial', 24))
+            root.update()
+            return
+        
+        # Title
+        canvas.create_text(width // 2, 50, 
+                         text=f"Profile: {progress.get('username', 'Player')}",
+                         fill='white', font=('Arial', 48, 'bold'))
+        
+        # Stats
+        y_pos = 150
+        total_plays = progress.get('total_charts_played', 0)
+        total_notes = (progress.get('total_perfects', 0) + 
+                      progress.get('total_greats', 0) + 
+                      progress.get('total_goods', 0) + 
+                      progress.get('total_bads', 0) + 
+                      progress.get('total_misses', 0))
+        
+        if total_notes > 0:
+            weighted_score = (progress.get('total_perfects', 0) * 100 + 
+                            progress.get('total_greats', 0) * 70 + 
+                            progress.get('total_goods', 0) * 40 + 
+                            progress.get('total_bads', 0) * 10)
+            avg_accuracy = weighted_score / (total_notes * 100.0) * 100.0
+        else:
+            avg_accuracy = 0.0
+        
+        # Get best rank
+        best_scores = progress.get('best_scores', {})
+        best_rank = 'D'
+        for chart_key, chart_data in best_scores.items():
+            rank = chart_data.get('rank', 'D')
+            if rank == 'S' or (rank == 'A' and best_rank not in ['S']) or \
+               (rank == 'B' and best_rank not in ['S', 'A']) or \
+               (rank == 'C' and best_rank == 'D'):
+                best_rank = rank
+        
+        # Stats display
+        stats = [
+            f"Total Plays: {total_plays}",
+            f"Total Score: {progress.get('total_score', 0):,}",
+            f"Average Accuracy: {avg_accuracy:.2f}%",
+            f"Best Rank: {best_rank}",
+            f"Total Playtime: {progress.get('total_playtime_seconds', 0) // 60} minutes",
+            "",
+            f"Perfect: {progress.get('total_perfects', 0)}  |  Great: {progress.get('total_greats', 0)}",
+            f"Good: {progress.get('total_goods', 0)}  |  Bad: {progress.get('total_bads', 0)}  |  Miss: {progress.get('total_misses', 0)}"
+        ]
+        
+        for stat in stats:
+            canvas.create_text(width // 2, y_pos, text=stat,
+                             fill='cyan', font=('Arial', 24))
+            y_pos += 40
+        
+        # Achievements
+        y_pos += 20
+        canvas.create_text(width // 2, y_pos, text="--- Achievements ---",
+                         fill='yellow', font=('Arial', 28, 'bold'))
+        y_pos += 50
+        
+        achievements = progress.get('achievements', {})
+        if achievements:
+            for ach_key, ach_data in list(achievements.items())[:5]:  # Show first 5
+                canvas.create_text(width // 2, y_pos, 
+                                 text=f"🏆 {ach_data['name']}: {ach_data['description']}",
+                                 fill='gold', font=('Arial', 18))
+                y_pos += 35
+        else:
+            canvas.create_text(width // 2, y_pos, text="No achievements yet",
+                             fill='gray', font=('Arial', 18))
+        
+        canvas.create_text(width // 2, height - 50, 
+                         text="Press ESC or click anywhere to go back",
+                         fill='gray', font=('Arial', 16))
+        root.update()
+    
+    def on_profile_key(event):
+        nonlocal menu_running
+        if event.keysym == 'Escape':
+            menu_running = False
+    
+    def on_profile_click(event):
+        nonlocal menu_running
+        menu_running = False
+    
+    draw_profile()
+    root.bind('<KeyPress>', on_profile_key)
+    root.bind('<Button-1>', on_profile_click)
+    
+    while menu_running:
+        root.update()
+        time.sleep(0.01)
+    
+    root.unbind('<KeyPress>')
+    root.unbind('<Button-1>')
+
 def show_main_menu():
     """Display main menu"""
     menu_running = True
     selected_option = 0
-    options = ['Play', 'Watch Replay', 'Options', 'Quit']
+    options = ['Play', 'Watch Replay', 'Profile', 'Options', 'Quit']
     
     def draw_menu():
         canvas.delete('all')
@@ -2298,7 +2597,7 @@ def show_main_menu():
         nonlocal menu_running, selected_option
         
         if event.keysym == 'Escape':
-            selected_option = 3  # Quit (index updated for new menu item)
+            selected_option = 4  # Quit (index updated for new menu item)
             menu_running = False
             return
         
@@ -2386,6 +2685,9 @@ if __name__ == "__main__":
         elif choice == 'Watch Replay':
             # Show replay selection menu
             show_replay_menu()
+        elif choice == 'Profile':
+            # Show profile/stats menu
+            show_profile_menu()
         elif choice == 'Options':
             show_options_menu()
         elif choice == 'Quit':
