@@ -41,7 +41,7 @@ else:
     MpEvent = Any
 
 try:
-    from pynput.keyboard import Controller as KeyboardController, Key, Listener as KeyboardListener
+    from pynput.keyboard import Controller as KeyboardController, Key, KeyCode, Listener as KeyboardListener
     from pynput.mouse import Controller as MouseController, Button, Listener as MouseListener
 except ImportError:
     print("Missing dependency: pynput is required to run this script.")
@@ -277,7 +277,7 @@ ctrl7_armed = False
 ctrl1_count = 0
 ctrl1_first_time = 0.0
 
-# double-lock globals for q, a, z, y, u, i, g
+# double-lock globals for q, a, z, y, u, i, g, r
 ctrlq_last_time = 0.0
 ctrlq_armed = False
 ctrla_last_time = 0.0
@@ -292,6 +292,8 @@ ctrli_last_time = 0.0
 ctrli_armed = False
 ctrlg_last_time = 0.0
 ctrlg_armed = False
+ctrlr_last_time = 0.0
+ctrlr_armed = False
 
 # NEW: bind circle_art_working to Left Shift when enabled via Ctrl+C
 circle_art_shift_bind = False
@@ -1078,6 +1080,12 @@ def is_alt(k: Key) -> bool:
     # On macOS, Option is alt; on other platforms, Alt is alt
     return k in (Key.alt, Key.alt_l, Key.alt_r)
 
+def get_char(key: Key | KeyCode | None) -> str | None:
+    """Safely get the char attribute from a key, returns None if not available."""
+    if isinstance(key, KeyCode):
+        return key.char
+    return None
+
 def scan_screen_for_text(search_text: str, monitor_index: int = 1) -> tuple[bool, tuple[int, int] | None]:
     """Scan the screen for the given text using OCR.
     
@@ -1239,34 +1247,25 @@ def stopallthreads() -> None:
         """
         return is_alt(k)
 
-def on_press(key: Key | None) -> None:
+def on_press(key: Key | KeyCode | None) -> None:
     global automation_working, braindamage_working, circlecrash_working, circle_art_working, engineer_spam_working, mcrash_working
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
     global ctrl1_count, ctrl1_first_time, ctrlg_armed, ctrlg_last_time
     global ctrlq_last_time, ctrlq_armed, ctrla_last_time, ctrla_armed
     global ctrlz_last_time, ctrlz_armed, ctrly_last_time, ctrly_armed
     global ctrlu_last_time, ctrlu_armed, ctrli_last_time, ctrli_armed
+    global ctrlr_last_time, ctrlr_armed
     global circle_art_shift_bind, mcrash_shift_bind, ctrlswap
     global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
     try:
         # Workaround for pynput macOS Unicode decode bug - some special keys trigger this
         if key is None:
             return
-        # Use Right Shift instead of Escape to stop scripts
+        # Use Right Shift to stop all macros
         if key == Key.shift_r:
-            if 'ctrl' in pressed_keys:
-                print("estop")
-                exit(0)
-            else:
-                automation_working = False
-                braindamage_working = False
-                circle_art_working = False
-                engineer_spam_working = False
-                circle_art_shift_bind = False
-                mcrash_shift_bind = False
-                circle_mouse_active = False
-                stopallthreads()
-                print("softstop")
+            print("softstop")
+            stopallthreads()
+            return
         elif is_ctrl(key):
             pressed_keys.add('ctrl')
         elif is_alt(key):
@@ -1288,31 +1287,37 @@ def on_press(key: Key | None) -> None:
                 elif key == Key.right:
                     mouse.position = (x + 1, y)
                 return
-        # NEW: pressing Left Shift starts circle_art_working if binding is enabled
+        # Left Shift: activate circle art OR pause/unpause spam macros (only if already running)
         elif key == Key.shift_l:
+            # Priority 1: Circle art shift bind
             if circle_art_shift_bind:
                 if not circle_art_working:
                     print("circle_art on")
                 circle_art_working = True
                 start_circle_art()
-                if mcrash_shift_bind:
-                    if not mcrash_working:
-                        print("mcrash on")
-                    mcrash_working = True
-                    start_mcrash()
-        elif hasattr(key, 'char') and key.char and key.char == "'":
+            # Priority 2: Engineer spam pause/unpause (only if already running AND currently paused)
+            elif engineer_spam_process and engineer_spam_process.is_alive() and not engineer_spam_event.is_set():
+                # Only allow resume if process is alive and currently paused
+                engineer_spam_event.set()
+                print("Engineer spam RESUMED (left shift)")
+            # Priority 3: Custom reload spam pause/unpause (only if already running AND currently paused)
+            elif custom_reload_spam_process and custom_reload_spam_process.is_alive() and not custom_reload_spam_event.is_set():
+                # Only allow resume if process is alive and currently paused
+                custom_reload_spam_event.set()
+                print("Custom reload spam RESUMED (left shift)")
+        elif get_char(key) == "'":
             if 'ctrl' in pressed_keys:
                 print("unicode blocks macro")
                 type_unicode_blocks("027103B103C1056C1D07005B000BFFFC007F2400000B005D")
-        elif hasattr(key, 'char') and key.char and key.char == ";":
+        elif get_char(key) == ",":
             if 'ctrl' in pressed_keys:
                 time.sleep(0.5)
                 controller.type("«∑∏¯ˇ†∫–⁄∞∆µ•‰ª¬∂Ω◊ﬂı®»")
-        elif hasattr(key, 'char') and key.char and key.char == ",":
+        elif get_char(key) == ";":
             if 'ctrl' in pressed_keys:
                 time.sleep(0.5)
                 controller.type("«∑∫–µ¬∂Ωı»")
-        elif hasattr(key, 'char') and key.char and key.char == ".":
+        elif get_char(key) == ".":
             if 'ctrl' in pressed_keys:
                 time.sleep(0.5)
                 controller.tap(Key.enter)
@@ -1332,7 +1337,7 @@ def on_press(key: Key | None) -> None:
                 controller.type("⁂⋣௹⁞ß૱ɧ⊯å⁛ɮ⏓⁊⁒Ϡç⁁⌁ϐÂͳϟ֏»")
                 time.sleep(0.1)
                 controller.tap(Key.enter)
-        elif hasattr(key, 'char') and key.char and key.char == "/":
+        elif get_char(key) == "/":
             if 'ctrl' in pressed_keys:
                 time.sleep(0.5)
                 controller.type("₥ἆȵɪꜻƈ [𒈙]")
@@ -1450,13 +1455,21 @@ def on_press(key: Key | None) -> None:
             if 'ctrl' in pressed_keys:
                 print("50m score")
                 score50m()
-        elif hasattr(key, 'char') and key.char and key.char=='h':
+        elif hasattr(key, 'char') and key.char and key.char=='h': 
             if 'ctrl' in pressed_keys:
                 repeat_tap_in_console("h", 3000)
         elif hasattr(key, 'char') and key.char and key.char=='r':
             if 'ctrl' in pressed_keys:
-                for _ in range(200):
-                    type_with_enter("$arena close")
+                now = time.time()
+                if ctrlr_armed and (now - ctrlr_last_time <= 5):
+                    print("Ctrl+R second press - executing arena close spam")
+                    for _ in range(500):
+                        type_with_enter("$arena close")
+                    ctrlr_armed = False
+                else:
+                    print("Ctrl+R first press - press again within 5s to confirm arena close spam")
+                    ctrlr_last_time = now
+                    ctrlr_armed = True
         elif hasattr(key, 'char') and key.char and key.char=='g':
             if 'ctrl' in pressed_keys:
                 now = time.time()
@@ -1707,7 +1720,7 @@ def on_press(key: Key | None) -> None:
     except Exception as e:
         print(f"Error: {e}")
     
-def on_release(key: Key | None) -> None:
+def on_release(key: Key | KeyCode | None) -> None:
     global circle_art_working, circle_art_shift_bind, mcrash_working, mcrash_shift_bind
     try:
         # Workaround for pynput macOS Unicode decode bug

@@ -23,20 +23,43 @@ Key = None
 MouseController = None
 Button = None
 
-models = [
-    "deepseek-r1-14b-16k",
-    "deepseek-r1-8b-16k",
-    "llama3.1-8b-16k",
-    "llama3.2-3b-16k",
-    "qwen2.5-14b-16k",
-    "qwen2.5-coder-14b-16k",
-    "qwen3-8b-16k",
-    "qwen3-4b-16k",
-    "qwen3-1.7b-16k",
-    "phi3-3.8b-16k",
-    "phi4-14b-16k",
-    "gemma3-12b-16k"
-]
+def get_ollama_models():
+    """Fetch list of available Ollama models from 'ollama list' command"""
+    try:
+        result = subprocess.run(
+            ['ollama', 'list'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            # Skip header line and parse model names
+            models = []
+            for line in lines[1:]:  # Skip first line (header)
+                if line.strip():
+                    # Extract first column (NAME)
+                    name = line.split()[0]
+                    models.append(name)
+            
+            if models:
+                print(f"Found {len(models)} Ollama models")
+                return models
+            else:
+                print("No models found, using fallback list")
+                return ["deepseek-r1-14b-16k:latest"]
+        else:
+            print(f"Error running 'ollama list': {result.stderr}")
+            return ["deepseek-r1-14b-16k:latest"]
+    except FileNotFoundError:
+        print("Warning: ollama command not found. Install Ollama to use AI mode.")
+        return []
+    except Exception as e:
+        print(f"Error fetching Ollama models: {e}")
+        return ["deepseek-r1-14b-16k:latest"]
+
+models = get_ollama_models()
 
 # Detect platform
 PLATFORM = platform.system().lower()  # 'darwin' (macOS), 'linux', 'windows'
