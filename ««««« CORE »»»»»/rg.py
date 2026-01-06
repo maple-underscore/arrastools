@@ -141,6 +141,10 @@ settings = {
     'hit_bar_position': 0.9,  # Hit bar Y position as fraction of height (0.7 to 0.95)
     'background_dim': 0,  # Background dimness (0 to 255)
     'show_fps': False,  # Show FPS counter
+    'show_timing_zones': False,  # Show judgment zones on hit bar
+    'colorblind_mode': False,  # Use colorblind-friendly colors
+    'high_contrast_mode': False,  # Use high contrast colors
+    'show_late_early': True,  # Show LATE/EARLY indicators for perfect and great
     # Audio settings
     'music_volume': 100,  # Music volume (0 to 100)
     'sfx_volume': 100,  # SFX volume (0 to 100)
@@ -413,8 +417,48 @@ def draw_hit_bar():
     canvas.create_rectangle(bar_start, BAR_Y - 5, bar_end, BAR_Y + 5,
                           fill='white', outline='yellow', width=3, tags='hitbar')
     
+    # Draw timing zones if enabled
+    if settings.get('show_timing_zones', False):
+        windows = get_timing_windows()
+        # Calculate pixel heights for each timing window
+        # Assuming 600 pixels per second scroll speed as base
+        base_speed = 600
+        
+        # Draw zones (from bottom to top: MISS, BAD, GOOD, GREAT, PERFECT)
+        zone_colors = {
+            'MISS': '#550000',
+            'BAD': '#553300', 
+            'GOOD': '#555500',
+            'GREAT': '#005500',
+            'PERFECT': '#005555'
+        }
+        
+        if settings.get('colorblind_mode', False):
+            zone_colors = {
+                'MISS': '#330000',
+                'BAD': '#440044',
+                'GOOD': '#442200',
+                'GREAT': '#444400',
+                'PERFECT': '#004444'
+            }
+        
+        # Draw zones as semi-transparent overlays
+        for zone_name in ['MISS', 'BAD', 'GOOD', 'GREAT', 'PERFECT']:
+            zone_height = int(windows[zone_name] * base_speed)
+            zone_y_start = BAR_Y - zone_height
+            zone_y_end = BAR_Y + zone_height
+            
+            # Draw behind the hit bar
+            canvas.create_rectangle(bar_start, zone_y_start, bar_end, zone_y_end,
+                                  fill=zone_colors[zone_name], outline='',
+                                  tags='timing_zone', stipple='gray25')
+    
     # Draw lane indicators at the hit bar
     colors = ['red', 'orange', 'yellow', 'lime', 'cyan', 'blue', 'purple', 'magenta']
+    if settings.get('colorblind_mode', False):
+        # Colorblind-friendly lane colors
+        colors = ['#E69F00', '#56B4E9', '#009E73', '#F0E442', '#0072B2', '#D55E00', '#CC79A7', '#999999']
+    
     for i in range(LANE_COUNT):
         x = LANE_MARGIN + i * LANE_WIDTH + LANE_WIDTH // 2
         canvas.create_rectangle(x - 40, BAR_Y - 10, x + 40, BAR_Y + 10,
@@ -517,23 +561,54 @@ def draw_slide(lane, y_start, y_end, note_id, is_holding=False, multiplier=1):
                           fill=bar_color, outline=outline_color, width=3, tags=f'note_{note_id}')
 
 def show_judgment(judgment, offset_ms=None, auto_miss=False):
-    """Display judgment text for 400ms with optional offset"""
+    """Display judgment text for 400ms with optional offset and LATE/EARLY indicators"""
     global judgment_display
     
-    colors = {
-        'PERFECT': 'cyan',
-        'GREAT': 'lime',
-        'GOOD': 'yellow',
-        'BAD': 'orange',
-        'MISS': 'red'
-    }
+    # Get colors based on settings
+    if settings.get('colorblind_mode', False):
+        # Colorblind-friendly colors
+        colors = {
+            'PERFECT': '#00D9FF',  # Bright cyan
+            'GREAT': '#FFD700',    # Gold
+            'GOOD': '#FF6B35',     # Orange-red
+            'BAD': '#A020F0',      # Purple
+            'MISS': '#FF1744'      # Deep red
+        }
+    elif settings.get('high_contrast_mode', False):
+        # High contrast colors
+        colors = {
+            'PERFECT': 'white',
+            'GREAT': 'yellow',
+            'GOOD': 'orange',
+            'BAD': 'red',
+            'MISS': 'red'
+        }
+    else:
+        # Default colors
+        colors = {
+            'PERFECT': 'cyan',
+            'GREAT': 'lime',
+            'GOOD': 'yellow',
+            'BAD': 'orange',
+            'MISS': 'red'
+        }
     
-    # Add offset display
+    # Add offset display and LATE/EARLY indicators
     display_text = judgment
     if judgment == 'MISS' and auto_miss:
         display_text = "MISS (N/A)"
     elif offset_ms is not None:
-        display_text = f"{judgment} ({offset_ms:+.0f}ms)"
+        # Add LATE/EARLY indicators for PERFECT and GREAT
+        if settings.get('show_late_early', True) and judgment in ['PERFECT', 'GREAT']:
+            if offset_ms > 5:  # More than 5ms late
+                late_early = " LATE"
+            elif offset_ms < -5:  # More than 5ms early
+                late_early = " EARLY"
+            else:
+                late_early = ""
+            display_text = f"{judgment}{late_early} ({offset_ms:+.0f}ms)"
+        else:
+            display_text = f"{judgment} ({offset_ms:+.0f}ms)"
     
     end_time = time.time() + 0.4  # 400ms
     judgment_display = (display_text, end_time, colors.get(judgment, 'white'))
@@ -2333,7 +2408,7 @@ def show_options_menu():
     current_page = 0  # 0 = Main, 1 = Visual, 2 = Audio, 3 = Gameplay
     options_pages = {
         0: ['Visual Settings', 'Audio Settings', 'Gameplay Settings', 'Change Keys', 'Scroll Speed', 'Export Settings', 'Import Settings', 'Save & Back'],
-        1: ['Note Size', 'Hit Bar Position', 'Background Dim', 'Show FPS', 'Back'],
+        1: ['Note Size', 'Hit Bar Position', 'Background Dim', 'Show FPS', 'Show Timing Zones', 'Colorblind Mode', 'High Contrast Mode', 'Show Late/Early', 'Back'],
         2: ['Music Volume', 'SFX Volume', 'Global Offset', 'Back'],
         3: ['Timing Windows', 'Back']
     }
@@ -2380,6 +2455,14 @@ def show_options_menu():
                     text = f"{option}: {settings.get('background_dim', 0)}"
                 elif option == 'Show FPS':
                     text = f"{option}: {'ON' if settings.get('show_fps', False) else 'OFF'}"
+                elif option == 'Show Timing Zones':
+                    text = f"{option}: {'ON' if settings.get('show_timing_zones', False) else 'OFF'}"
+                elif option == 'Colorblind Mode':
+                    text = f"{option}: {'ON' if settings.get('colorblind_mode', False) else 'OFF'}"
+                elif option == 'High Contrast Mode':
+                    text = f"{option}: {'ON' if settings.get('high_contrast_mode', False) else 'OFF'}"
+                elif option == 'Show Late/Early':
+                    text = f"{option}: {'ON' if settings.get('show_late_early', True) else 'OFF'}"
                 elif option == 'Music Volume':
                     text = f"{option}: {settings.get('music_volume', 100)}%"
                 elif option == 'SFX Volume':
@@ -2430,21 +2513,52 @@ def show_options_menu():
             selected_option = (selected_option + 1) % len(options)
             draw_options()
         elif event.keysym == 'Return':
-            if options[selected_option] == 'Change Keys':
+            option_name = options[selected_option]
+            if option_name == 'Change Keys':
                 # Start key remapping for each lane
                 show_key_remap_screen()
-            elif options[selected_option] == 'Scroll Speed':
-                # This is handled by left/right in the menu itself
-                pass
-            elif options[selected_option] == 'Save & Back':
+            elif option_name in ['Show FPS', 'Show Timing Zones', 'Colorblind Mode', 'High Contrast Mode', 'Show Late/Early']:
+                # Toggle boolean settings
+                setting_key = {
+                    'Show FPS': 'show_fps',
+                    'Show Timing Zones': 'show_timing_zones',
+                    'Colorblind Mode': 'colorblind_mode',
+                    'High Contrast Mode': 'high_contrast_mode',
+                    'Show Late/Early': 'show_late_early'
+                }[option_name]
+                settings[setting_key] = not settings.get(setting_key, False)
+                draw_options()
+            elif option_name == 'Save & Back':
                 save_settings()
                 menu_running = False
-        elif event.keysym == 'Left' and selected_option == 1:  # Scroll Speed
-            settings['scroll_speed_multiplier'] = max(0.1, settings['scroll_speed_multiplier'] - 0.1)
-            draw_options()
-        elif event.keysym == 'Right' and selected_option == 1:  # Scroll Speed
-            settings['scroll_speed_multiplier'] = min(10.0, settings['scroll_speed_multiplier'] + 0.1)
-            draw_options()
+            elif option_name in ['Visual Settings', 'Audio Settings', 'Gameplay Settings']:
+                # Navigate to subpage
+                nonlocal current_page
+                if option_name == 'Visual Settings':
+                    current_page = 1
+                elif option_name == 'Audio Settings':
+                    current_page = 2
+                elif option_name == 'Gameplay Settings':
+                    current_page = 3
+                selected_option = 0
+                draw_options()
+            elif option_name == 'Back':
+                # Return to main page
+                current_page = 0
+                selected_option = 0
+                draw_options()
+        elif event.keysym == 'Left':
+            # Handle left arrow for adjustable values
+            option_name = options[selected_option]
+            if option_name == 'Scroll Speed':
+                settings['scroll_speed_multiplier'] = max(0.1, settings['scroll_speed_multiplier'] - 0.1)
+                draw_options()
+        elif event.keysym == 'Right':
+            # Handle right arrow for adjustable values
+            option_name = options[selected_option]
+            if option_name == 'Scroll Speed':
+                settings['scroll_speed_multiplier'] = min(10.0, settings['scroll_speed_multiplier'] + 0.1)
+                draw_options()
     
     def on_options_mouse_click(event):
         nonlocal menu_running, selected_option, remapping_index
@@ -2705,10 +2819,177 @@ def show_main_menu():
     
     return options[selected_option]
 
+def show_pregame_setup(chart_id, difficulty):
+    """Show pre-game setup GUI for speed, calibration, and mode selection"""
+    global game_mode, settings
+    
+    setup_running = True
+    current_speed = settings.get('scroll_speed_multiplier', 1.0)
+    selected_mode = game_mode if game_mode in ['auto', 'practice'] else 'normal'
+    calibrating = False
+    metronome_beats = []
+    
+    def draw_setup():
+        canvas.delete('all')
+        canvas.configure(bg='black')
+        
+        # Title
+        canvas.create_text(width // 2, 50, text=f"Setup: {chart_id} - {difficulty}",
+                         fill='white', font=('Arial', 32, 'bold'))
+        
+        # Speed selector
+        y_pos = 150
+        canvas.create_text(width // 2, y_pos, text="Note Speed Multiplier",
+                         fill='cyan', font=('Arial', 24, 'bold'))
+        y_pos += 50
+        
+        # Speed preview bar
+        bar_x = width // 2 - 200
+        bar_width = 400
+        canvas.create_rectangle(bar_x, y_pos, bar_x + bar_width, y_pos + 30,
+                              fill='#333333', outline='white', width=2)
+        
+        # Current speed indicator
+        speed_pos = bar_x + int((current_speed - 0.5) / 4.0 * bar_width)
+        canvas.create_rectangle(speed_pos - 5, y_pos - 5, speed_pos + 5, y_pos + 35,
+                              fill='yellow', outline='white', width=2)
+        
+        canvas.create_text(width // 2, y_pos + 50, 
+                         text=f"{current_speed:.1f}x (←→ to adjust, 0.5x - 4.5x)",
+                         fill='white', font=('Arial', 18))
+        
+        # Mode selection
+        y_pos += 120
+        canvas.create_text(width // 2, y_pos, text="Game Mode",
+                         fill='cyan', font=('Arial', 24, 'bold'))
+        y_pos += 40
+        
+        modes = [('Normal', 'normal'), ('Auto Play', 'auto'), ('Practice', 'practice')]
+        for i, (mode_name, mode_key) in enumerate(modes):
+            x_pos = width // 2 - 200 + i * 200
+            color = 'yellow' if mode_key == selected_mode else 'white'
+            canvas.create_text(x_pos, y_pos, text=f"{i+1}. {mode_name}",
+                             fill=color, font=('Arial', 20), tags=f'mode_{mode_key}')
+        
+        # Calibration section
+        y_pos += 80
+        canvas.create_text(width // 2, y_pos, text="Offset Calibration",
+                         fill='cyan', font=('Arial', 24, 'bold'))
+        y_pos += 40
+        
+        current_offset = settings.get('global_offset', 0)
+        canvas.create_text(width // 2, y_pos, 
+                         text=f"Current Offset: {current_offset}ms",
+                         fill='white', font=('Arial', 18))
+        y_pos += 35
+        
+        if calibrating:
+            canvas.create_text(width // 2, y_pos, 
+                             text=f"Tap to the beat! ({len(metronome_beats)}/8)",
+                             fill='lime', font=('Arial', 20, 'bold'))
+        else:
+            canvas.create_text(width // 2, y_pos, 
+                             text="Press C to auto-calibrate (tap 8 beats)",
+                             fill='gray', font=('Arial', 16))
+        
+        # Manual offset adjustment
+        y_pos += 50
+        canvas.create_text(width // 2, y_pos, 
+                         text="Manual: [ = -10ms  ] = +10ms  \\ = Reset",
+                         fill='gray', font=('Arial', 16))
+        
+        # Instructions
+        canvas.create_text(width // 2, height - 100,
+                         text="ENTER to start  |  ESC to go back",
+                         fill='white', font=('Arial', 20, 'bold'))
+        
+        root.update()
+    
+    def on_setup_key(event):
+        nonlocal setup_running, current_speed, selected_mode, calibrating, metronome_beats
+        
+        if event.keysym == 'Escape':
+            setup_running = False
+            return
+        elif event.keysym == 'Return':
+            # Save settings and start game
+            settings['scroll_speed_multiplier'] = current_speed
+            global game_mode
+            game_mode = selected_mode
+            setup_running = False
+            return
+        
+        # Speed adjustment
+        if event.keysym == 'Left':
+            current_speed = max(0.5, current_speed - 0.1)
+            draw_setup()
+        elif event.keysym == 'Right':
+            current_speed = min(4.5, current_speed + 0.1)
+            draw_setup()
+        
+        # Mode selection
+        if event.char and event.char.isdigit():
+            num = int(event.char)
+            if num == 1:
+                selected_mode = 'normal'
+            elif num == 2:
+                selected_mode = 'auto'
+            elif num == 3:
+                selected_mode = 'practice'
+            draw_setup()
+        
+        # Calibration
+        if event.char and event.char.lower() == 'c':
+            calibrating = True
+            metronome_beats = []
+            draw_setup()
+        
+        # Manual offset adjustment
+        if event.char == '[':
+            settings['global_offset'] = settings.get('global_offset', 0) - 10
+            draw_setup()
+        elif event.char == ']':
+            settings['global_offset'] = settings.get('global_offset', 0) + 10
+            draw_setup()
+        elif event.char == '\\':
+            settings['global_offset'] = 0
+            draw_setup()
+        
+        # Metronome tap for calibration
+        if calibrating and event.char == ' ':
+            metronome_beats.append(time.time())
+            if len(metronome_beats) >= 8:
+                # Calculate average interval and set offset
+                intervals = []
+                for i in range(1, len(metronome_beats)):
+                    intervals.append(metronome_beats[i] - metronome_beats[i-1])
+                avg_interval = sum(intervals) / len(intervals)
+                # Assume 120 BPM target, calculate offset
+                expected_interval = 60.0 / 120.0  # 0.5 seconds per beat
+                offset_seconds = avg_interval - expected_interval
+                settings['global_offset'] = int(offset_seconds * 1000)
+                calibrating = False
+                metronome_beats = []
+            draw_setup()
+    
+    draw_setup()
+    root.bind('<KeyPress>', on_setup_key)
+    
+    while setup_running:
+        root.update()
+        time.sleep(0.01)
+    
+    root.unbind('<KeyPress>')
+    return setup_running  # False means go back, True means start
+
 def start_game(chart_id, difficulty):
     """Initialize and start the game"""
     global current_chart_id, current_difficulty, replay_data, game_running
     global practice_speed, practice_loop_start, practice_loop_end, practice_looping
+    
+    # Show pre-game setup
+    if not show_pregame_setup(chart_id, difficulty):
+        return  # User pressed ESC to go back
     
     current_chart_id = chart_id
     current_difficulty = difficulty
