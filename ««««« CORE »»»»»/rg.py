@@ -93,6 +93,13 @@ current_chart_id = None
 current_difficulty = None
 music_playing = False
 
+# Game modes
+game_mode = 'normal'  # 'normal', 'auto', or 'practice'
+practice_speed = 1.0  # Practice mode speed multiplier
+practice_loop_start = None  # Practice mode loop start (in seconds)
+practice_loop_end = None  # Practice mode loop end (in seconds)
+practice_looping = False  # Whether loop is enabled
+
 # Particle system for hit effects
 active_particles = []  # List of (x, y, size, color, end_time) tuples
 
@@ -778,12 +785,43 @@ def on_release(key):
 def on_tkinter_press(event):
     """Handle tkinter key press events during gameplay"""
     global key_pressed_flags, key_is_down, game_running
+    global practice_speed, practice_loop_start, practice_loop_end, practice_looping
     
     print(f"DEBUG tkinter_press: keysym={event.keysym}, char={event.char}, game_running={game_running}")
     
     if event.keysym == 'Escape':
         game_running = False
         return
+    
+    # Practice mode controls
+    if game_mode == 'practice':
+        if event.char == '[':
+            # Set loop start
+            current_time = time.time() - start_time
+            practice_loop_start = current_time
+            print(f"Practice loop start set at {current_time:.2f}s")
+            return
+        elif event.char == ']':
+            # Set loop end
+            current_time = time.time() - start_time
+            practice_loop_end = current_time
+            print(f"Practice loop end set at {current_time:.2f}s")
+            return
+        elif event.char and event.char.lower() == 'l':
+            # Toggle looping
+            practice_looping = not practice_looping
+            print(f"Practice looping: {practice_looping}")
+            return
+        elif event.char == '-':
+            # Decrease speed
+            practice_speed = max(0.25, practice_speed - 0.25)
+            print(f"Practice speed: {practice_speed:.2f}x")
+            return
+        elif event.char == '=':
+            # Increase speed
+            practice_speed = min(2.0, practice_speed + 0.25)
+            print(f"Practice speed: {practice_speed:.2f}x")
+            return
     
     # Get lane from key
     lane = None
@@ -792,7 +830,7 @@ def on_tkinter_press(event):
     
     if lane is not None:
         key_is_down[lane] = True
-        if not is_replay and game_running:
+        if not is_replay and game_running and game_mode != 'auto':
             if not key_pressed_flags[lane]:
                 key_pressed_flags[lane] = True
                 current_time = time.time() - start_time
@@ -813,7 +851,7 @@ def on_tkinter_release(event):
     if lane is not None:
         key_pressed_flags[lane] = False
         key_is_down[lane] = False
-        if not is_replay and game_running:
+        if not is_replay and game_running and game_mode != 'auto':
             current_time = time.time() - start_time
             replay_data.append((current_time, 'release', lane))
             check_slide_hold(lane, current_time, False)
@@ -876,6 +914,21 @@ def draw_ui():
         if time.time() < end_time:
             canvas.create_text(width // 2, 100, text=judgment_text,
                              fill=color, font=('Arial', 48, 'bold'), tags='ui')
+    
+    # Watermarks for special modes
+    if game_mode == 'auto':
+        canvas.create_text(width // 2, height - 100, text="AUTO PLAY",
+                         fill='#666666', font=('Arial', 32, 'bold'), tags='ui')
+    elif game_mode == 'practice':
+        practice_text = f"PRACTICE MODE - Speed: {practice_speed:.2f}x"
+        if practice_looping and practice_loop_start is not None and practice_loop_end is not None:
+            practice_text += " [LOOP]"
+        canvas.create_text(width // 2, height - 100, text=practice_text,
+                         fill='#666666', font=('Arial', 24, 'bold'), tags='ui')
+        # Show controls
+        canvas.create_text(width // 2, height - 70, 
+                         text="[ = Loop Start  |  ] = Loop End  |  L = Toggle Loop  |  - = Slower  |  + = Faster",
+                         fill='#555555', font=('Arial', 14), tags='ui')
 
 def get_pixel_speed(current_beat):
     """Get the current pixel speed based on BPM, spd% changes, and global multiplier"""
@@ -1067,6 +1120,56 @@ def get_available_replays():
     replays.sort(key=lambda x: x['data'].get('timestamp', ''), reverse=True)
     return replays
 
+def auto_play_ai(current_time):
+    """AI that plays notes perfectly in auto mode"""
+    global key_is_down, key_pressed_flags
+    
+    # Check tap notes for perfect hits
+    for note in active_notes[:]:
+        if note['type'] == 'tap' and not note.get('hit', False):
+            time_diff = abs(current_time - note['time'])
+            # Hit exactly on time (within 1 frame)
+            if time_diff <= (1.0 / fps):
+                lane = note['lane']
+                if not key_is_down.get(lane, False):
+                    key_is_down[lane] = True
+                    key_pressed_flags[lane] = True
+                    check_hit(lane, current_time)
+                    # Schedule release after 0.05 seconds
+                    note['auto_release_time'] = current_time + 0.05
+    
+    # Release tap notes after brief hold
+    for note in active_notes[:]:
+        if note.get('auto_release_time') and current_time >= note['auto_release_time']:
+            lane = note['lane']
+            key_is_down[lane] = False
+            key_pressed_flags[lane] = False
+            note.pop('auto_release_time', None)
+    
+    # Check slide notes
+    for slide in active_slides[:]:
+        lane = slide['lane']
+        
+        # Start holding at perfect timing
+        if not slide.get('holding', False) and not slide.get('hit', False):
+            time_diff = abs(current_time - slide['time'])
+            if time_diff <= (1.0 / fps):
+                key_is_down[lane] = True
+                key_pressed_flags[lane] = True
+                check_hit(lane, current_time)
+        
+        # Continue holding during slide
+        if slide.get('holding', False):
+            key_is_down[lane] = True
+            
+            # Release at perfect timing
+            if current_time >= slide['end_time']:
+                time_diff = abs(current_time - slide['end_time'])
+                if time_diff <= (1.0 / fps):
+                    key_is_down[lane] = False
+                    key_pressed_flags[lane] = False
+                    check_slide_hold(lane, current_time, False)
+
 def game_loop():
     """Main game loop"""
     global start_time, game_running, chart, music_playing, active_particles
@@ -1102,6 +1205,19 @@ def game_loop():
     while game_running and (chart or active_notes or active_slides):
         frame_start = time.time()
         current_time = frame_start - start_time
+        
+        # Practice mode loop check
+        if game_mode == 'practice' and practice_looping:
+            if practice_loop_start is not None and practice_loop_end is not None:
+                if current_time >= practice_loop_end:
+                    # Loop back to start
+                    # This is simplified - ideally we'd reset all game state
+                    start_time += (practice_loop_end - practice_loop_start)
+                    current_time = practice_loop_start
+        
+        # Auto-play AI
+        if game_mode == 'auto':
+            auto_play_ai(current_time)
         
         # Clear dynamic elements
         canvas.delete('note')
@@ -1794,30 +1910,45 @@ def show_chart_menu():
 
     def select_difficulty(chart_id, difficulties):
         nonlocal menu_running, selected_chart, selected_difficulty
-        global current_chart_id, current_difficulty
+        global current_chart_id, current_difficulty, game_mode
         
         canvas.delete('all')
         canvas.configure(bg='black')
         
-        canvas.create_text(width // 2, 100, text=f"Select Difficulty for {chart_id}",
+        canvas.create_text(width // 2, 100, text=f"Select Mode for {chart_id}",
                          fill='white', font=('Arial', 36, 'bold'))
         
         y_pos = 200
+        
+        # Show special modes first
+        canvas.create_text(width // 2, y_pos, text="A. Auto Play",
+                         fill='cyan', font=('Arial', 24), tags='mode_auto')
+        y_pos += 50
+        
+        canvas.create_text(width // 2, y_pos, text="P. Practice Mode",
+                         fill='lime', font=('Arial', 24), tags='mode_practice')
+        y_pos += 70
+        
+        # Show regular difficulties
+        canvas.create_text(width // 2, y_pos, text="--- Regular Difficulties ---",
+                         fill='gray', font=('Arial', 18))
+        y_pos += 50
+        
         for i, diff in enumerate(sorted(difficulties)):
             mp3_file = f"{CHART_DIRECTORY}/{chart_id}_{diff}.mp3"
             audio_icon = " ♫" if os.path.exists(mp3_file) else ""
             
             canvas.create_text(width // 2, y_pos, text=f"{i + 1}. {diff}{audio_icon}",
                              fill='yellow', font=('Arial', 24), tags=f'diff_{i}')
-            y_pos += 60
+            y_pos += 50
         
-        canvas.create_text(width // 2, height - 50, text="Press number or click to select | ESC to go back",
+        canvas.create_text(width // 2, height - 50, text="Press number/letter or click to select | ESC to go back",
                          fill='gray', font=('Arial', 16))
         root.update()
         
         def on_diff_tkinter_key(event):
             nonlocal selected_difficulty, menu_running
-            global current_chart_id, current_difficulty
+            global current_chart_id, current_difficulty, game_mode
             
             print(f"DEBUG diff_tkinter_key: {event.keysym}, {event.char}")
             
@@ -1829,12 +1960,40 @@ def show_chart_menu():
                 root.bind('<Button-1>', on_mouse_click)
                 return
             
+            # Check for Auto mode
+            if event.char and event.char.lower() == 'a':
+                # Use first available difficulty for auto mode
+                selected_difficulty = sorted(difficulties)[0]
+                current_chart_id = chart_id
+                current_difficulty = selected_difficulty
+                game_mode = 'auto'
+                menu_running = False
+                root.unbind('<KeyPress>')
+                root.unbind('<Button-1>')
+                print(f"DEBUG: Selected AUTO mode with chart_id={current_chart_id}, difficulty={current_difficulty}")
+                return
+            
+            # Check for Practice mode
+            if event.char and event.char.lower() == 'p':
+                # Use first available difficulty for practice mode
+                selected_difficulty = sorted(difficulties)[0]
+                current_chart_id = chart_id
+                current_difficulty = selected_difficulty
+                game_mode = 'practice'
+                menu_running = False
+                root.unbind('<KeyPress>')
+                root.unbind('<Button-1>')
+                print(f"DEBUG: Selected PRACTICE mode with chart_id={current_chart_id}, difficulty={current_difficulty}")
+                return
+            
+            # Regular difficulty selection
             if event.char.isdigit():
                 num = int(event.char)
                 if 0 < num <= len(difficulties):
                     selected_difficulty = sorted(difficulties)[num - 1]
                     current_chart_id = chart_id
                     current_difficulty = selected_difficulty
+                    game_mode = 'normal'
                     menu_running = False
                     root.unbind('<KeyPress>')
                     root.unbind('<Button-1>')
@@ -1842,19 +2001,40 @@ def show_chart_menu():
         
         def on_diff_mouse_click(event):
             nonlocal selected_difficulty, menu_running
-            global current_chart_id, current_difficulty
+            global current_chart_id, current_difficulty, game_mode
             
             # Get clicked item
             items = canvas.find_overlapping(event.x - 10, event.y - 10, event.x + 10, event.y + 10)
             for item in items:
                 tags = canvas.gettags(item)
                 for tag in tags:
-                    if tag.startswith('diff_'):
+                    if tag == 'mode_auto':
+                        selected_difficulty = sorted(difficulties)[0]
+                        current_chart_id = chart_id
+                        current_difficulty = selected_difficulty
+                        game_mode = 'auto'
+                        menu_running = False
+                        root.unbind('<KeyPress>')
+                        root.unbind('<Button-1>')
+                        print(f"DEBUG: Selected AUTO mode")
+                        return
+                    elif tag == 'mode_practice':
+                        selected_difficulty = sorted(difficulties)[0]
+                        current_chart_id = chart_id
+                        current_difficulty = selected_difficulty
+                        game_mode = 'practice'
+                        menu_running = False
+                        root.unbind('<KeyPress>')
+                        root.unbind('<Button-1>')
+                        print(f"DEBUG: Selected PRACTICE mode")
+                        return
+                    elif tag.startswith('diff_'):
                         diff_index = int(tag.split('_')[1])
                         if diff_index < len(difficulties):
                             selected_difficulty = sorted(difficulties)[diff_index]
                             current_chart_id = chart_id
                             current_difficulty = selected_difficulty
+                            game_mode = 'normal'
                             menu_running = False
                             root.unbind('<KeyPress>')
                             root.unbind('<Button-1>')
@@ -2160,12 +2340,20 @@ def show_main_menu():
 def start_game(chart_id, difficulty):
     """Initialize and start the game"""
     global current_chart_id, current_difficulty, replay_data, game_running
+    global practice_speed, practice_loop_start, practice_loop_end, practice_looping
+    
     current_chart_id = chart_id
     current_difficulty = difficulty
     replay_data = []  # Clear any previous replay data
     game_running = True  # Enable keyboard input
     
-    print(f"DEBUG: Starting game with chart {chart_id}, difficulty {difficulty}")
+    # Reset practice mode variables
+    practice_speed = 1.0
+    practice_loop_start = None
+    practice_loop_end = None
+    practice_looping = False
+    
+    print(f"DEBUG: Starting game with chart {chart_id}, difficulty {difficulty}, mode {game_mode}")
     print(f"DEBUG: game_running set to {game_running}")
     
     load_chart(chart_id, difficulty)
