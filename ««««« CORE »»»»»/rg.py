@@ -46,6 +46,35 @@ TIMING_GOOD = 0.15
 TIMING_BAD = 0.20
 TIMING_MISS = 0.25
 
+def get_timing_windows():
+    """Get timing windows based on settings"""
+    mode = settings.get('timing_windows', 'normal')
+    
+    if mode == 'strict':
+        return {
+            'PERFECT': 0.035,
+            'GREAT': 0.075,
+            'GOOD': 0.115,
+            'BAD': 0.155,
+            'MISS': 0.20
+        }
+    elif mode == 'lenient':
+        return {
+            'PERFECT': 0.065,
+            'GREAT': 0.125,
+            'GOOD': 0.185,
+            'BAD': 0.245,
+            'MISS': 0.30
+        }
+    else:  # normal
+        return {
+            'PERFECT': 0.05,
+            'GREAT': 0.10,
+            'GOOD': 0.15,
+            'BAD': 0.20,
+            'MISS': 0.25
+        }
+
 # Scoring
 SCORE_PERFECT = 1000
 SCORE_GREAT = 700
@@ -93,10 +122,35 @@ current_chart_id = None
 current_difficulty = None
 music_playing = False
 
+# Game modes
+game_mode = 'normal'  # 'normal', 'auto', or 'practice'
+practice_speed = 1.0  # Practice mode speed multiplier
+practice_loop_start = None  # Practice mode loop start (in seconds)
+practice_loop_end = None  # Practice mode loop end (in seconds)
+practice_looping = False  # Whether loop is enabled
+
+# Particle system for hit effects
+active_particles = []  # List of (x, y, size, color, end_time) tuples
+
 # Settings
 settings = {
     'scroll_speed_multiplier': 1.0,  # Global scroll speed multiplier (0.1 to 10)
-    'key_bindings': ['q', 'w', 'e', 'r', 'u', 'i', 'o', 'p']  # Customizable keys
+    'key_bindings': ['q', 'w', 'e', 'r', 'u', 'i', 'o', 'p'],  # Customizable keys
+    # Visual settings
+    'note_size_multiplier': 1.0,  # Note size multiplier (0.5 to 2.0)
+    'hit_bar_position': 0.9,  # Hit bar Y position as fraction of height (0.7 to 0.95)
+    'background_dim': 0,  # Background dimness (0 to 255)
+    'show_fps': False,  # Show FPS counter
+    'show_timing_zones': False,  # Show judgment zones on hit bar
+    'colorblind_mode': False,  # Use colorblind-friendly colors
+    'high_contrast_mode': False,  # Use high contrast colors
+    'show_late_early': True,  # Show LATE/EARLY indicators for perfect and great
+    # Audio settings
+    'music_volume': 100,  # Music volume (0 to 100)
+    'sfx_volume': 100,  # SFX volume (0 to 100)
+    'global_offset': 0,  # Global offset in milliseconds (-200 to 200)
+    # Gameplay settings
+    'timing_windows': 'normal',  # 'strict', 'normal', or 'lenient'
 }
 
 # Key mappings (will be rebuilt from settings)
@@ -363,8 +417,48 @@ def draw_hit_bar():
     canvas.create_rectangle(bar_start, BAR_Y - 5, bar_end, BAR_Y + 5,
                           fill='white', outline='yellow', width=3, tags='hitbar')
     
+    # Draw timing zones if enabled
+    if settings.get('show_timing_zones', False):
+        windows = get_timing_windows()
+        # Calculate pixel heights for each timing window
+        # Assuming 600 pixels per second scroll speed as base
+        base_speed = 600
+        
+        # Draw zones (from bottom to top: MISS, BAD, GOOD, GREAT, PERFECT)
+        zone_colors = {
+            'MISS': '#550000',
+            'BAD': '#553300', 
+            'GOOD': '#555500',
+            'GREAT': '#005500',
+            'PERFECT': '#005555'
+        }
+        
+        if settings.get('colorblind_mode', False):
+            zone_colors = {
+                'MISS': '#330000',
+                'BAD': '#440044',
+                'GOOD': '#442200',
+                'GREAT': '#444400',
+                'PERFECT': '#004444'
+            }
+        
+        # Draw zones as semi-transparent overlays
+        for zone_name in ['MISS', 'BAD', 'GOOD', 'GREAT', 'PERFECT']:
+            zone_height = int(windows[zone_name] * base_speed)
+            zone_y_start = BAR_Y - zone_height
+            zone_y_end = BAR_Y + zone_height
+            
+            # Draw behind the hit bar
+            canvas.create_rectangle(bar_start, zone_y_start, bar_end, zone_y_end,
+                                  fill=zone_colors[zone_name], outline='',
+                                  tags='timing_zone', stipple='gray25')
+    
     # Draw lane indicators at the hit bar
     colors = ['red', 'orange', 'yellow', 'lime', 'cyan', 'blue', 'purple', 'magenta']
+    if settings.get('colorblind_mode', False):
+        # Colorblind-friendly lane colors
+        colors = ['#E69F00', '#56B4E9', '#009E73', '#F0E442', '#0072B2', '#D55E00', '#CC79A7', '#999999']
+    
     for i in range(LANE_COUNT):
         x = LANE_MARGIN + i * LANE_WIDTH + LANE_WIDTH // 2
         canvas.create_rectangle(x - 40, BAR_Y - 10, x + 40, BAR_Y + 10,
@@ -467,8 +561,61 @@ def draw_slide(lane, y_start, y_end, note_id, is_holding=False, multiplier=1):
                           fill=bar_color, outline=outline_color, width=3, tags=f'note_{note_id}')
 
 def show_judgment(judgment, offset_ms=None, auto_miss=False):
-    """Display judgment text for 400ms with optional offset"""
+    """Display judgment text for 400ms with optional offset and LATE/EARLY indicators"""
     global judgment_display
+    
+    # Get colors based on settings
+    if settings.get('colorblind_mode', False):
+        # Colorblind-friendly colors
+        colors = {
+            'PERFECT': '#00D9FF',  # Bright cyan
+            'GREAT': '#FFD700',    # Gold
+            'GOOD': '#FF6B35',     # Orange-red
+            'BAD': '#A020F0',      # Purple
+            'MISS': '#FF1744'      # Deep red
+        }
+    elif settings.get('high_contrast_mode', False):
+        # High contrast colors
+        colors = {
+            'PERFECT': 'white',
+            'GREAT': 'yellow',
+            'GOOD': 'orange',
+            'BAD': 'red',
+            'MISS': 'red'
+        }
+    else:
+        # Default colors
+        colors = {
+            'PERFECT': 'cyan',
+            'GREAT': 'lime',
+            'GOOD': 'yellow',
+            'BAD': 'orange',
+            'MISS': 'red'
+        }
+    
+    # Add offset display and LATE/EARLY indicators
+    display_text = judgment
+    if judgment == 'MISS' and auto_miss:
+        display_text = "MISS (N/A)"
+    elif offset_ms is not None:
+        # Add LATE/EARLY indicators for PERFECT and GREAT
+        if settings.get('show_late_early', True) and judgment in ['PERFECT', 'GREAT']:
+            if offset_ms > 5:  # More than 5ms late
+                late_early = " LATE"
+            elif offset_ms < -5:  # More than 5ms early
+                late_early = " EARLY"
+            else:
+                late_early = ""
+            display_text = f"{judgment}{late_early} ({offset_ms:+.0f}ms)"
+        else:
+            display_text = f"{judgment} ({offset_ms:+.0f}ms)"
+    
+    end_time = time.time() + 0.4  # 400ms
+    judgment_display = (display_text, end_time, colors.get(judgment, 'white'))
+
+def spawn_particle(lane, judgment):
+    """Spawn a hit particle effect at the hit bar in the given lane"""
+    global active_particles
     
     colors = {
         'PERFECT': 'cyan',
@@ -478,33 +625,86 @@ def show_judgment(judgment, offset_ms=None, auto_miss=False):
         'MISS': 'red'
     }
     
-    # Add offset display
-    display_text = judgment
-    if judgment == 'MISS' and auto_miss:
-        display_text = "MISS (N/A)"
-    elif offset_ms is not None:
-        display_text = f"{judgment} ({offset_ms:+.0f}ms)"
+    x = LANE_MARGIN + lane * LANE_WIDTH + LANE_WIDTH // 2
+    y = BAR_Y
+    color = colors.get(judgment, 'white')
+    end_time = time.time() + 0.3  # 300ms lifetime
     
-    end_time = time.time() + 0.4  # 400ms
-    judgment_display = (display_text, end_time, colors.get(judgment, 'white'))
+    # Create particle as (x, y, initial_size, color, end_time, spawn_time)
+    active_particles.append((x, y, 20, color, end_time, time.time()))
+
+def draw_particles():
+    """Draw all active particles with expanding/fading animation"""
+    current_time = time.time()
+    particles_to_remove = []
+    
+    for i, particle in enumerate(active_particles):
+        x, y, initial_size, color, end_time, spawn_time = particle
+        
+        if current_time >= end_time:
+            particles_to_remove.append(i)
+            continue
+        
+        # Calculate animation progress (0.0 to 1.0)
+        progress = (current_time - spawn_time) / 0.3
+        
+        # Expand size over time
+        size = int(initial_size + (60 * progress))
+        
+        # Calculate opacity (fade out)
+        opacity = int(255 * (1.0 - progress))
+        
+        # Draw particle as expanding circle
+        # Use stipple pattern to simulate transparency (tkinter limitation)
+        stipple_patterns = ['', 'gray75', 'gray50', 'gray25']
+        stipple_index = min(int(progress * 4), 3)
+        stipple = stipple_patterns[stipple_index]
+        
+        if stipple:
+            canvas.create_oval(x - size, y - size, x + size, y + size,
+                             outline=color, width=2, fill='', 
+                             stipple=stipple, tags='particle')
+        else:
+            canvas.create_oval(x - size, y - size, x + size, y + size,
+                             outline=color, width=2, fill='',
+                             tags='particle')
+    
+    # Remove expired particles
+    for i in reversed(particles_to_remove):
+        active_particles.pop(i)
+
+def calculate_accuracy():
+    """Calculate current accuracy percentage"""
+    total_notes_hit = perfect_count + great_count + good_count + bad_count
+    if total_notes_hit == 0:
+        return 100.0
+    
+    # Formula: (perfect*100 + great*70 + good*40 + bad*10) / (total notes hit * 100)
+    weighted_score = (perfect_count * 100 + great_count * 70 + 
+                     good_count * 40 + bad_count * 10)
+    accuracy = weighted_score / (total_notes_hit * 100.0)
+    return accuracy * 100.0
 
 def judge_timing(time_diff):
     """Return judgment, score, and offset in ms based on timing difference"""
     global perfect_count, great_count, good_count, bad_count, miss_count
     
+    # Get timing windows from settings
+    windows = get_timing_windows()
+    
     abs_diff = abs(time_diff)
     offset_ms = time_diff * 1000  # Convert to ms
     
-    if abs_diff <= TIMING_PERFECT:
+    if abs_diff <= windows['PERFECT']:
         perfect_count += 1
         return 'PERFECT', SCORE_PERFECT, offset_ms
-    elif abs_diff <= TIMING_GREAT:
+    elif abs_diff <= windows['GREAT']:
         great_count += 1
         return 'GREAT', SCORE_GREAT, offset_ms
-    elif abs_diff <= TIMING_GOOD: 
+    elif abs_diff <= windows['GOOD']: 
         good_count += 1
         return 'GOOD', SCORE_GOOD, offset_ms
-    elif abs_diff <= TIMING_BAD:
+    elif abs_diff <= windows['BAD']:
         bad_count += 1
         return 'BAD', SCORE_BAD, offset_ms
     else:
@@ -545,6 +745,7 @@ def check_hit(lane, current_time):
         best_note['hit'] = True
         best_note['judgment'] = judgment
         show_judgment(judgment, offset_ms)
+        spawn_particle(lane, judgment)  # Add particle effect
         return hit
     
     # Check slide notes
@@ -567,11 +768,13 @@ def check_hit(lane, current_time):
                         combo += 1
                         max_combo = max(max_combo, combo)
                         show_judgment(judgment, offset_ms)
+                        spawn_particle(lane, judgment)  # Add particle effect
                         hit = True
                     else: 
                         combo = 0
                         slide['hit'] = True  # Mark for deletion
                         show_judgment('MISS')
+                        spawn_particle(lane, 'MISS')  # Add particle effect for miss
     
     return hit
 
@@ -628,12 +831,14 @@ def check_slide_hold(lane, current_time, is_holding):
                     max_combo = max(max_combo, combo)
                     slide['remove'] = True  # Mark for removal
                     show_judgment(judgment, offset_ms)
+                    spawn_particle(lane, judgment)  # Add particle effect
                 else:
                     # Released too early
                     combo = 0
                     miss_count += 1
                     slide['remove'] = True  # Mark for removal
                     show_judgment('MISS')
+                    spawn_particle(lane, 'MISS')  # Add particle effect
 
 def on_press(key):
     """Handle key press - only register if key wasn't already down"""
@@ -698,12 +903,43 @@ def on_release(key):
 def on_tkinter_press(event):
     """Handle tkinter key press events during gameplay"""
     global key_pressed_flags, key_is_down, game_running
+    global practice_speed, practice_loop_start, practice_loop_end, practice_looping
     
     print(f"DEBUG tkinter_press: keysym={event.keysym}, char={event.char}, game_running={game_running}")
     
     if event.keysym == 'Escape':
         game_running = False
         return
+    
+    # Practice mode controls
+    if game_mode == 'practice':
+        if event.char == '[':
+            # Set loop start
+            current_time = time.time() - start_time
+            practice_loop_start = current_time
+            print(f"Practice loop start set at {current_time:.2f}s")
+            return
+        elif event.char == ']':
+            # Set loop end
+            current_time = time.time() - start_time
+            practice_loop_end = current_time
+            print(f"Practice loop end set at {current_time:.2f}s")
+            return
+        elif event.char and event.char.lower() == 'l':
+            # Toggle looping
+            practice_looping = not practice_looping
+            print(f"Practice looping: {practice_looping}")
+            return
+        elif event.char == '-':
+            # Decrease speed
+            practice_speed = max(0.25, practice_speed - 0.25)
+            print(f"Practice speed: {practice_speed:.2f}x")
+            return
+        elif event.char == '=':
+            # Increase speed
+            practice_speed = min(2.0, practice_speed + 0.25)
+            print(f"Practice speed: {practice_speed:.2f}x")
+            return
     
     # Get lane from key
     lane = None
@@ -712,7 +948,7 @@ def on_tkinter_press(event):
     
     if lane is not None:
         key_is_down[lane] = True
-        if not is_replay and game_running:
+        if not is_replay and game_running and game_mode != 'auto':
             if not key_pressed_flags[lane]:
                 key_pressed_flags[lane] = True
                 current_time = time.time() - start_time
@@ -733,7 +969,7 @@ def on_tkinter_release(event):
     if lane is not None:
         key_pressed_flags[lane] = False
         key_is_down[lane] = False
-        if not is_replay and game_running:
+        if not is_replay and game_running and game_mode != 'auto':
             current_time = time.time() - start_time
             replay_data.append((current_time, 'release', lane))
             check_slide_hold(lane, current_time, False)
@@ -768,13 +1004,27 @@ def get_rank_color(rank):
     return colors.get(rank, 'white')
 
 def draw_ui():
-    """Draw score bar and judgment"""
+    """Draw score bar, accuracy, combo, and judgment"""
     canvas.delete('ui')
+    canvas.delete('particle')  # Clear old particles
     draw_key_labels()  # Update key press feedback
+    draw_particles()  # Draw active particles
     
     # Score at top left
     canvas.create_text(80, 30, text=f"Score: {score}",
                       fill='white', font=('Arial', 24, 'bold'), tags='ui', anchor='w')
+    
+    # Accuracy percentage at top left (below score)
+    accuracy = calculate_accuracy()
+    canvas.create_text(80, 65, text=f"Accuracy: {accuracy:.2f}%",
+                      fill='cyan', font=('Arial', 20, 'bold'), tags='ui', anchor='w')
+    
+    # Combo counter at top right
+    if combo > 0:
+        canvas.create_text(width - 80, 30, text=f"{combo}",
+                          fill='yellow', font=('Arial', 48, 'bold'), tags='ui', anchor='e')
+        canvas.create_text(width - 80, 75, text="COMBO",
+                          fill='yellow', font=('Arial', 20, 'bold'), tags='ui', anchor='e')
     
     # Draw judgment display (centered at top)
     if judgment_display:
@@ -782,6 +1032,21 @@ def draw_ui():
         if time.time() < end_time:
             canvas.create_text(width // 2, 100, text=judgment_text,
                              fill=color, font=('Arial', 48, 'bold'), tags='ui')
+    
+    # Watermarks for special modes
+    if game_mode == 'auto':
+        canvas.create_text(width // 2, height - 100, text="AUTO PLAY",
+                         fill='#666666', font=('Arial', 32, 'bold'), tags='ui')
+    elif game_mode == 'practice':
+        practice_text = f"PRACTICE MODE - Speed: {practice_speed:.2f}x"
+        if practice_looping and practice_loop_start is not None and practice_loop_end is not None:
+            practice_text += " [LOOP]"
+        canvas.create_text(width // 2, height - 100, text=practice_text,
+                         fill='#666666', font=('Arial', 24, 'bold'), tags='ui')
+        # Show controls
+        canvas.create_text(width // 2, height - 70, 
+                         text="[ = Loop Start  |  ] = Loop End  |  L = Toggle Loop  |  - = Slower  |  + = Faster",
+                         fill='#555555', font=('Arial', 14), tags='ui')
 
 def get_pixel_speed(current_beat):
     """Get the current pixel speed based on BPM, spd% changes, and global multiplier"""
@@ -902,9 +1167,284 @@ def show_countdown():
     canvas.delete('countdown')
     root.update()
 
+def save_replay(chart_id, difficulty, score, accuracy, inputs, rank):
+    """Save replay data to file in JSON format"""
+    import json
+    from datetime import datetime
+    
+    # Create replays directory if it doesn't exist
+    replay_dir = os.path.join(os.path.dirname(__file__), "replays")
+    os.makedirs(replay_dir, exist_ok=True)
+    
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{chart_id}_{difficulty}_{timestamp}.replay"
+    filepath = os.path.join(replay_dir, filename)
+    
+    # Prepare replay data
+    replay_info = {
+        "chart_id": chart_id,
+        "difficulty": difficulty,
+        "score": score,
+        "accuracy": accuracy,
+        "rank": rank,
+        "max_combo": max_combo,
+        "perfect": perfect_count,
+        "great": great_count,
+        "good": good_count,
+        "bad": bad_count,
+        "miss": miss_count,
+        "timestamp": timestamp,
+        "inputs": inputs  # List of (time, event_type, lane) tuples
+    }
+    
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(replay_info, f, indent=2)
+        print(f"Replay saved to {filepath}")
+    except Exception as e:
+        print(f"Error saving replay: {e}")
+
+def load_progress():
+    """Load progress data from file"""
+    import json
+    
+    progress_file = os.path.join(os.path.dirname(__file__), "progress.json")
+    if not os.path.exists(progress_file):
+        # Create default progress file
+        default_progress = {
+            "username": "Player",
+            "total_charts_played": 0,
+            "total_score": 0,
+            "total_playtime_seconds": 0,
+            "total_perfects": 0,
+            "total_greats": 0,
+            "total_goods": 0,
+            "total_bads": 0,
+            "total_misses": 0,
+            "best_scores": {},
+            "recently_played": [],
+            "achievements": {}
+        }
+        try:
+            with open(progress_file, 'w') as f:
+                json.dump(default_progress, f, indent=2)
+        except:
+            pass
+        return default_progress
+    
+    try:
+        with open(progress_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading progress: {e}")
+        return None
+
+def save_progress_data(progress):
+    """Save progress data to file"""
+    import json
+    
+    progress_file = os.path.join(os.path.dirname(__file__), "progress.json")
+    try:
+        with open(progress_file, 'w') as f:
+            json.dump(progress, f, indent=2)
+        print(f"Progress saved")
+    except Exception as e:
+        print(f"Error saving progress: {e}")
+
+def update_progress(chart_id, difficulty, score, rank, accuracy, playtime_seconds):
+    """Update progress after completing a chart"""
+    from datetime import datetime
+    
+    progress = load_progress()
+    if not progress:
+        return
+    
+    # Update totals
+    progress['total_charts_played'] += 1
+    progress['total_score'] += score
+    progress['total_playtime_seconds'] += int(playtime_seconds)
+    progress['total_perfects'] += perfect_count
+    progress['total_greats'] += great_count
+    progress['total_goods'] += good_count
+    progress['total_bads'] += bad_count
+    progress['total_misses'] += miss_count
+    
+    # Update best score for this chart/difficulty
+    chart_key = f"{chart_id}_{difficulty}"
+    if 'best_scores' not in progress:
+        progress['best_scores'] = {}
+    
+    if chart_key not in progress['best_scores'] or score > progress['best_scores'][chart_key].get('score', 0):
+        progress['best_scores'][chart_key] = {
+            'score': score,
+            'rank': rank,
+            'accuracy': accuracy,
+            'max_combo': max_combo,
+            'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    
+    # Update recently played (keep last 10)
+    if 'recently_played' not in progress:
+        progress['recently_played'] = []
+    
+    recent_entry = {
+        'chart_id': chart_id,
+        'difficulty': difficulty,
+        'score': score,
+        'rank': rank,
+        'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
+    }
+    
+    # Remove if already in list
+    progress['recently_played'] = [r for r in progress['recently_played'] 
+                                   if not (r['chart_id'] == chart_id and r['difficulty'] == difficulty)]
+    
+    # Add to front
+    progress['recently_played'].insert(0, recent_entry)
+    
+    # Keep only last 10
+    progress['recently_played'] = progress['recently_played'][:10]
+    
+    # Check for achievements
+    if 'achievements' not in progress:
+        progress['achievements'] = {}
+    
+    # Achievement: First clear
+    if 'first_clear' not in progress['achievements']:
+        progress['achievements']['first_clear'] = {
+            'name': 'First Clear',
+            'description': 'Complete your first chart',
+            'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    
+    # Achievement: 10 charts played
+    if progress['total_charts_played'] >= 10 and '10_charts' not in progress['achievements']:
+        progress['achievements']['10_charts'] = {
+            'name': '10 Charts',
+            'description': 'Play 10 charts',
+            'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    
+    # Achievement: First S rank
+    if rank == 'S' and 's_rank' not in progress['achievements']:
+        progress['achievements']['s_rank'] = {
+            'name': 'S Rank',
+            'description': 'Achieve an S rank',
+            'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    
+    # Achievement: Full combo
+    if miss_count == 0 and (perfect_count + great_count + good_count + bad_count) > 0:
+        if 'full_combo' not in progress['achievements']:
+            progress['achievements']['full_combo'] = {
+                'name': 'Full Combo',
+                'description': 'Complete a chart with no misses',
+                'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+            }
+    
+    # Achievement: All perfect
+    total_notes = perfect_count + great_count + good_count + bad_count + miss_count
+    if perfect_count == total_notes and perfect_count > 0:
+        if 'all_perfect' not in progress['achievements']:
+            progress['achievements']['all_perfect'] = {
+                'name': 'All Perfect',
+                'description': 'Complete a chart with all perfect hits',
+                'unlocked': datetime.now().strftime("%Y%m%d_%H%M%S")
+            }
+    
+    save_progress_data(progress)
+    return progress
+
+def load_replay_file(filepath):
+    """Load replay data from file"""
+    import json
+    
+    try:
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading replay: {e}")
+        return None
+
+def get_available_replays():
+    """Scan replays directory and return list of replay files"""
+    replay_dir = os.path.join(os.path.dirname(__file__), "replays")
+    if not os.path.exists(replay_dir):
+        return []
+    
+    replays = []
+    for filename in os.listdir(replay_dir):
+        if filename.endswith('.replay'):
+            filepath = os.path.join(replay_dir, filename)
+            replay_data = load_replay_file(filepath)
+            if replay_data:
+                replays.append({
+                    'filename': filename,
+                    'filepath': filepath,
+                    'data': replay_data
+                })
+    
+    # Sort by timestamp (newest first)
+    replays.sort(key=lambda x: x['data'].get('timestamp', ''), reverse=True)
+    return replays
+
+def auto_play_ai(current_time):
+    """AI that plays notes perfectly in auto mode"""
+    global key_is_down, key_pressed_flags
+    
+    # Check tap notes for perfect hits
+    for note in active_notes[:]:
+        if note['type'] == 'tap' and not note.get('hit', False):
+            time_diff = abs(current_time - note['time'])
+            # Hit exactly on time (within 1 frame)
+            if time_diff <= (1.0 / fps):
+                lane = note['lane']
+                if not key_is_down.get(lane, False):
+                    key_is_down[lane] = True
+                    key_pressed_flags[lane] = True
+                    check_hit(lane, current_time)
+                    # Schedule release after 0.05 seconds
+                    note['auto_release_time'] = current_time + 0.05
+    
+    # Release tap notes after brief hold
+    for note in active_notes[:]:
+        if note.get('auto_release_time') and current_time >= note['auto_release_time']:
+            lane = note['lane']
+            key_is_down[lane] = False
+            key_pressed_flags[lane] = False
+            note.pop('auto_release_time', None)
+    
+    # Check slide notes
+    for slide in active_slides[:]:
+        lane = slide['lane']
+        
+        # Start holding at perfect timing
+        if not slide.get('holding', False) and not slide.get('hit', False):
+            time_diff = abs(current_time - slide['time'])
+            if time_diff <= (1.0 / fps):
+                key_is_down[lane] = True
+                key_pressed_flags[lane] = True
+                check_hit(lane, current_time)
+        
+        # Continue holding during slide
+        if slide.get('holding', False):
+            key_is_down[lane] = True
+            
+            # Release at perfect timing
+            if current_time >= slide['end_time']:
+                time_diff = abs(current_time - slide['end_time'])
+                if time_diff <= (1.0 / fps):
+                    key_is_down[lane] = False
+                    key_pressed_flags[lane] = False
+                    check_slide_hold(lane, current_time, False)
+
 def game_loop():
     """Main game loop"""
-    global start_time, game_running, chart, music_playing
+    global start_time, game_running, chart, music_playing, active_particles
+    
+    # Reset particles
+    active_particles = []
     
     # Show countdown
     show_countdown()
@@ -934,6 +1474,19 @@ def game_loop():
     while game_running and (chart or active_notes or active_slides):
         frame_start = time.time()
         current_time = frame_start - start_time
+        
+        # Practice mode loop check
+        if game_mode == 'practice' and practice_looping:
+            if practice_loop_start is not None and practice_loop_end is not None:
+                if current_time >= practice_loop_end:
+                    # Loop back to start
+                    # This is simplified - ideally we'd reset all game state
+                    start_time += (practice_loop_end - practice_loop_start)
+                    current_time = practice_loop_start
+        
+        # Auto-play AI
+        if game_mode == 'auto':
+            auto_play_ai(current_time)
         
         # Clear dynamic elements
         canvas.delete('note')
@@ -986,6 +1539,50 @@ def game_loop():
         
         root.update()
         time.sleep(2.0)  # Display for 2 seconds
+    
+    # Save replay to file (only if not already a replay and not in auto mode)
+    if not is_replay and game_mode != 'auto' and current_chart_id and current_difficulty:
+        save_replay(current_chart_id, current_difficulty, score, 
+                   calculate_accuracy(), replay_data, rank)
+    
+    # Update progress (only if not replay and not auto mode)
+    if not is_replay and game_mode != 'auto' and current_chart_id and current_difficulty:
+        playtime = time.time() - start_time
+        updated_progress = update_progress(current_chart_id, current_difficulty, 
+                                          score, rank, calculate_accuracy(), playtime)
+        
+        # Check for new achievements
+        if updated_progress:
+            new_achievements = []
+            for ach_key, ach_data in updated_progress.get('achievements', {}).items():
+                # Check if achievement was just unlocked (within last 10 seconds)
+                from datetime import datetime, timedelta
+                unlock_time = datetime.strptime(ach_data['unlocked'], "%Y%m%d_%H%M%S")
+                if datetime.now() - unlock_time < timedelta(seconds=10):
+                    new_achievements.append(ach_data)
+            
+            # Show new achievements
+            if new_achievements:
+                canvas.delete('all')
+                canvas.configure(bg='black')
+                
+                canvas.create_text(width // 2, height // 2 - 150, 
+                                 text="ACHIEVEMENT UNLOCKED!",
+                                 fill='gold', font=('Arial', 48, 'bold'))
+                
+                y_pos = height // 2 - 50
+                for ach in new_achievements:
+                    canvas.create_text(width // 2, y_pos, 
+                                     text=ach['name'],
+                                     fill='yellow', font=('Arial', 36, 'bold'))
+                    y_pos += 50
+                    canvas.create_text(width // 2, y_pos, 
+                                     text=ach['description'],
+                                     fill='white', font=('Arial', 20))
+                    y_pos += 70
+                
+                root.update()
+                time.sleep(2.5)
     
     # Game over screen
     canvas.delete('all')
@@ -1054,7 +1651,7 @@ def play_replay():
     """Play back the recorded replay"""
     global is_replay, replay_index, game_running, start_time
     global score, combo, max_combo, perfect_count, great_count, good_count, bad_count, miss_count
-    global active_notes, active_slides, chart, key_is_down, key_pressed_flags
+    global active_notes, active_slides, chart, key_is_down, key_pressed_flags, active_particles
     
     # Reset game state
     is_replay = True
@@ -1066,6 +1663,8 @@ def play_replay():
     great_count = 0
     good_count = 0
     bad_count = 0
+    miss_count = 0
+    active_particles = []  # Reset particles
     miss_count = 0
     active_notes = []
     active_slides = []
@@ -1088,6 +1687,8 @@ def play_replay():
     start_time = time.time()
     game_running = True
     replay_exit = False
+    paused = False  # Pause state for frame-by-frame
+    current_frame = 0  # Frame counter for paused display
     
     canvas.delete('all')
     canvas.configure(bg='black')
@@ -1143,44 +1744,75 @@ def play_replay():
     def on_replay_key(event):
         """Handle key presses during replay"""
         global game_running, start_time
-        nonlocal replay_exit
+        nonlocal replay_exit, paused, current_frame
         
         if event.keysym == 'Escape':
             game_running = False
             replay_exit = True
+        elif event.char and event.char == ' ':
+            # Toggle pause
+            paused = not paused
+            if not paused:
+                # Resume - adjust start_time to account for pause
+                start_time = time.time() - (current_frame / fps)
+        elif event.char and event.char == ',':
+            # Step backward one frame (when paused)
+            if paused:
+                current_frame = max(0, current_frame - 1)
+                target_time = current_frame / fps
+                seek_to_time(target_time)
+                start_time = time.time() - target_time
+        elif event.char and event.char == '.':
+            # Step forward one frame (when paused)
+            if paused:
+                current_frame += 1
+                target_time = current_frame / fps
+                seek_to_time(target_time)
+                start_time = time.time() - target_time
         elif event.keysym == 'Left':
             # Jump back 5 seconds
             current_time = time.time() - start_time
             new_time = max(0, current_time - 5.0)
             seek_to_time(new_time)
             start_time = time.time() - new_time
+            if paused:
+                current_frame = int(new_time * fps)
         elif event.keysym == 'Right':
             # Jump forward 5 seconds
             current_time = time.time() - start_time
             new_time = min(total_duration, current_time + 5.0)
             seek_to_time(new_time)
             start_time = time.time() - new_time
+            if paused:
+                current_frame = int(new_time * fps)
     
     root.bind('<KeyPress>', on_replay_key)
     
     while game_running and (chart or active_notes or active_slides):
-        frame_start = time.time()
-        current_time = frame_start - start_time
+        if not paused:
+            frame_start = time.time()
+            current_time = frame_start - start_time
+            current_frame = int(current_time * fps)
+        else:
+            # When paused, use the stored frame number
+            frame_start = time.time()
+            current_time = current_frame / fps
         
-        # Process replay events
-        while replay_index < len(replay_data) and replay_data[replay_index][0] <= current_time:
-            event_time, event_type, lane = replay_data[replay_index]
-            
-            if event_type == 'press':
-                key_is_down[lane] = True
-                key_pressed_flags[lane] = True
-                check_hit(lane, event_time)
-            elif event_type == 'release':
-                key_is_down[lane] = False
-                key_pressed_flags[lane] = False
-                check_slide_hold(lane, event_time, False)
-            
-            replay_index += 1
+        # Process replay events (only if not paused)
+        if not paused:
+            while replay_index < len(replay_data) and replay_data[replay_index][0] <= current_time:
+                event_time, event_type, lane = replay_data[replay_index]
+                
+                if event_type == 'press':
+                    key_is_down[lane] = True
+                    key_pressed_flags[lane] = True
+                    check_hit(lane, event_time)
+                elif event_type == 'release':
+                    key_is_down[lane] = False
+                    key_pressed_flags[lane] = False
+                    check_slide_hold(lane, event_time, False)
+                
+                replay_index += 1
         
         # Clear dynamic elements
         canvas.delete('note')
@@ -1189,9 +1821,13 @@ def play_replay():
         update_notes(current_time)
         draw_ui()
         
-        # Add "REPLAY" watermark
-        canvas.create_text(width // 2, height - 80, text="REPLAY",
-                         fill='#666666', font=('Arial', 24, 'bold'), tags='ui')
+        # Add "REPLAY" watermark or "PAUSED" indicator
+        if paused:
+            canvas.create_text(width // 2, height - 80, text=f"PAUSED - Frame {current_frame}",
+                             fill='#FF6666', font=('Arial', 24, 'bold'), tags='ui')
+        else:
+            canvas.create_text(width // 2, height - 80, text="REPLAY",
+                             fill='#666666', font=('Arial', 24, 'bold'), tags='ui')
         
         # Draw playback bar at bottom
         bar_width = width - 200
@@ -1210,7 +1846,8 @@ def play_replay():
             progress_width = int(bar_width * progress)
             canvas.create_rectangle(bar_x, bar_y - bar_height // 2,
                                   bar_x + progress_width, bar_y + bar_height // 2,
-                                  fill='#00AAFF', outline='', tags='ui')
+                                  fill='#00AAFF' if not paused else '#FF6666', 
+                                  outline='', tags='ui')
         
         # Time display
         time_text = f"{int(current_time // 60):02d}:{int(current_time % 60):02d} / {int(total_duration // 60):02d}:{int(total_duration % 60):02d}"
@@ -1218,14 +1855,24 @@ def play_replay():
                          fill='white', font=('Arial', 16), tags='ui')
         
         # Controls hint
-        canvas.create_text(width // 2, height - 10, text="← Jump Back 5s  |  → Jump Forward 5s  |  ESC Exit Replay",
-                         fill='#888888', font=('Arial', 14), tags='ui')
+        if paused:
+            canvas.create_text(width // 2, height - 10, 
+                             text="SPACE Resume  |  , Previous Frame  |  . Next Frame  |  ESC Exit",
+                             fill='#888888', font=('Arial', 14), tags='ui')
+        else:
+            canvas.create_text(width // 2, height - 10, 
+                             text="SPACE Pause  |  ← Jump Back 5s  |  → Jump Forward 5s  |  ESC Exit Replay",
+                             fill='#888888', font=('Arial', 14), tags='ui')
         
-        # Maintain frame rate
-        elapsed = time.time() - frame_start
-        sleep_time = frame_dur - elapsed
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+        # Maintain frame rate (only if not paused)
+        if not paused:
+            elapsed = time.time() - frame_start
+            sleep_time = frame_dur - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+        else:
+            # When paused, just update at a lower rate
+            time.sleep(0.05)
         
         root.update()
     
@@ -1255,6 +1902,166 @@ def get_available_charts():
                 charts[chart_id].append(difficulty)
     
     return charts
+
+def show_replay_menu():
+    """Display replay selection menu"""
+    global current_chart_id, current_difficulty, replay_data, is_replay
+    
+    menu_running = True
+    current_page = 0
+    replays_per_page = 10
+    
+    def draw_menu():
+        canvas.delete('all')
+        canvas.configure(bg='black')
+        
+        # Title
+        canvas.create_text(width // 2, 50, text="WATCH REPLAY",
+                         fill='white', font=('Arial', 48, 'bold'))
+        
+        # Instructions
+        canvas.create_text(width // 2, 120, text="Use number keys or click to select | ←→ to change page | ESC to go back",
+                         fill='gray', font=('Arial', 16))
+        
+        replays = get_available_replays()
+        if not replays:
+            canvas.create_text(width // 2, height // 2,
+                             text="No replays found",
+                             fill='red', font=('Arial', 24))
+            root.update()
+            return
+        
+        # Calculate pagination
+        total_pages = (len(replays) + replays_per_page - 1) // replays_per_page
+        nonlocal current_page
+        current_page = max(0, min(current_page, total_pages - 1))
+        
+        start_idx = current_page * replays_per_page
+        end_idx = min(start_idx + replays_per_page, len(replays))
+        page_replays = replays[start_idx:end_idx]
+        
+        # Display page indicator
+        if total_pages > 1:
+            canvas.create_text(width // 2, 150, text=f"Page {current_page + 1} of {total_pages}",
+                             fill='white', font=('Arial', 18))
+        
+        # Display replays
+        y_pos = 200
+        for i, replay_info in enumerate(page_replays):
+            data = replay_info['data']
+            chart_id = data.get('chart_id', 'Unknown')
+            difficulty = data.get('difficulty', 'Unknown')
+            rank = data.get('rank', 'D')
+            score = data.get('score', 0)
+            accuracy = data.get('accuracy', 0)
+            timestamp = data.get('timestamp', '')
+            
+            # Format timestamp for display
+            if len(timestamp) >= 13:
+                date_str = f"{timestamp[4:6]}/{timestamp[6:8]}"
+                time_str = f"{timestamp[9:11]}:{timestamp[11:13]}"
+                display_time = f"{date_str} {time_str}"
+            else:
+                display_time = timestamp
+            
+            text = f"{i + 1}. {chart_id} [{difficulty}] - Rank {rank} - {accuracy:.1f}% - {display_time}"
+            canvas.create_text(width // 2, y_pos, text=text,
+                             fill='cyan', font=('Arial', 18), tags=f'replay_{i}')
+            y_pos += 35
+        
+        root.update()
+    
+    def on_tkinter_key(event):
+        """Handle tkinter key events for menu"""
+        nonlocal menu_running, current_page
+        
+        if event.keysym == 'Escape':
+            menu_running = False
+            return
+        
+        # Left/Right arrows for pagination
+        if event.keysym == 'Left':
+            replays = get_available_replays()
+            total_pages = (len(replays) + replays_per_page - 1) // replays_per_page
+            if current_page > 0:
+                current_page -= 1
+                draw_menu()
+            return
+        
+        if event.keysym == 'Right':
+            replays = get_available_replays()
+            total_pages = (len(replays) + replays_per_page - 1) // replays_per_page
+            if current_page < total_pages - 1:
+                current_page += 1
+                draw_menu()
+            return
+        
+        # Number key selection
+        if event.char and event.char.isdigit():
+            num = int(event.char)
+            if num > 0:
+                replays = get_available_replays()
+                start_idx = current_page * replays_per_page
+                page_replays = replays[start_idx:start_idx + replays_per_page]
+                if num <= len(page_replays):
+                    # Load and play selected replay
+                    replay_info = page_replays[num - 1]
+                    data = replay_info['data']
+                    
+                    current_chart_id = data['chart_id']
+                    current_difficulty = data['difficulty']
+                    replay_data = [tuple(event) for event in data['inputs']]
+                    
+                    menu_running = False
+                    root.unbind('<KeyPress>')
+                    root.unbind('<Button-1>')
+                    
+                    # Start replay
+                    load_chart(current_chart_id, current_difficulty)
+                    play_replay()
+    
+    def on_mouse_click(event):
+        """Handle mouse clicks in replay menu"""
+        # Get clicked item
+        items = canvas.find_overlapping(event.x - 10, event.y - 10, event.x + 10, event.y + 10)
+        for item in items:
+            tags = canvas.gettags(item)
+            for tag in tags:
+                if tag.startswith('replay_'):
+                    replay_index = int(tag.split('_')[1])
+                    replays = get_available_replays()
+                    start_idx = current_page * replays_per_page
+                    page_replays = replays[start_idx:start_idx + replays_per_page]
+                    if replay_index < len(page_replays):
+                        # Load and play selected replay
+                        replay_info = page_replays[replay_index]
+                        data = replay_info['data']
+                        
+                        global current_chart_id, current_difficulty, replay_data
+                        current_chart_id = data['chart_id']
+                        current_difficulty = data['difficulty']
+                        replay_data = [tuple(event) for event in data['inputs']]
+                        
+                        nonlocal menu_running
+                        menu_running = False
+                        root.unbind('<KeyPress>')
+                        root.unbind('<Button-1>')
+                        
+                        # Start replay
+                        load_chart(current_chart_id, current_difficulty)
+                        play_replay()
+                    return
+    
+    draw_menu()
+    root.bind('<KeyPress>', on_tkinter_key)
+    root.bind('<Button-1>', on_mouse_click)
+    
+    while menu_running:
+        root.update()
+        time.sleep(0.01)
+    
+    root.unbind('<KeyPress>')
+    root.unbind('<Button-1>')
 
 def show_chart_menu():
     """Display chart selection menu"""
@@ -1411,30 +2218,45 @@ def show_chart_menu():
 
     def select_difficulty(chart_id, difficulties):
         nonlocal menu_running, selected_chart, selected_difficulty
-        global current_chart_id, current_difficulty
+        global current_chart_id, current_difficulty, game_mode
         
         canvas.delete('all')
         canvas.configure(bg='black')
         
-        canvas.create_text(width // 2, 100, text=f"Select Difficulty for {chart_id}",
+        canvas.create_text(width // 2, 100, text=f"Select Mode for {chart_id}",
                          fill='white', font=('Arial', 36, 'bold'))
         
         y_pos = 200
+        
+        # Show special modes first
+        canvas.create_text(width // 2, y_pos, text="A. Auto Play",
+                         fill='cyan', font=('Arial', 24), tags='mode_auto')
+        y_pos += 50
+        
+        canvas.create_text(width // 2, y_pos, text="P. Practice Mode",
+                         fill='lime', font=('Arial', 24), tags='mode_practice')
+        y_pos += 70
+        
+        # Show regular difficulties
+        canvas.create_text(width // 2, y_pos, text="--- Regular Difficulties ---",
+                         fill='gray', font=('Arial', 18))
+        y_pos += 50
+        
         for i, diff in enumerate(sorted(difficulties)):
             mp3_file = f"{CHART_DIRECTORY}/{chart_id}_{diff}.mp3"
             audio_icon = " ♫" if os.path.exists(mp3_file) else ""
             
             canvas.create_text(width // 2, y_pos, text=f"{i + 1}. {diff}{audio_icon}",
                              fill='yellow', font=('Arial', 24), tags=f'diff_{i}')
-            y_pos += 60
+            y_pos += 50
         
-        canvas.create_text(width // 2, height - 50, text="Press number or click to select | ESC to go back",
+        canvas.create_text(width // 2, height - 50, text="Press number/letter or click to select | ESC to go back",
                          fill='gray', font=('Arial', 16))
         root.update()
         
         def on_diff_tkinter_key(event):
             nonlocal selected_difficulty, menu_running
-            global current_chart_id, current_difficulty
+            global current_chart_id, current_difficulty, game_mode
             
             print(f"DEBUG diff_tkinter_key: {event.keysym}, {event.char}")
             
@@ -1446,12 +2268,40 @@ def show_chart_menu():
                 root.bind('<Button-1>', on_mouse_click)
                 return
             
+            # Check for Auto mode
+            if event.char and event.char.lower() == 'a':
+                # Use first available difficulty for auto mode
+                selected_difficulty = sorted(difficulties)[0]
+                current_chart_id = chart_id
+                current_difficulty = selected_difficulty
+                game_mode = 'auto'
+                menu_running = False
+                root.unbind('<KeyPress>')
+                root.unbind('<Button-1>')
+                print(f"DEBUG: Selected AUTO mode with chart_id={current_chart_id}, difficulty={current_difficulty}")
+                return
+            
+            # Check for Practice mode
+            if event.char and event.char.lower() == 'p':
+                # Use first available difficulty for practice mode
+                selected_difficulty = sorted(difficulties)[0]
+                current_chart_id = chart_id
+                current_difficulty = selected_difficulty
+                game_mode = 'practice'
+                menu_running = False
+                root.unbind('<KeyPress>')
+                root.unbind('<Button-1>')
+                print(f"DEBUG: Selected PRACTICE mode with chart_id={current_chart_id}, difficulty={current_difficulty}")
+                return
+            
+            # Regular difficulty selection
             if event.char.isdigit():
                 num = int(event.char)
                 if 0 < num <= len(difficulties):
                     selected_difficulty = sorted(difficulties)[num - 1]
                     current_chart_id = chart_id
                     current_difficulty = selected_difficulty
+                    game_mode = 'normal'
                     menu_running = False
                     root.unbind('<KeyPress>')
                     root.unbind('<Button-1>')
@@ -1459,19 +2309,40 @@ def show_chart_menu():
         
         def on_diff_mouse_click(event):
             nonlocal selected_difficulty, menu_running
-            global current_chart_id, current_difficulty
+            global current_chart_id, current_difficulty, game_mode
             
             # Get clicked item
             items = canvas.find_overlapping(event.x - 10, event.y - 10, event.x + 10, event.y + 10)
             for item in items:
                 tags = canvas.gettags(item)
                 for tag in tags:
-                    if tag.startswith('diff_'):
+                    if tag == 'mode_auto':
+                        selected_difficulty = sorted(difficulties)[0]
+                        current_chart_id = chart_id
+                        current_difficulty = selected_difficulty
+                        game_mode = 'auto'
+                        menu_running = False
+                        root.unbind('<KeyPress>')
+                        root.unbind('<Button-1>')
+                        print(f"DEBUG: Selected AUTO mode")
+                        return
+                    elif tag == 'mode_practice':
+                        selected_difficulty = sorted(difficulties)[0]
+                        current_chart_id = chart_id
+                        current_difficulty = selected_difficulty
+                        game_mode = 'practice'
+                        menu_running = False
+                        root.unbind('<KeyPress>')
+                        root.unbind('<Button-1>')
+                        print(f"DEBUG: Selected PRACTICE mode")
+                        return
+                    elif tag.startswith('diff_'):
                         diff_index = int(tag.split('_')[1])
                         if diff_index < len(difficulties):
                             selected_difficulty = sorted(difficulties)[diff_index]
                             current_chart_id = chart_id
                             current_difficulty = selected_difficulty
+                            game_mode = 'normal'
                             menu_running = False
                             root.unbind('<KeyPress>')
                             root.unbind('<Button-1>')
@@ -1534,7 +2405,13 @@ def show_options_menu():
     """Display options menu for changing settings"""
     menu_running = True
     selected_option = 0
-    options = ['Change Keys', 'Scroll Speed', 'Save & Back']
+    current_page = 0  # 0 = Main, 1 = Visual, 2 = Audio, 3 = Gameplay
+    options_pages = {
+        0: ['Visual Settings', 'Audio Settings', 'Gameplay Settings', 'Change Keys', 'Scroll Speed', 'Export Settings', 'Import Settings', 'Save & Back'],
+        1: ['Note Size', 'Hit Bar Position', 'Background Dim', 'Show FPS', 'Show Timing Zones', 'Colorblind Mode', 'High Contrast Mode', 'Show Late/Early', 'Back'],
+        2: ['Music Volume', 'SFX Volume', 'Global Offset', 'Back'],
+        3: ['Timing Windows', 'Back']
+    }
     
     # State for key remapping
     remapping_index = None
@@ -1543,7 +2420,8 @@ def show_options_menu():
         canvas.delete('all')
         canvas.configure(bg='black')
         
-        canvas.create_text(width // 2, 50, text="OPTIONS",
+        page_titles = {0: 'OPTIONS', 1: 'VISUAL SETTINGS', 2: 'AUDIO SETTINGS', 3: 'GAMEPLAY SETTINGS'}
+        canvas.create_text(width // 2, 50, text=page_titles.get(current_page, 'OPTIONS'),
                          fill='white', font=('Arial', 48, 'bold'))
         
         if remapping_index is not None:
@@ -1555,23 +2433,50 @@ def show_options_menu():
                              fill='gray', font=('Arial', 16))
         else:
             # Normal menu
-            canvas.create_text(width // 2, 120, text="Use ↑↓ to navigate, ENTER or click to select, ESC to go back",
-                             fill='gray', font=('Arial', 16))
+            canvas.create_text(width // 2, 120, text="Use ↑↓ to navigate, ENTER or click to select, ←→ to adjust values, ESC to go back",
+                             fill='gray', font=('Arial', 14))
             
             y_pos = 200
+            options = options_pages[current_page]
             for i, option in enumerate(options):
                 color = 'yellow' if i == selected_option else 'white'
+                
+                # Format text based on option
                 if option == 'Change Keys':
                     keys_text = ''.join(settings['key_bindings'])
                     text = f"{option}: {keys_text}"
                 elif option == 'Scroll Speed':
-                    text = f"{option}: {settings['scroll_speed_multiplier']:.1f}x (←→ to adjust)"
+                    text = f"{option}: {settings['scroll_speed_multiplier']:.1f}x"
+                elif option == 'Note Size':
+                    text = f"{option}: {settings.get('note_size_multiplier', 1.0):.1f}x"
+                elif option == 'Hit Bar Position':
+                    text = f"{option}: {settings.get('hit_bar_position', 0.9):.2f}"
+                elif option == 'Background Dim':
+                    text = f"{option}: {settings.get('background_dim', 0)}"
+                elif option == 'Show FPS':
+                    text = f"{option}: {'ON' if settings.get('show_fps', False) else 'OFF'}"
+                elif option == 'Show Timing Zones':
+                    text = f"{option}: {'ON' if settings.get('show_timing_zones', False) else 'OFF'}"
+                elif option == 'Colorblind Mode':
+                    text = f"{option}: {'ON' if settings.get('colorblind_mode', False) else 'OFF'}"
+                elif option == 'High Contrast Mode':
+                    text = f"{option}: {'ON' if settings.get('high_contrast_mode', False) else 'OFF'}"
+                elif option == 'Show Late/Early':
+                    text = f"{option}: {'ON' if settings.get('show_late_early', True) else 'OFF'}"
+                elif option == 'Music Volume':
+                    text = f"{option}: {settings.get('music_volume', 100)}%"
+                elif option == 'SFX Volume':
+                    text = f"{option}: {settings.get('sfx_volume', 100)}%"
+                elif option == 'Global Offset':
+                    text = f"{option}: {settings.get('global_offset', 0)}ms"
+                elif option == 'Timing Windows':
+                    text = f"{option}: {settings.get('timing_windows', 'normal').upper()}"
                 else:
                     text = option
                 
                 canvas.create_text(width // 2, y_pos, text=text,
-                                 fill=color, font=('Arial', 24), tags=f'option_{i}')
-                y_pos += 60
+                                 fill=color, font=('Arial', 22), tags=f'option_{i}')
+                y_pos += 50
         
         root.update()
     
@@ -1608,21 +2513,52 @@ def show_options_menu():
             selected_option = (selected_option + 1) % len(options)
             draw_options()
         elif event.keysym == 'Return':
-            if options[selected_option] == 'Change Keys':
+            option_name = options[selected_option]
+            if option_name == 'Change Keys':
                 # Start key remapping for each lane
                 show_key_remap_screen()
-            elif options[selected_option] == 'Scroll Speed':
-                # This is handled by left/right in the menu itself
-                pass
-            elif options[selected_option] == 'Save & Back':
+            elif option_name in ['Show FPS', 'Show Timing Zones', 'Colorblind Mode', 'High Contrast Mode', 'Show Late/Early']:
+                # Toggle boolean settings
+                setting_key = {
+                    'Show FPS': 'show_fps',
+                    'Show Timing Zones': 'show_timing_zones',
+                    'Colorblind Mode': 'colorblind_mode',
+                    'High Contrast Mode': 'high_contrast_mode',
+                    'Show Late/Early': 'show_late_early'
+                }[option_name]
+                settings[setting_key] = not settings.get(setting_key, False)
+                draw_options()
+            elif option_name == 'Save & Back':
                 save_settings()
                 menu_running = False
-        elif event.keysym == 'Left' and selected_option == 1:  # Scroll Speed
-            settings['scroll_speed_multiplier'] = max(0.1, settings['scroll_speed_multiplier'] - 0.1)
-            draw_options()
-        elif event.keysym == 'Right' and selected_option == 1:  # Scroll Speed
-            settings['scroll_speed_multiplier'] = min(10.0, settings['scroll_speed_multiplier'] + 0.1)
-            draw_options()
+            elif option_name in ['Visual Settings', 'Audio Settings', 'Gameplay Settings']:
+                # Navigate to subpage
+                nonlocal current_page
+                if option_name == 'Visual Settings':
+                    current_page = 1
+                elif option_name == 'Audio Settings':
+                    current_page = 2
+                elif option_name == 'Gameplay Settings':
+                    current_page = 3
+                selected_option = 0
+                draw_options()
+            elif option_name == 'Back':
+                # Return to main page
+                current_page = 0
+                selected_option = 0
+                draw_options()
+        elif event.keysym == 'Left':
+            # Handle left arrow for adjustable values
+            option_name = options[selected_option]
+            if option_name == 'Scroll Speed':
+                settings['scroll_speed_multiplier'] = max(0.1, settings['scroll_speed_multiplier'] - 0.1)
+                draw_options()
+        elif event.keysym == 'Right':
+            # Handle right arrow for adjustable values
+            option_name = options[selected_option]
+            if option_name == 'Scroll Speed':
+                settings['scroll_speed_multiplier'] = min(10.0, settings['scroll_speed_multiplier'] + 0.1)
+                draw_options()
     
     def on_options_mouse_click(event):
         nonlocal menu_running, selected_option, remapping_index
@@ -1706,11 +2642,120 @@ def show_options_menu():
     root.unbind('<KeyPress>')
     root.unbind('<Button-1>')
 
+def show_profile_menu():
+    """Display profile/stats menu"""
+    menu_running = True
+    
+    def draw_profile():
+        canvas.delete('all')
+        canvas.configure(bg='black')
+        
+        # Load progress data
+        progress = load_progress()
+        if not progress:
+            canvas.create_text(width // 2, height // 2, 
+                             text="No progress data found",
+                             fill='red', font=('Arial', 24))
+            root.update()
+            return
+        
+        # Title
+        canvas.create_text(width // 2, 50, 
+                         text=f"Profile: {progress.get('username', 'Player')}",
+                         fill='white', font=('Arial', 48, 'bold'))
+        
+        # Stats
+        y_pos = 150
+        total_plays = progress.get('total_charts_played', 0)
+        total_notes = (progress.get('total_perfects', 0) + 
+                      progress.get('total_greats', 0) + 
+                      progress.get('total_goods', 0) + 
+                      progress.get('total_bads', 0) + 
+                      progress.get('total_misses', 0))
+        
+        if total_notes > 0:
+            weighted_score = (progress.get('total_perfects', 0) * 100 + 
+                            progress.get('total_greats', 0) * 70 + 
+                            progress.get('total_goods', 0) * 40 + 
+                            progress.get('total_bads', 0) * 10)
+            avg_accuracy = weighted_score / (total_notes * 100.0) * 100.0
+        else:
+            avg_accuracy = 0.0
+        
+        # Get best rank
+        best_scores = progress.get('best_scores', {})
+        best_rank = 'D'
+        for chart_key, chart_data in best_scores.items():
+            rank = chart_data.get('rank', 'D')
+            if rank == 'S' or (rank == 'A' and best_rank not in ['S']) or \
+               (rank == 'B' and best_rank not in ['S', 'A']) or \
+               (rank == 'C' and best_rank == 'D'):
+                best_rank = rank
+        
+        # Stats display
+        stats = [
+            f"Total Plays: {total_plays}",
+            f"Total Score: {progress.get('total_score', 0):,}",
+            f"Average Accuracy: {avg_accuracy:.2f}%",
+            f"Best Rank: {best_rank}",
+            f"Total Playtime: {progress.get('total_playtime_seconds', 0) // 60} minutes",
+            "",
+            f"Perfect: {progress.get('total_perfects', 0)}  |  Great: {progress.get('total_greats', 0)}",
+            f"Good: {progress.get('total_goods', 0)}  |  Bad: {progress.get('total_bads', 0)}  |  Miss: {progress.get('total_misses', 0)}"
+        ]
+        
+        for stat in stats:
+            canvas.create_text(width // 2, y_pos, text=stat,
+                             fill='cyan', font=('Arial', 24))
+            y_pos += 40
+        
+        # Achievements
+        y_pos += 20
+        canvas.create_text(width // 2, y_pos, text="--- Achievements ---",
+                         fill='yellow', font=('Arial', 28, 'bold'))
+        y_pos += 50
+        
+        achievements = progress.get('achievements', {})
+        if achievements:
+            for ach_key, ach_data in list(achievements.items())[:5]:  # Show first 5
+                canvas.create_text(width // 2, y_pos, 
+                                 text=f"🏆 {ach_data['name']}: {ach_data['description']}",
+                                 fill='gold', font=('Arial', 18))
+                y_pos += 35
+        else:
+            canvas.create_text(width // 2, y_pos, text="No achievements yet",
+                             fill='gray', font=('Arial', 18))
+        
+        canvas.create_text(width // 2, height - 50, 
+                         text="Press ESC or click anywhere to go back",
+                         fill='gray', font=('Arial', 16))
+        root.update()
+    
+    def on_profile_key(event):
+        nonlocal menu_running
+        if event.keysym == 'Escape':
+            menu_running = False
+    
+    def on_profile_click(event):
+        nonlocal menu_running
+        menu_running = False
+    
+    draw_profile()
+    root.bind('<KeyPress>', on_profile_key)
+    root.bind('<Button-1>', on_profile_click)
+    
+    while menu_running:
+        root.update()
+        time.sleep(0.01)
+    
+    root.unbind('<KeyPress>')
+    root.unbind('<Button-1>')
+
 def show_main_menu():
     """Display main menu"""
     menu_running = True
     selected_option = 0
-    options = ['Play', 'Options', 'Quit']
+    options = ['Play', 'Watch Replay', 'Profile', 'Options', 'Quit']
     
     def draw_menu():
         canvas.delete('all')
@@ -1735,7 +2780,7 @@ def show_main_menu():
         nonlocal menu_running, selected_option
         
         if event.keysym == 'Escape':
-            selected_option = 2  # Quit
+            selected_option = 4  # Quit (index updated for new menu item)
             menu_running = False
             return
         
@@ -1774,15 +2819,190 @@ def show_main_menu():
     
     return options[selected_option]
 
+def show_pregame_setup(chart_id, difficulty):
+    """Show pre-game setup GUI for speed, calibration, and mode selection"""
+    global game_mode, settings
+    
+    setup_running = True
+    current_speed = settings.get('scroll_speed_multiplier', 1.0)
+    selected_mode = game_mode if game_mode in ['auto', 'practice'] else 'normal'
+    calibrating = False
+    metronome_beats = []
+    
+    def draw_setup():
+        canvas.delete('all')
+        canvas.configure(bg='black')
+        
+        # Title
+        canvas.create_text(width // 2, 50, text=f"Setup: {chart_id} - {difficulty}",
+                         fill='white', font=('Arial', 32, 'bold'))
+        
+        # Speed selector
+        y_pos = 150
+        canvas.create_text(width // 2, y_pos, text="Note Speed Multiplier",
+                         fill='cyan', font=('Arial', 24, 'bold'))
+        y_pos += 50
+        
+        # Speed preview bar
+        bar_x = width // 2 - 200
+        bar_width = 400
+        canvas.create_rectangle(bar_x, y_pos, bar_x + bar_width, y_pos + 30,
+                              fill='#333333', outline='white', width=2)
+        
+        # Current speed indicator
+        speed_pos = bar_x + int((current_speed - 0.5) / 4.0 * bar_width)
+        canvas.create_rectangle(speed_pos - 5, y_pos - 5, speed_pos + 5, y_pos + 35,
+                              fill='yellow', outline='white', width=2)
+        
+        canvas.create_text(width // 2, y_pos + 50, 
+                         text=f"{current_speed:.1f}x (←→ to adjust, 0.5x - 4.5x)",
+                         fill='white', font=('Arial', 18))
+        
+        # Mode selection
+        y_pos += 120
+        canvas.create_text(width // 2, y_pos, text="Game Mode",
+                         fill='cyan', font=('Arial', 24, 'bold'))
+        y_pos += 40
+        
+        modes = [('Normal', 'normal'), ('Auto Play', 'auto'), ('Practice', 'practice')]
+        for i, (mode_name, mode_key) in enumerate(modes):
+            x_pos = width // 2 - 200 + i * 200
+            color = 'yellow' if mode_key == selected_mode else 'white'
+            canvas.create_text(x_pos, y_pos, text=f"{i+1}. {mode_name}",
+                             fill=color, font=('Arial', 20), tags=f'mode_{mode_key}')
+        
+        # Calibration section
+        y_pos += 80
+        canvas.create_text(width // 2, y_pos, text="Offset Calibration",
+                         fill='cyan', font=('Arial', 24, 'bold'))
+        y_pos += 40
+        
+        current_offset = settings.get('global_offset', 0)
+        canvas.create_text(width // 2, y_pos, 
+                         text=f"Current Offset: {current_offset}ms",
+                         fill='white', font=('Arial', 18))
+        y_pos += 35
+        
+        if calibrating:
+            canvas.create_text(width // 2, y_pos, 
+                             text=f"Tap to the beat! ({len(metronome_beats)}/8)",
+                             fill='lime', font=('Arial', 20, 'bold'))
+        else:
+            canvas.create_text(width // 2, y_pos, 
+                             text="Press C to auto-calibrate (tap 8 beats)",
+                             fill='gray', font=('Arial', 16))
+        
+        # Manual offset adjustment
+        y_pos += 50
+        canvas.create_text(width // 2, y_pos, 
+                         text="Manual: [ = -10ms  ] = +10ms  \\ = Reset",
+                         fill='gray', font=('Arial', 16))
+        
+        # Instructions
+        canvas.create_text(width // 2, height - 100,
+                         text="ENTER to start  |  ESC to go back",
+                         fill='white', font=('Arial', 20, 'bold'))
+        
+        root.update()
+    
+    def on_setup_key(event):
+        nonlocal setup_running, current_speed, selected_mode, calibrating, metronome_beats
+        
+        if event.keysym == 'Escape':
+            setup_running = False
+            return
+        elif event.keysym == 'Return':
+            # Save settings and start game
+            settings['scroll_speed_multiplier'] = current_speed
+            global game_mode
+            game_mode = selected_mode
+            setup_running = False
+            return
+        
+        # Speed adjustment
+        if event.keysym == 'Left':
+            current_speed = max(0.5, current_speed - 0.1)
+            draw_setup()
+        elif event.keysym == 'Right':
+            current_speed = min(4.5, current_speed + 0.1)
+            draw_setup()
+        
+        # Mode selection
+        if event.char and event.char.isdigit():
+            num = int(event.char)
+            if num == 1:
+                selected_mode = 'normal'
+            elif num == 2:
+                selected_mode = 'auto'
+            elif num == 3:
+                selected_mode = 'practice'
+            draw_setup()
+        
+        # Calibration
+        if event.char and event.char.lower() == 'c':
+            calibrating = True
+            metronome_beats = []
+            draw_setup()
+        
+        # Manual offset adjustment
+        if event.char == '[':
+            settings['global_offset'] = settings.get('global_offset', 0) - 10
+            draw_setup()
+        elif event.char == ']':
+            settings['global_offset'] = settings.get('global_offset', 0) + 10
+            draw_setup()
+        elif event.char == '\\':
+            settings['global_offset'] = 0
+            draw_setup()
+        
+        # Metronome tap for calibration
+        if calibrating and event.char == ' ':
+            metronome_beats.append(time.time())
+            if len(metronome_beats) >= 8:
+                # Calculate average interval and set offset
+                intervals = []
+                for i in range(1, len(metronome_beats)):
+                    intervals.append(metronome_beats[i] - metronome_beats[i-1])
+                avg_interval = sum(intervals) / len(intervals)
+                # Assume 120 BPM target, calculate offset
+                expected_interval = 60.0 / 120.0  # 0.5 seconds per beat
+                offset_seconds = avg_interval - expected_interval
+                settings['global_offset'] = int(offset_seconds * 1000)
+                calibrating = False
+                metronome_beats = []
+            draw_setup()
+    
+    draw_setup()
+    root.bind('<KeyPress>', on_setup_key)
+    
+    while setup_running:
+        root.update()
+        time.sleep(0.01)
+    
+    root.unbind('<KeyPress>')
+    return setup_running  # False means go back, True means start
+
 def start_game(chart_id, difficulty):
     """Initialize and start the game"""
     global current_chart_id, current_difficulty, replay_data, game_running
+    global practice_speed, practice_loop_start, practice_loop_end, practice_looping
+    
+    # Show pre-game setup
+    if not show_pregame_setup(chart_id, difficulty):
+        return  # User pressed ESC to go back
+    
     current_chart_id = chart_id
     current_difficulty = difficulty
     replay_data = []  # Clear any previous replay data
     game_running = True  # Enable keyboard input
     
-    print(f"DEBUG: Starting game with chart {chart_id}, difficulty {difficulty}")
+    # Reset practice mode variables
+    practice_speed = 1.0
+    practice_loop_start = None
+    practice_loop_end = None
+    practice_looping = False
+    
+    print(f"DEBUG: Starting game with chart {chart_id}, difficulty {difficulty}, mode {game_mode}")
     print(f"DEBUG: game_running set to {game_running}")
     
     load_chart(chart_id, difficulty)
@@ -1812,6 +3032,12 @@ if __name__ == "__main__":
             # Show chart selection menu
             if show_chart_menu():
                 start_game(current_chart_id, current_difficulty)
+        elif choice == 'Watch Replay':
+            # Show replay selection menu
+            show_replay_menu()
+        elif choice == 'Profile':
+            # Show profile/stats menu
+            show_profile_menu()
         elif choice == 'Options':
             show_options_menu()
         elif choice == 'Quit':
