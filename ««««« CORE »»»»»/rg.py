@@ -205,18 +205,31 @@ def load_chart(id, difficulty):
         initial_bpm = float(id.split("_")[1])
         
         slide_starts = {}  # Track slide start positions by lane:  {lane:  (beat, multiplier)}
+        last_beat = 0  # Track last beat for BPM changes
         
         for line in lines:
             if '%' not in line:
                 continue
             
             parts = line.split("%")
+            
+            # Check for BPM change first (format: bpm%{new_bpm})
+            if parts[0].strip() == "bpm":
+                try:
+                    new_bpm = float(parts[1].strip())
+                    # BPM changes at the last processed beat
+                    bpm_changes.append((last_beat, new_bpm))
+                    continue
+                except:
+                    pass
+            
             beat = float(parts[0])
+            last_beat = beat  # Update last beat
             note_data = parts[1] if len(parts) > 1 else ""
             
-            # Check for BPM change
-            if note_data. strip().startswith("bpm"):
-                # Format: bpm%{new_bpm}
+            # Check for BPM change at specific beat (format: {beat}%bpm{new_bpm})
+            if note_data.strip().startswith("bpm"):
+                # Format: {beat}%bpm{new_bpm}
                 try:
                     new_bpm = float(note_data.strip().replace("bpm", "").strip())
                     bpm_changes.append((beat, new_bpm))
