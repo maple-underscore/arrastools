@@ -54,7 +54,7 @@ SCORE_BAD = 100
 SCORE_MISS = 0
 
 # Ranking thresholds (percentage of max possible score)
-RANK_S = 0.95  # 95%+
+RANK_S = 0.90  # 95%+
 RANK_A = 0.90  # 90-95%
 RANK_B = 0.80  # 80-90%
 RANK_C = 0.70  # 70-80%
@@ -253,7 +253,7 @@ def load_chart(id, difficulty):
                         'id': f"tap_{beat}_{lane}_{random.randint(1000, 9999)}"
                     })
                 
-                elif char == "D":
+                elif char == "x":
                     # Double score tap note
                     note_time = beats_to_seconds(beat, bpm_changes, initial_bpm)
                     chart.append({
@@ -265,19 +265,19 @@ def load_chart(id, difficulty):
                         'id': f"tap_{beat}_{lane}_{random. randint(1000, 9999)}"
                     })
                 
-                elif char == "S":
+                elif char == "s":
                     # Slide start
                     if lane in slide_starts:
                         print(f"Warning: Overlapping slide starts in lane {lane} at beat {beat}")
                     slide_starts[lane] = (beat, 1)  # Normal slide
                 
-                elif char == "s":
-                    # Double score slide start (lowercase s)
+                elif char == "S":
+                    # Double score slide start (uppercase S)
                     if lane in slide_starts:
                         print(f"Warning: Overlapping slide starts in lane {lane} at beat {beat}")
                     slide_starts[lane] = (beat, 2)  # Double score slide
                 
-                elif char == "E":
+                elif char == "e":
                     # Slide end
                     if lane in slide_starts:
                         start_beat, multiplier = slide_starts[lane]
@@ -376,28 +376,37 @@ def draw_slide(lane, y_start, y_end, note_id, is_holding=False, multiplier=1):
     # Gold for double score, green for normal
     if multiplier == 2:
         bar_color = '#FFD700'
-        hold_color = '#FFE680'
+        hold_rgb = (255, 230, 128)  # Light gold with 50% opacity
         outline_color = '#FFA500'
     else: 
         bar_color = '#00FF00' if not is_holding else '#00DD00'
-        hold_color = '#90EE90'
+        hold_rgb = (144, 238, 144)  # Light green with 50% opacity
         outline_color = '#00CC00'
     
-    # Draw the translucent hold area (entire slide length)
+    # Draw the translucent hold area (entire slide length) with true 50% opacity
+    rect_width = NOTE_WIDTH
     if y_end < y_start:
-        # Create a semi-transparent rectangle for the hold area
-        canvas.create_rectangle(x - NOTE_WIDTH//2, y_end, x + NOTE_WIDTH//2, y_start,
-                              fill=hold_color, outline='', stipple='gray50',
-                              tags=f'note_{note_id}')
+        rect_height = int(y_start - y_end)
+        rect_y = int(y_end)
     else:
-        canvas.create_rectangle(x - NOTE_WIDTH//2, y_start, x + NOTE_WIDTH//2, y_end,
-                              fill=hold_color, outline='', stipple='gray50',
-                              tags=f'note_{note_id}')
+        rect_height = int(y_end - y_start)
+        rect_y = int(y_start)
     
-    # Draw start marker (thick bar)
-    canvas.create_rectangle(x - NOTE_WIDTH//2, y_start - NOTE_HEIGHT//2,
-                          x + NOTE_WIDTH//2, y_start + NOTE_HEIGHT//2,
-                          fill=bar_color, outline=outline_color, width=3, tags=f'note_{note_id}')
+    if rect_height > 0 and rect_width > 0:
+        # Create semi-transparent image
+        img = Image.new('RGBA', (rect_width, rect_height), (*hold_rgb, 128))  # 128 = 50% opacity
+        photo = ImageTk.PhotoImage(img)
+        canvas.create_image(x, rect_y + rect_height // 2, image=photo, tags=f'note_{note_id}')
+        # Keep reference to prevent garbage collection
+        if not hasattr(canvas, '_slide_images'):
+            canvas._slide_images = {}
+        canvas._slide_images[note_id] = photo
+    
+    # Draw start marker (thick bar) - ONLY if not being held
+    if not is_holding:
+        canvas.create_rectangle(x - NOTE_WIDTH//2, y_start - NOTE_HEIGHT//2,
+                              x + NOTE_WIDTH//2, y_start + NOTE_HEIGHT//2,
+                              fill=bar_color, outline=outline_color, width=3, tags=f'note_{note_id}')
     
     # Draw end marker (thick bar)
     canvas.create_rectangle(x - NOTE_WIDTH//2, y_end - NOTE_HEIGHT//2,
@@ -416,11 +425,11 @@ def show_judgment(judgment, offset_ms=None, auto_miss=False):
         'MISS': 'red'
     }
     
-    # Add offset display for BAD and MISS
+    # Add offset display
     display_text = judgment
     if judgment == 'MISS' and auto_miss:
         display_text = "MISS (N/A)"
-    elif offset_ms is not None and judgment in ['BAD', 'MISS']:
+    elif offset_ms is not None:
         display_text = f"{judgment} ({offset_ms:+.0f}ms)"
     
     end_time = time.time() + 0.4  # 400ms
@@ -447,7 +456,7 @@ def judge_timing(time_diff):
         return 'BAD', SCORE_BAD, offset_ms
     else:
         miss_count += 1
-        return 'MISS', SCORE_MISS
+        return 'MISS', SCORE_MISS, offset_ms
 
 def check_hit(lane, current_time):
     """Check if a note was hit in the lane"""
@@ -514,29 +523,40 @@ def check_hit(lane, current_time):
     return hit
 
 def update_slide_combo(current_time):
-    """Update combo for slides being held - +1 per beat, awards 1/10 of perfect score"""
-    global combo, max_combo, score
+    """Update combo for slides being held - +1 per beat, awards 1/10 of perfect score OR register miss"""
+    global combo, max_combo, score, miss_count
     
-    for slide in active_slides: 
-        if slide. get('holding', False):
+    for slide in active_slides[:]: 
+        # Only process slides that have been started
+        if slide.get('hit_start', False):
             # Calculate current beat
             current_beat = seconds_to_beats(current_time, bpm_changes, initial_bpm)
-            last_beat = slide. get('last_beat_combo', slide['beat'])
             multiplier = slide.get('multiplier', 1)
             
-            # Check if we've passed a full beat
-            if int(current_beat) > int(last_beat):
-                beats_passed = int(current_beat) - int(last_beat)
-                for _ in range(beats_passed):
+            # Initialize next_tick on first call
+            if 'next_tick' not in slide:
+                slide['next_tick'] = slide['beat'] + 1.0
+            
+            # Check if we've passed the next beat tick
+            while current_beat >= slide['next_tick'] and slide['next_tick'] <= slide['end_beat']:
+                if slide.get('holding', False):
+                    # Award score for holding correctly
                     combo += 1
                     max_combo = max(max_combo, combo)
                     # Award 1/10 of perfect score per beat
                     score += int(SCORE_PERFECT * 0.1 * multiplier)
-                slide['last_beat_combo'] = int(current_beat)
+                    slide['next_tick'] += 1.0
+                else:
+                    # Register miss for not holding
+                    combo = 0
+                    miss_count += 1
+                    show_judgment('MISS')
+                    slide['remove'] = True  # Mark for deletion
+                    break  # Stop processing this slide
 
 def check_slide_hold(lane, current_time, is_holding):
     """Check if a slide is being held correctly"""
-    global score, combo, max_combo, active_slides
+    global score, combo, max_combo, active_slides, miss_count
     
     for slide in active_slides[: ]:
         if slide['lane'] == lane and slide. get('holding', False):
@@ -550,14 +570,13 @@ def check_slide_hold(lane, current_time, is_holding):
                     score += points * multiplier
                     combo += 1
                     max_combo = max(max_combo, combo)
-                    canvas.delete(f"note_{slide['id']}")
-                    active_slides.remove(slide)
+                    slide['remove'] = True  # Mark for removal
                     show_judgment(judgment, offset_ms)
                 else:
                     # Released too early
                     combo = 0
-                    canvas.delete(f"note_{slide['id']}")
-                    active_slides.remove(slide)
+                    miss_count += 1
+                    slide['remove'] = True  # Mark for removal
                     show_judgment('MISS')
 
 def on_press(key):
@@ -767,30 +786,49 @@ def update_notes(current_time):
     
     # Update and draw slide notes
     for slide in active_slides[:]:
-        # Remove hit slides
-        if slide.get('hit', False):
+        # Remove marked slides
+        if slide.get('remove', False):
             canvas.delete(f"note_{slide['id']}")
+            # Clean up image reference
+            if hasattr(canvas, '_slide_images') and slide['id'] in canvas._slide_images:
+                del canvas._slide_images[slide['id']]
             active_slides.remove(slide)
             continue
+        
+        # Calculate pixel speed based on slide's BPM
+        slide_bpm = get_current_bpm(slide['beat'], bpm_changes, initial_bpm)
+        pixel_ps = slide_bpm * 10
             
-        y_start = BAR_Y - ((slide['time'] - current_time) * pixel_ps)
-        y_end = BAR_Y - ((slide['end_time'] - current_time) * pixel_ps)
+        # If slide is being held, lock the start position to the hit bar
+        if slide.get('holding', False):
+            y_start = int(BAR_Y)
+            y_end = BAR_Y - ((slide['end_time'] - current_time) * pixel_ps)
+        else:
+            y_start = BAR_Y - ((slide['time'] - current_time) * pixel_ps)
+            y_end = BAR_Y - ((slide['end_time'] - current_time) * pixel_ps)
         
         # Check if slide is complete
-        if slide. get('holding', False) and current_time >= slide['end_time']:
+        if slide.get('holding', False) and current_time >= slide['end_time']:
             # Auto-complete if still holding at the end
             if key_is_down[slide['lane']]: 
                 check_slide_hold(slide['lane'], current_time, False)
         
-        if y_start > height + 100:
-            canvas. delete(f"note_{slide['id']}")
-            active_slides.remove(slide)
-            if not slide.get('hit_start', False):
-                combo = 0
-                miss_count += 1
-                show_judgment('MISS', auto_miss=True)
-        elif y_end < height:
+        # Remove unhit slides that scrolled past
+        if not slide.get('holding', False) and not slide.get('hit_start', False) and y_start > height + 100:
             canvas.delete(f"note_{slide['id']}")
+            if hasattr(canvas, '_slide_images') and slide['id'] in canvas._slide_images:
+                del canvas._slide_images[slide['id']]
+            active_slides.remove(slide)
+            combo = 0
+            miss_count += 1
+            show_judgment('MISS', auto_miss=True)
+            continue
+        
+        # Always redraw if holding, OR if any part is visible on screen
+        if slide.get('holding', False) or (0 <= y_start <= height or 0 <= y_end <= height):
+            canvas.delete(f"note_{slide['id']}")
+            if hasattr(canvas, '_slide_images') and slide['id'] in canvas._slide_images:
+                del canvas._slide_images[slide['id']]
             draw_slide(slide['lane'], int(y_start), int(y_end), slide['id'],
                       slide.get('holding', False), slide.get('multiplier', 1))
 
@@ -842,6 +880,7 @@ def game_loop():
     draw_hit_bar()
     draw_key_labels()  # Initial key labels
     
+    # Continue while there are notes/slides to process OR slides being held
     while game_running and (chart or active_notes or active_slides):
         frame_start = time.time()
         current_time = frame_start - start_time
@@ -927,36 +966,39 @@ def game_loop():
                       fill='white', font=('Arial', 20))
     
     canvas.create_text(width // 2, height - 100,
-                      text="Press R to watch replay  |  Press ESC to exit",
+                      text="Press R to replay  |  Press M to menu  |  Press ESC to exit",
                       fill='gray', font=('Arial', 20))
     
     root.update()
     
-    # Wait for user input
-    waiting = True
-    def on_end_key(key):
-        nonlocal waiting
-        if key == Key.esc:
-            waiting = False
-            root.quit()
-            return False
-        try:
-            if hasattr(key, 'char') and key.char and key.char.lower() == 'r':
-                waiting = False
-                play_replay()
-        except:
-            pass
+    # Wait for user input using tkinter bindings
+    waiting = [True]  # Use list to allow modification in nested function
+    action = [None]  # 'replay', 'menu', or None
     
-    end_listener = Listener(on_press=on_end_key)
-    end_listener.start()
+    def on_end_tkinter_key(event):
+        if event.keysym == 'Escape':
+            waiting[0] = False
+            action[0] = 'exit'
+        elif event.char and event.char.lower() == 'r':
+            waiting[0] = False
+            action[0] = 'replay'
+        elif event.char and event.char.lower() == 'm':
+            waiting[0] = False
+            action[0] = 'menu'
     
-    while waiting:
+    root.bind('<KeyPress>', on_end_tkinter_key)
+    
+    while waiting[0]:
         root.update()
         time.sleep(0.01)
     
-    end_listener.stop()
-
-    end_listener.stop()
+    root.unbind('<KeyPress>')
+    
+    # Execute the action
+    if action[0] == 'replay':
+        play_replay()
+    elif action[0] == 'exit':
+        root.quit()
 
 def play_replay():
     """Play back the recorded replay"""
