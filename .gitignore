@@ -44,6 +44,7 @@ arras_models
 **/charts/*
 **/progress.json
 **/replays/*
+**/*.replay
 **/progress.json
 **/settings.json
 **/aacontext.txt
