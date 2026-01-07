@@ -151,6 +151,10 @@ settings = {
     'global_offset': 0,  # Global offset in milliseconds (-200 to 200)
     # Gameplay settings
     'timing_windows': 'normal',  # 'strict', 'normal', or 'lenient'
+    # Performance settings
+    'fps_target': 60,  # Target FPS (1 to 600)
+    'renderer': 'auto',  # 'auto', 'tkinter', or 'opengl'
+    'show_performance_metrics': False,  # Show detailed performance metrics
 }
 
 # Key mappings (will be rebuilt from settings)
@@ -2405,12 +2409,13 @@ def show_options_menu():
     """Display options menu for changing settings"""
     menu_running = True
     selected_option = 0
-    current_page = 0  # 0 = Main, 1 = Visual, 2 = Audio, 3 = Gameplay
+    current_page = 0  # 0 = Main, 1 = Visual, 2 = Audio, 3 = Gameplay, 4 = Performance
     options_pages = {
-        0: ['Visual Settings', 'Audio Settings', 'Gameplay Settings', 'Change Keys', 'Scroll Speed', 'Export Settings', 'Import Settings', 'Save & Back'],
+        0: ['Visual Settings', 'Audio Settings', 'Gameplay Settings', 'Performance Settings', 'Change Keys', 'Scroll Speed', 'Export Settings', 'Import Settings', 'Save & Back'],
         1: ['Note Size', 'Hit Bar Position', 'Background Dim', 'Show FPS', 'Show Timing Zones', 'Colorblind Mode', 'High Contrast Mode', 'Show Late/Early', 'Back'],
         2: ['Music Volume', 'SFX Volume', 'Global Offset', 'Back'],
-        3: ['Timing Windows', 'Back']
+        3: ['Timing Windows', 'Back'],
+        4: ['FPS Target', 'Renderer', 'Show Performance Metrics', 'Back']
     }
     
     # State for key remapping
@@ -2420,7 +2425,7 @@ def show_options_menu():
         canvas.delete('all')
         canvas.configure(bg='black')
         
-        page_titles = {0: 'OPTIONS', 1: 'VISUAL SETTINGS', 2: 'AUDIO SETTINGS', 3: 'GAMEPLAY SETTINGS'}
+        page_titles = {0: 'OPTIONS', 1: 'VISUAL SETTINGS', 2: 'AUDIO SETTINGS', 3: 'GAMEPLAY SETTINGS', 4: 'PERFORMANCE SETTINGS'}
         canvas.create_text(width // 2, 50, text=page_titles.get(current_page, 'OPTIONS'),
                          fill='white', font=('Arial', 48, 'bold'))
         
@@ -2471,6 +2476,12 @@ def show_options_menu():
                     text = f"{option}: {settings.get('global_offset', 0)}ms"
                 elif option == 'Timing Windows':
                     text = f"{option}: {settings.get('timing_windows', 'normal').upper()}"
+                elif option == 'FPS Target':
+                    text = f"{option}: {settings.get('fps_target', 60)} FPS"
+                elif option == 'Renderer':
+                    text = f"{option}: {settings.get('renderer', 'auto').upper()}"
+                elif option == 'Show Performance Metrics':
+                    text = f"{option}: {'ON' if settings.get('show_performance_metrics', False) else 'OFF'}"
                 else:
                     text = option
                 
@@ -2517,21 +2528,29 @@ def show_options_menu():
             if option_name == 'Change Keys':
                 # Start key remapping for each lane
                 show_key_remap_screen()
-            elif option_name in ['Show FPS', 'Show Timing Zones', 'Colorblind Mode', 'High Contrast Mode', 'Show Late/Early']:
+            elif option_name in ['Show FPS', 'Show Timing Zones', 'Colorblind Mode', 'High Contrast Mode', 'Show Late/Early', 'Show Performance Metrics']:
                 # Toggle boolean settings
                 setting_key = {
                     'Show FPS': 'show_fps',
                     'Show Timing Zones': 'show_timing_zones',
                     'Colorblind Mode': 'colorblind_mode',
                     'High Contrast Mode': 'high_contrast_mode',
-                    'Show Late/Early': 'show_late_early'
+                    'Show Late/Early': 'show_late_early',
+                    'Show Performance Metrics': 'show_performance_metrics'
                 }[option_name]
                 settings[setting_key] = not settings.get(setting_key, False)
+                draw_options()
+            elif option_name == 'Renderer':
+                # Cycle through renderer options
+                renderers = ['auto', 'tkinter', 'opengl']
+                current = settings.get('renderer', 'auto')
+                current_idx = renderers.index(current) if current in renderers else 0
+                settings['renderer'] = renderers[(current_idx + 1) % len(renderers)]
                 draw_options()
             elif option_name == 'Save & Back':
                 save_settings()
                 menu_running = False
-            elif option_name in ['Visual Settings', 'Audio Settings', 'Gameplay Settings']:
+            elif option_name in ['Visual Settings', 'Audio Settings', 'Gameplay Settings', 'Performance Settings']:
                 # Navigate to subpage
                 nonlocal current_page
                 if option_name == 'Visual Settings':
@@ -2540,6 +2559,8 @@ def show_options_menu():
                     current_page = 2
                 elif option_name == 'Gameplay Settings':
                     current_page = 3
+                elif option_name == 'Performance Settings':
+                    current_page = 4
                 selected_option = 0
                 draw_options()
             elif option_name == 'Back':
@@ -2553,11 +2574,19 @@ def show_options_menu():
             if option_name == 'Scroll Speed':
                 settings['scroll_speed_multiplier'] = max(0.1, settings['scroll_speed_multiplier'] - 0.1)
                 draw_options()
+            elif option_name == 'FPS Target':
+                # Decrease by 10, min 1
+                settings['fps_target'] = max(1, settings.get('fps_target', 60) - 10)
+                draw_options()
         elif event.keysym == 'Right':
             # Handle right arrow for adjustable values
             option_name = options[selected_option]
             if option_name == 'Scroll Speed':
                 settings['scroll_speed_multiplier'] = min(10.0, settings['scroll_speed_multiplier'] + 0.1)
+                draw_options()
+            elif option_name == 'FPS Target':
+                # Increase by 10, max 600
+                settings['fps_target'] = min(600, settings.get('fps_target', 60) + 10)
                 draw_options()
     
     def on_options_mouse_click(event):
