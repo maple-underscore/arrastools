@@ -8,9 +8,10 @@ import os
 import glob
 import signal
 import sys
+import pygame
 
 # Disable pygame/audio support
-AUDIO_AVAILABLE = False
+AUDIO_AVAILABLE = True
 
 # Ignore SIGTRAP to avoid trace trap errors
 signal.signal(signal.SIGTRAP, signal.SIG_IGN)
@@ -1394,61 +1395,84 @@ def get_available_replays():
     return replays
 
 def auto_play_ai(current_time):
-    """AI that plays notes perfectly in auto mode"""
-    global key_is_down, key_pressed_flags
+    """AI that plays notes perfectly in auto mode - directly scores without simulating keypresses"""
+    global score, combo, max_combo, perfect_count
     
-    # Check tap notes for perfect hits
+    # Auto-hit tap notes - wider window to catch high-BPM notes
     for note in active_notes[:]:
         if note['type'] == 'tap' and not note.get('hit', False):
-            time_diff = abs(current_time - note['time'])
-            # Hit exactly on time (within 1 frame)
-            if time_diff <= (1.0 / fps):
-                lane = note['lane']
-                if not key_is_down.get(lane, False):
-                    key_is_down[lane] = True
-                    key_pressed_flags[lane] = True
-                    check_hit(lane, current_time)
-                    # Schedule release after 0.05 seconds
-                    note['auto_release_time'] = current_time + 0.05
+            time_diff = current_time - note['time']
+            # Expanded window: catch notes slightly before and well after their time
+            # This ensures we don't miss any notes at high BPM (e.g., 250 BPM)
+            if -0.05 <= time_diff <= (2.0 / fps):
+                # Award perfect score directly
+                multiplier = note.get('multiplier', 1)
+                score += SCORE_PERFECT * multiplier
+                combo += 1
+                max_combo = max(max_combo, combo)
+                perfect_count += 1
+                note['hit'] = True
+                show_judgment('PERFECT', 0.0)
+                spawn_particle(note['lane'], 'PERFECT')
     
-    # Release tap notes after brief hold
-    for note in active_notes[:]:
-        if note.get('auto_release_time') and current_time >= note['auto_release_time']:
-            lane = note['lane']
-            key_is_down[lane] = False
-            key_pressed_flags[lane] = False
-            note.pop('auto_release_time', None)
-    
-    # Check slide notes
+    # Auto-hit and hold slides
     for slide in active_slides[:]:
-        lane = slide['lane']
+        # Start slide at perfect timing
+        if not slide.get('hit_start', False):
+            time_diff = current_time - slide['time']
+            # Expanded window for slides too
+            if -0.05 <= time_diff <= (2.0 / fps):
+                # Start the slide with perfect timing
+                multiplier = slide.get('multiplier', 1)
+                score += SCORE_PERFECT * multiplier
+                combo += 1
+                max_combo = max(max_combo, combo)
+                perfect_count += 1
+                slide['hit_start'] = True
+                slide['holding'] = True
+                slide['next_tick'] = slide['beat'] + 1.0
+                show_judgment('PERFECT', 0.0)
+                spawn_particle(slide['lane'], 'PERFECT')
         
-        # Start holding at perfect timing
-        if not slide.get('holding', False) and not slide.get('hit', False):
-            time_diff = abs(current_time - slide['time'])
-            if time_diff <= (1.0 / fps):
-                key_is_down[lane] = True
-                key_pressed_flags[lane] = True
-                check_hit(lane, current_time)
-        
-        # Continue holding during slide
-        if slide.get('holding', False):
-            key_is_down[lane] = True
-            
-            # Release at perfect timing
-            if current_time >= slide['end_time']:
-                time_diff = abs(current_time - slide['end_time'])
-                if time_diff <= (1.0 / fps):
-                    key_is_down[lane] = False
-                    key_pressed_flags[lane] = False
-                    check_slide_hold(lane, current_time, False)
+        # Auto-complete slide at end
+        if slide.get('holding', False) and not slide.get('auto_completed', False):
+            time_diff = current_time - slide['end_time']
+            # Use same expanded window for slide completion
+            if -0.05 <= time_diff <= (2.0 / fps):
+                # Complete the slide with perfect timing
+                multiplier = slide.get('multiplier', 1)
+                score += SCORE_PERFECT * multiplier
+                combo += 1
+                max_combo = max(max_combo, combo)
+                perfect_count += 1
+                slide['auto_completed'] = True
+                slide['remove'] = True
+                show_judgment('PERFECT', 0.0)
+                spawn_particle(slide['lane'], 'PERFECT')
 
 def game_loop():
     """Main game loop"""
     global start_time, game_running, chart, music_playing, active_particles
+    global score, combo, max_combo, perfect_count, great_count, good_count, bad_count, miss_count
+    global active_notes, active_slides, key_pressed_flags, key_is_down
     
-    # Reset particles
+    # Reset all game state
     active_particles = []
+    active_notes = []
+    active_slides = []
+    score = 0
+    combo = 0
+    max_combo = 0
+    perfect_count = 0
+    great_count = 0
+    good_count = 0
+    bad_count = 0
+    miss_count = 0
+    
+    # Reset key states
+    for i in range(LANE_COUNT):
+        key_pressed_flags[i] = False
+        key_is_down[i] = False
     
     # Show countdown
     show_countdown()
@@ -1491,6 +1515,15 @@ def game_loop():
         # Auto-play AI
         if game_mode == 'auto':
             auto_play_ai(current_time)
+        
+        # Check slide holds for currently pressed keys (normal gameplay)
+        if game_mode != 'auto':
+            for lane in range(LANE_COUNT):
+                if key_is_down.get(lane, False):
+                    check_slide_hold(lane, current_time, True)
+        
+        # Update slide combo (awards score per beat for held slides)
+        update_slide_combo(current_time)
         
         # Clear dynamic elements
         canvas.delete('note')
@@ -2417,11 +2450,13 @@ def show_options_menu():
         3: ['Timing Windows', 'Back'],
         4: ['FPS Target', 'Renderer', 'Show Performance Metrics', 'Back']
     }
+    options = options_pages[current_page]  # Current options list
     
     # State for key remapping
     remapping_index = None
     
     def draw_options():
+        nonlocal options
         canvas.delete('all')
         canvas.configure(bg='black')
         
@@ -2492,7 +2527,7 @@ def show_options_menu():
         root.update()
     
     def on_options_key(event):
-        nonlocal menu_running, selected_option, remapping_index
+        nonlocal menu_running, selected_option, remapping_index, options, current_page
         
         if remapping_index is not None:
             # Key remapping mode
@@ -2552,7 +2587,6 @@ def show_options_menu():
                 menu_running = False
             elif option_name in ['Visual Settings', 'Audio Settings', 'Gameplay Settings', 'Performance Settings']:
                 # Navigate to subpage
-                nonlocal current_page
                 if option_name == 'Visual Settings':
                     current_page = 1
                 elif option_name == 'Audio Settings':
@@ -2562,11 +2596,13 @@ def show_options_menu():
                 elif option_name == 'Performance Settings':
                     current_page = 4
                 selected_option = 0
+                options = options_pages[current_page]
                 draw_options()
             elif option_name == 'Back':
                 # Return to main page
                 current_page = 0
                 selected_option = 0
+                options = options_pages[current_page]
                 draw_options()
         elif event.keysym == 'Left':
             # Handle left arrow for adjustable values
@@ -2590,7 +2626,7 @@ def show_options_menu():
                 draw_options()
     
     def on_options_mouse_click(event):
-        nonlocal menu_running, selected_option, remapping_index
+        nonlocal menu_running, selected_option, remapping_index, options
         
         if remapping_index is not None:
             # Ignore clicks during key remapping
@@ -2853,10 +2889,12 @@ def show_pregame_setup(chart_id, difficulty):
     global game_mode, settings
     
     setup_running = True
+    start_game_flag = False  # Track if user wants to start (Enter) or go back (Esc)
     current_speed = settings.get('scroll_speed_multiplier', 1.0)
     selected_mode = game_mode if game_mode in ['auto', 'practice'] else 'normal'
     calibrating = False
     metronome_beats = []
+    last_beat_time = 0  # For visual flash effect
     
     def draw_setup():
         canvas.delete('all')
@@ -2913,9 +2951,72 @@ def show_pregame_setup(chart_id, difficulty):
         y_pos += 35
         
         if calibrating:
+            # Show calibration progress with visual indicators
             canvas.create_text(width // 2, y_pos, 
-                             text=f"Tap to the beat! ({len(metronome_beats)}/8)",
+                             text=f"Tap SPACE to the beat! ({len(metronome_beats)}/8)",
                              fill='lime', font=('Arial', 20, 'bold'))
+            y_pos += 50
+            
+            # Draw beat indicators (circles for each tap)
+            circle_y = y_pos
+            circle_spacing = 60
+            start_x = width // 2 - (7 * circle_spacing) // 2
+            
+            for i in range(8):
+                x = start_x + i * circle_spacing
+                if i < len(metronome_beats):
+                    # Filled circle for completed beats
+                    # Flash effect: check if this was the last beat tapped
+                    time_since_beat = time.time() - last_beat_time
+                    if i == len(metronome_beats) - 1 and time_since_beat < 0.15:
+                        # Flash yellow for the most recent beat
+                        color = 'yellow'
+                        size = 25
+                    else:
+                        color = 'lime'
+                        size = 20
+                    canvas.create_oval(x - size, circle_y - size, x + size, circle_y + size,
+                                     fill=color, outline='white', width=3)
+                else:
+                    # Empty circle for pending beats
+                    canvas.create_oval(x - 15, circle_y - 15, x + 15, circle_y + 15,
+                                     fill='', outline='gray', width=2)
+            
+            y_pos += 60
+            
+            # Show interval consistency if we have at least 2 beats
+            if len(metronome_beats) >= 2:
+                intervals = []
+                for i in range(1, len(metronome_beats)):
+                    intervals.append(metronome_beats[i] - metronome_beats[i-1])
+                avg_interval = sum(intervals) / len(intervals)
+                bpm = 60.0 / avg_interval
+                
+                # Show detected BPM
+                canvas.create_text(width // 2, y_pos,
+                                 text=f"Detected tempo: {bpm:.1f} BPM",
+                                 fill='cyan', font=('Arial', 16))
+                y_pos += 30
+                
+                # Show consistency indicator
+                if len(intervals) >= 2:
+                    variance = sum((x - avg_interval) ** 2 for x in intervals) / len(intervals)
+                    std_dev = variance ** 0.5
+                    consistency = max(0, 1 - (std_dev / avg_interval) * 5)  # 0 to 1
+                    
+                    # Draw consistency bar
+                    bar_width = 300
+                    bar_x = width // 2 - bar_width // 2
+                    canvas.create_rectangle(bar_x, y_pos, bar_x + bar_width, y_pos + 20,
+                                          fill='#333333', outline='white', width=1)
+                    fill_width = int(bar_width * consistency)
+                    bar_color = 'lime' if consistency > 0.7 else 'yellow' if consistency > 0.4 else 'red'
+                    if fill_width > 0:
+                        canvas.create_rectangle(bar_x, y_pos, bar_x + fill_width, y_pos + 20,
+                                              fill=bar_color, outline='')
+                    canvas.create_text(width // 2, y_pos + 30,
+                                     text=f"Consistency: {consistency*100:.0f}%",
+                                     fill='white', font=('Arial', 14))
         else:
             canvas.create_text(width // 2, y_pos, 
                              text="Press C to auto-calibrate (tap 8 beats)",
@@ -2935,10 +3036,11 @@ def show_pregame_setup(chart_id, difficulty):
         root.update()
     
     def on_setup_key(event):
-        nonlocal setup_running, current_speed, selected_mode, calibrating, metronome_beats
+        nonlocal setup_running, start_game_flag, current_speed, selected_mode, calibrating, metronome_beats, last_beat_time
         
         if event.keysym == 'Escape':
             setup_running = False
+            start_game_flag = False
             return
         elif event.keysym == 'Return':
             # Save settings and start game
@@ -2946,6 +3048,7 @@ def show_pregame_setup(chart_id, difficulty):
             global game_mode
             game_mode = selected_mode
             setup_running = False
+            start_game_flag = True
             return
         
         # Speed adjustment
@@ -2986,7 +3089,9 @@ def show_pregame_setup(chart_id, difficulty):
         
         # Metronome tap for calibration
         if calibrating and event.char == ' ':
-            metronome_beats.append(time.time())
+            current_time = time.time()
+            metronome_beats.append(current_time)
+            last_beat_time = current_time  # For visual flash effect
             if len(metronome_beats) >= 8:
                 # Calculate average interval and set offset
                 intervals = []
@@ -3005,11 +3110,14 @@ def show_pregame_setup(chart_id, difficulty):
     root.bind('<KeyPress>', on_setup_key)
     
     while setup_running:
+        # Continuously redraw if calibrating to show flash animation
+        if calibrating:
+            draw_setup()
         root.update()
         time.sleep(0.01)
     
     root.unbind('<KeyPress>')
-    return setup_running  # False means go back, True means start
+    return start_game_flag  # True means start, False means go back
 
 def start_game(chart_id, difficulty):
     """Initialize and start the game"""

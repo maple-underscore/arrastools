@@ -5,9 +5,24 @@
     "2",
     "3",
     "4",
+    "5",
+    "6",
     "7",
-    "8",
-    "9",
-    "0"
-  ]
+    "8"
+  ],
+  "note_size_multiplier": 1.0,
+  "hit_bar_position": 0.9,
+  "background_dim": 0,
+  "show_fps": true,
+  "show_timing_zones": true,
+  "colorblind_mode": false,
+  "high_contrast_mode": true,
+  "show_late_early": true,
+  "music_volume": 100,
+  "sfx_volume": 100,
+  "global_offset": 0,
+  "timing_windows": "normal",
+  "fps_target": 60,
+  "renderer": "auto",
+  "show_performance_metrics": true
 }

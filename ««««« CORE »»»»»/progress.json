@@ -1,14 +1,55 @@
 {
-  "username": "Player",
-  "total_charts_played": 0,
-  "total_score": 0,
-  "total_playtime_seconds": 0,
-  "total_perfects": 0,
-  "total_greats": 0,
-  "total_goods": 0,
-  "total_bads": 0,
-  "total_misses": 0,
-  "best_scores": {},
-  "recently_played": [],
-  "achievements": {}
+  "username": "maple_",
+  "total_charts_played": 7,
+  "total_score": 263000,
+  "total_playtime_seconds": 160,
+  "total_perfects": 204,
+  "total_greats": 76,
+  "total_goods": 9,
+  "total_bads": 5,
+  "total_misses": 196,
+  "best_scores": {
+    "test_80_easy": {
+      "score": 70100,
+      "rank": "S",
+      "accuracy": 94.72972972972973,
+      "max_combo": 19,
+      "timestamp": "20260106_210704"
+    },
+    "test_80_medium": {
+      "score": 46300,
+      "rank": "B",
+      "accuracy": 94.375,
+      "max_combo": 48,
+      "timestamp": "20260106_181840"
+    }
+  },
+  "recently_played": [
+    {
+      "chart_id": "test_80",
+      "difficulty": "easy",
+      "score": 70100,
+      "rank": "S",
+      "timestamp": "20260106_210704"
+    },
+    {
+      "chart_id": "test_80",
+      "difficulty": "medium",
+      "score": 46300,
+      "rank": "B",
+      "timestamp": "20260106_181840"
+    }
+  ],
+  "achievements": {
+    "first_clear": {
+      "name": "First Clear",
+      "description": "Complete your first chart",
+      "unlocked": "20260106_180411"
+    },
+    "s_rank": {
+      "name": "S Rank",
+      "description": "Achieve an S rank",
+      "unlocked": "20260106_180742"
+    }
+  }
 }

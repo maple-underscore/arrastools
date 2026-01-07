@@ -41,3 +41,4 @@ arras_models
 rollbotsave.txt
 rollbotlog.txt
 **/charts/*
+**/progress.json
