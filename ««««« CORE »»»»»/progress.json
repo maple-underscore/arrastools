@@ -1,13 +1,13 @@
 {
   "username": "maple_",
-  "total_charts_played": 7,
-  "total_score": 263000,
-  "total_playtime_seconds": 160,
-  "total_perfects": 204,
-  "total_greats": 76,
+  "total_charts_played": 8,
+  "total_score": 264700,
+  "total_playtime_seconds": 164,
+  "total_perfects": 205,
+  "total_greats": 77,
   "total_goods": 9,
   "total_bads": 5,
-  "total_misses": 196,
+  "total_misses": 199,
   "best_scores": {
     "test_80_easy": {
       "score": 70100,
@@ -22,9 +22,23 @@
       "accuracy": 94.375,
       "max_combo": 48,
       "timestamp": "20260106_181840"
+    },
+    "test_250_medium": {
+      "score": 1700,
+      "rank": "D",
+      "accuracy": 85.0,
+      "max_combo": 1,
+      "timestamp": "20260106_233720"
     }
   },
   "recently_played": [
+    {
+      "chart_id": "test_250",
+      "difficulty": "medium",
+      "score": 1700,
+      "rank": "D",
+      "timestamp": "20260106_233720"
+    },
     {
       "chart_id": "test_80",
       "difficulty": "easy",

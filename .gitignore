@@ -38,8 +38,12 @@ you
 3.12
 arras_models
 .mypy_cache
-rollbotsave.txt
-rollbotlog.txt
+**/rollbotsave.txt
+**/rollbotlog.txt
+**/rollbotsimlog.txt
 **/charts/*
 **/progress.json
 **/replays/*
+**/progress.json
+**/settings.json
+**/aacontext.txt
