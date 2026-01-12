@@ -7,5 +7,3 @@ torch
 shapely
 pytesseract
 pygame>=2.5.0
-PyOpenGL>=3.1.6
-PyOpenGL-accelerate>=3.1.6
