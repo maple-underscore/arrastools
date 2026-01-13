@@ -281,6 +281,10 @@ def load_chart(id, difficulty):
         speed_changes = []
         initial_bpm = float(id.split("_")[1])
         
+        # Calculate beat offset for 2-second delay
+        # At BPM X: 2 seconds = (2 * X) / 60 beats
+        beat_offset = (2.0 * initial_bpm) / 60.0
+        
         slide_starts = {}  # Track slide start positions by lane:  {lane:  (beat, multiplier)}
         last_beat = 0  # Track last beat for BPM changes
         
@@ -294,8 +298,8 @@ def load_chart(id, difficulty):
             if parts[0].strip() == "bpm":
                 try:
                     new_bpm = float(parts[1].strip())
-                    # BPM changes at the last processed beat
-                    bpm_changes.append((last_beat, new_bpm))
+                    # BPM changes at the last processed beat (with offset)
+                    bpm_changes.append((last_beat + beat_offset, new_bpm))
                     continue
                 except:
                     pass
@@ -304,13 +308,13 @@ def load_chart(id, difficulty):
             if parts[0].strip() == "spd":
                 try:
                     speed_percent = float(parts[1].strip())
-                    # Speed changes at the last processed beat
-                    speed_changes.append((last_beat, speed_percent / 100.0))
+                    # Speed changes at the last processed beat (with offset)
+                    speed_changes.append((last_beat + beat_offset, speed_percent / 100.0))
                     continue
                 except:
                     pass
             
-            beat = float(parts[0])
+            beat = float(parts[0]) + beat_offset  # Add offset for 2-second delay
             last_beat = beat  # Update last beat
             note_data = parts[1] if len(parts) > 1 else ""
             
@@ -1015,20 +1019,73 @@ def draw_ui():
     draw_key_labels()  # Update key press feedback
     draw_particles()  # Draw active particles
     
+    # Left margin - Score, Accuracy, and Score Bar
+    left_x = 50
+    
     # Score at top left
-    canvas.create_text(80, 30, text=f"Score: {score}",
+    canvas.create_text(left_x, 30, text=f"Score: {score}",
                       fill='white', font=('Arial', 24, 'bold'), tags='ui', anchor='w')
     
     # Accuracy percentage at top left (below score)
     accuracy = calculate_accuracy()
-    canvas.create_text(80, 65, text=f"Accuracy: {accuracy:.2f}%",
+    canvas.create_text(left_x, 65, text=f"Accuracy: {accuracy:.2f}%",
                       fill='cyan', font=('Arial', 20, 'bold'), tags='ui', anchor='w')
+    
+    # Vertical Score Bar (shows progress towards ranks)
+    bar_x = left_x + 10
+    bar_y_top = 120
+    bar_height = 400
+    bar_width = 30
+    
+    # Background bar
+    canvas.create_rectangle(bar_x, bar_y_top, bar_x + bar_width, bar_y_top + bar_height,
+                           fill='#222222', outline='white', width=2, tags='ui')
+    
+    # Calculate score percentage
+    score_percentage = min(1.0, score / max_possible_score) if max_possible_score > 0 else 0
+    
+    # Fill bar based on score
+    fill_height = int(bar_height * score_percentage)
+    if fill_height > 0:
+        # Color based on current rank
+        if score_percentage >= RANK_S:
+            fill_color = '#FFD700'  # Gold
+        elif score_percentage >= RANK_A:
+            fill_color = '#00FF00'  # Green
+        elif score_percentage >= RANK_B:
+            fill_color = '#00BFFF'  # Blue
+        elif score_percentage >= RANK_C:
+            fill_color = '#FFA500'  # Orange
+        else:
+            fill_color = '#FF4500'  # Red
+        
+        canvas.create_rectangle(bar_x, bar_y_top + bar_height - fill_height,
+                               bar_x + bar_width, bar_y_top + bar_height,
+                               fill=fill_color, outline='', tags='ui')
+    
+    # Draw rank threshold lines
+    rank_thresholds = [
+        (RANK_S, 'S', '#FFD700'),
+        (RANK_A, 'A', '#00FF00'),
+        (RANK_B, 'B', '#00BFFF'),
+        (RANK_C, 'C', '#FFA500'),
+    ]
+    
+    for threshold, label, color in rank_thresholds:
+        y = bar_y_top + bar_height - int(bar_height * threshold)
+        canvas.create_line(bar_x, y, bar_x + bar_width, y,
+                          fill=color, width=2, tags='ui')
+        canvas.create_text(bar_x + bar_width + 5, y, text=label,
+                          fill=color, font=('Arial', 14, 'bold'), tags='ui', anchor='w')
+    
+    # Right margin - Combo and Auto Play text
+    right_x = width - 50
     
     # Combo counter at top right
     if combo > 0:
-        canvas.create_text(width - 80, 30, text=f"{combo}",
+        canvas.create_text(right_x, 30, text=f"{combo}",
                           fill='yellow', font=('Arial', 48, 'bold'), tags='ui', anchor='e')
-        canvas.create_text(width - 80, 75, text="COMBO",
+        canvas.create_text(right_x, 75, text="COMBO",
                           fill='yellow', font=('Arial', 20, 'bold'), tags='ui', anchor='e')
     
     # Draw judgment display (centered at top)
@@ -1038,16 +1095,16 @@ def draw_ui():
             canvas.create_text(width // 2, 100, text=judgment_text,
                              fill=color, font=('Arial', 48, 'bold'), tags='ui')
     
-    # Watermarks for special modes
+    # Watermarks for special modes (right margin)
     if game_mode == 'auto':
-        canvas.create_text(width // 2, height - 100, text="AUTO PLAY",
-                         fill='#666666', font=('Arial', 32, 'bold'), tags='ui')
+        canvas.create_text(right_x, 150, text="AUTO PLAY",
+                         fill='#666666', font=('Arial', 32, 'bold'), tags='ui', anchor='e')
     elif game_mode == 'practice':
-        practice_text = f"PRACTICE MODE - Speed: {practice_speed:.2f}x"
+        practice_text = f"PRACTICE MODE\nSpeed: {practice_speed:.2f}x"
         if practice_looping and practice_loop_start is not None and practice_loop_end is not None:
-            practice_text += " [LOOP]"
-        canvas.create_text(width // 2, height - 100, text=practice_text,
-                         fill='#666666', font=('Arial', 24, 'bold'), tags='ui')
+            practice_text += "\n[LOOP]"
+        canvas.create_text(right_x, 150, text=practice_text,
+                         fill='#666666', font=('Arial', 24, 'bold'), tags='ui', anchor='e')
         # Show controls
         canvas.create_text(width // 2, height - 70, 
                          text="[ = Loop Start  |  ] = Loop End  |  L = Toggle Loop  |  - = Slower  |  + = Faster",
@@ -1490,7 +1547,9 @@ def game_loop():
                 print(f"Could not play music: {e}")
     
     frame_dur = 1 / fps
-    start_time = time.time()
+    # Set start_time 2 seconds in the future so current_time starts at -2.0
+    # This gives a 2 second delay before notes start spawning
+    start_time = time.time() + 2.0
     game_running = True
     
     # Draw static elements

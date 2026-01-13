@@ -7,3 +7,4 @@ torch>=2.0.0
 shapely>=2.0.0
 pytesseract>=0.3.10
 pygame>=2.5.0
+pyperclip

@@ -1086,6 +1086,160 @@ def get_char(key: Key | KeyCode | None) -> str | None:
         return key.char
     return None
 
+def ocr_text_capture() -> None:
+    """Capture text from a screen region defined by two mouse clicks.
+    
+    User clicks two points to define a rectangle. The text within that rectangle
+    is read using OCR and typed out using Enter-text-Enter format.
+    
+    Workflow:
+        1. User presses Ctrl+P to start
+        2. User clicks first corner of rectangle (within 10 seconds)
+        3. User clicks second corner of rectangle (within 10 seconds)
+        4. OCR reads text from the defined rectangle
+        5. Text is typed out using type_with_enter()
+    """
+    if not HAS_OCR:
+        print("Error: OCR dependencies not installed. Cannot capture text.")
+        print("Install with: pip install mss pytesseract pillow")
+        return
+    
+    print("\nOCR Text Capture: Click two corners to define rectangle...")
+    print("(You have 10 seconds for each click)")
+    
+    clicks = []
+    click_timeout = 10  # seconds
+    
+    def on_click(x: int, y: int, button: Button, pressed: bool) -> bool | None:
+        """Capture mouse clicks to define rectangle corners."""
+        if pressed and button == Button.left:
+            clicks.append((x, y))
+            print(f"  Click {len(clicks)}: ({x}, {y})")
+            if len(clicks) >= 2:
+                return False  # Stop listener
+        return None
+    
+    # Start mouse listener to capture clicks
+    try:
+        with MouseListener(on_click=on_click) as listener:
+            listener.join(timeout=click_timeout * 2)
+    except Exception as e:
+        print(f"Error capturing clicks: {e}")
+        return
+    
+    if len(clicks) < 2:
+        print("Error: Timeout - did not receive 2 clicks")
+        return
+    
+    # Calculate rectangle bounds
+    x1, y1 = clicks[0]
+    x2, y2 = clicks[1]
+    
+    # Ensure x1,y1 is top-left and x2,y2 is bottom-right
+    left = min(x1, x2)
+    top = min(y1, y2)
+    right = max(x1, x2)
+    bottom = max(y1, y2)
+    width = right - left
+    height = bottom - top
+    
+    print(f"Rectangle: ({left}, {top}) to ({right}, {bottom}) [{width}x{height}]")
+    
+    # Capture the screen region using mss
+    try:
+        with mss.mss() as sct:
+            # Define the region to capture
+            region = {
+                'left': left,
+                'top': top,
+                'width': width,
+                'height': height
+            }
+            
+            # Capture the region
+            screenshot = sct.grab(region)
+            
+            # Convert to PIL Image
+            img = Image.frombytes('RGB', screenshot.size, screenshot.rgb)
+            
+            # Image preprocessing for better OCR
+            original_size = img.size
+            
+            # Upscale image so both dimensions are at least 1024x768
+            target_width, target_height = 1024, 768
+            current_width, current_height = img.size
+            
+            # Calculate scale factors needed for each dimension
+            scale_x = target_width / current_width if current_width < target_width else 1
+            scale_y = target_height / current_height if current_height < target_height else 1
+            
+            # Use the larger scale factor to ensure both dimensions meet the minimum
+            scale_factor = max(scale_x, scale_y)
+            
+            if scale_factor > 1:
+                new_size = (int(current_width * scale_factor), int(current_height * scale_factor))
+                img = img.resize(new_size, Image.LANCZOS)
+                print(f"Upscaled image from {original_size} to {img.size} ({scale_factor:.2f}x)")
+            
+            # Convert to grayscale for better OCR
+            img = img.convert('L')
+            
+            # Enhance contrast
+            from PIL import ImageEnhance
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(2.0)
+            
+            # Optional: Apply sharpening
+            from PIL import ImageFilter
+            img = img.filter(ImageFilter.SHARPEN)
+            
+            print("Reading text from captured region...")
+            
+            # Perform OCR with optimized configuration
+            # --oem 1: Use LSTM neural net mode (best for modern text)
+            # --psm 6: Assume uniform block of text
+            # Other useful PSM modes:
+            #   3: Fully automatic page segmentation (default)
+            #   6: Assume a single uniform block of text
+            #   11: Sparse text. Find as much text as possible in no particular order
+            custom_config = r'--oem 1 --psm 6'
+            text = pytesseract.image_to_string(img, config=custom_config)
+            
+            # Clean up the text (strip whitespace, remove empty lines)
+            text = text.strip()
+            
+            if not text:
+                print("No text detected in the selected region")
+                print("Trying with different PSM mode (sparse text)...")
+                # Try again with sparse text mode
+                custom_config = r'--oem 1 --psm 11'
+                text = pytesseract.image_to_string(img, config=custom_config)
+                text = text.strip()
+            
+            if not text:
+                print("Still no text detected - typing 'No text'")
+                type_with_enter("No text")
+                return
+            
+            # Replace newlines with literal \n for single-line output
+            text = text.replace('\n', '\\n')
+            
+            print(f"Detected text ({len(text)} chars):")
+            print(f"--- START ---")
+            print(text)
+            print(f"--- END ---")
+            
+            # Type the text using the existing helper
+            print("Typing text...")
+            type_with_enter(text)
+            print("Done!")
+            
+    except Exception as e:
+        print(f"Error during OCR text capture: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def scan_screen_for_text(search_text: str, monitor_index: int = 1) -> tuple[bool, tuple[int, int] | None]:
     """Scan the screen for the given text using OCR.
     
@@ -1248,6 +1402,14 @@ def stopallthreads() -> None:
         return is_alt(k)
 
 def on_press(key: Key | KeyCode | None) -> None:
+    # Global variables that track double-press states need to be declared
+    global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
+    global ctrl1_count, ctrl1_first_time
+    global ctrlq_last_time, ctrlq_armed, ctrla_last_time, ctrla_armed
+    global ctrlz_last_time, ctrlz_armed, ctrly_last_time, ctrly_armed
+    global ctrlu_last_time, ctrlu_armed, ctrli_last_time, ctrli_armed
+    global ctrlg_last_time, ctrlg_armed, ctrlr_last_time, ctrlr_armed
+    global circle_art_shift_bind, mcrash_shift_bind, arena_current_type
     global automation_working, braindamage_working, circlecrash_working, circle_art_working, engineer_spam_working, mcrash_working
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
     global ctrl1_count, ctrl1_first_time, ctrlg_armed, ctrlg_last_time
@@ -1453,8 +1615,11 @@ def on_press(key: Key | KeyCode | None) -> None:
                 start_engineer_spam()
         elif hasattr(key, 'char') and key.char and key.char=='l':
             if 'ctrl' in pressed_keys:
-                print("50m score")
-                score50m()
+                controller.press("`")
+                for _ in range(10):
+                    controller.tap("x")
+                    time.sleep(0.03)
+                controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='h': 
             if 'ctrl' in pressed_keys:
                 repeat_tap_in_console("h", 3000)
@@ -1684,7 +1849,8 @@ def on_press(key: Key | KeyCode | None) -> None:
                     stop_circle_mouse()
         elif hasattr(key, 'char') and key.char and key.char=='0':
             if 'ctrl' in pressed_keys:
-                toggle_overlay()
+                print("OCR Text Capture - Click two corners to define region")
+                threading.Thread(target=ocr_text_capture, daemon=True).start()
         elif hasattr(key, 'char') and key.char and key.char=='\\':
             # Toggle direction of circle while active
             if circle_mouse_active:
@@ -1696,6 +1862,8 @@ def on_press(key: Key | KeyCode | None) -> None:
             if 'ctrl' in pressed_keys:
                 type_with_enter("$arena team 1", 0.05)
                 type_with_enter("$arena spawnpoint 0 0", 0.05)
+        elif hasattr(key, 'char') and key.char and key.char.lower()=='p':
+            pass
         elif hasattr(key, 'char') and key.char and key.char=='t':
             if 'ctrl' in pressed_keys:
                 print("custom_reload_spam")
@@ -1741,14 +1909,20 @@ def on_release(key: Key | KeyCode | None) -> None:
     elif key == Key.shift_l:
         if circle_art_shift_bind and circle_art_working:
             print("circle_art off")
-        if circle_art_shift_bind:
             circle_art_working = False
             circle_art_event.clear()
+            # Actually stop the process
+            if circle_art_process is not None and circle_art_process.is_alive():
+                circle_art_process.terminate()
+                circle_art_process.join(timeout=1)
         if mcrash_shift_bind and mcrash_working:
             print("mcrash off")
-        if mcrash_shift_bind:
             mcrash_working = False
             mcrash_event.clear()
+            # Actually stop the process
+            if mcrash_process is not None and mcrash_process.is_alive():
+                mcrash_process.terminate()
+                mcrash_process.join(timeout=1)
     elif key in pressed_keys:
         pressed_keys.remove(key)
 
