@@ -48,3 +48,5 @@ arras_models
 **/progress.json
 **/settings.json
 **/aacontext.txt
+
+macros/**

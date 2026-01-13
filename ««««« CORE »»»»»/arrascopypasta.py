@@ -7,6 +7,7 @@ import re
 import subprocess
 import tempfile
 import random
+import pyperclip
 
 # Lazy import pynput to avoid slow startup
 def _lazy_import_pynput():
@@ -170,13 +171,69 @@ def split_sentences(filepath, max_length=60, disable_space_breaking=False, disab
 pause_event = threading.Event()
 pause_event.set()  # Start as running
 
+def has_complex_unicode(text):
+    """Check if text contains complex unicode (Japanese, Chinese, etc.) that pynput can't handle"""
+    for char in text:
+        code = ord(char)
+        # Japanese hiragana, katakana, kanji
+        if (0x3040 <= code <= 0x309F or  # Hiragana
+            0x30A0 <= code <= 0x30FF or  # Katakana
+            0x4E00 <= code <= 0x9FFF or  # CJK Unified Ideographs
+            0x3400 <= code <= 0x4DBF or  # CJK Extension A
+            0x20000 <= code <= 0x2A6DF or # CJK Extension B
+            0x2A700 <= code <= 0x2B73F or # CJK Extension C
+            0x2B740 <= code <= 0x2B81F or # CJK Extension D
+            0x2B820 <= code <= 0x2CEAF or # CJK Extension E
+            0xF900 <= code <= 0xFAFF or  # CJK Compatibility Ideographs
+            0x2F800 <= code <= 0x2FA1F):  # CJK Compatibility Ideographs Supplement
+            return True
+        # Other complex scripts (Arabic, Hebrew, Thai, etc.)
+        if (0x0600 <= code <= 0x06FF or  # Arabic
+            0x0590 <= code <= 0x05FF or  # Hebrew
+            0x0E00 <= code <= 0x0E7F or  # Thai
+            0x1100 <= code <= 0x11FF or  # Hangul Jamo
+            0xAC00 <= code <= 0xD7AF):   # Hangul Syllables
+            return True
+    return False
+
 def safe_type(text):
-    """Type text while flagging to ignore synthetic keypresses"""
+    """Type text while flagging to ignore synthetic keypresses.
+    Uses clipboard for complex unicode (Japanese, etc.) for better compatibility.
+    """
     global controller_typing
     _ensure_controller()
+    _ensure_key()
     controller_typing = True
-    controller.type(text)
-    controller_typing = False
+    
+    try:
+        # Check if text contains complex unicode
+        if has_complex_unicode(text):
+            # Use clipboard method for complex unicode
+            old_clipboard = pyperclip.paste()  # Save current clipboard
+            try:
+                pyperclip.copy(text)  # Copy text to clipboard
+                time.sleep(0.05)  # Small delay for clipboard
+                # Paste using Cmd+V (macOS) or Ctrl+V (Windows/Linux)
+                if PLATFORM == 'darwin':
+                    controller.press(Key.cmd)
+                else:
+                    controller.press(Key.ctrl)
+                controller.press('v')
+                controller.release('v')
+                if PLATFORM == 'darwin':
+                    controller.release(Key.cmd)
+                else:
+                    controller.release(Key.ctrl)
+                time.sleep(0.05)
+            finally:
+                # Restore old clipboard after a short delay
+                time.sleep(0.1)
+                pyperclip.copy(old_clipboard)
+        else:
+            # Use direct typing for ASCII and simple unicode
+            controller.type(text)
+    finally:
+        controller_typing = False
 
 def safe_tap(key):
     """Tap key while flagging to ignore synthetic keypresses"""
