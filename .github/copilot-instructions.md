@@ -1,174 +1,362 @@
-# Copilot instructions for arrastools
+# Copilot Instructions for arrastools
 
-Purpose: Help AI coding agents work productively in this repo of desktop automation tools and a PPO-based Arras AI. Scripts control keyboard/mouse, read pixels, and automate gameplay/UI flows across macOS, Linux, and Windows.
+**Purpose**: Desktop automation toolkit for Arras.io game automation, including screen capture, input synthesis, pixel detection, AI agents (PPO/DQN), and cross-platform macro scripts.
 
-## Architecture and key files
-- This is a collection of standalone Python scripts (no package/pytest). Common patterns repeat across files.
-- Screen + input automation:
-  - `arrastools.py` — hotkey-driven macros using pynput. Listeners run at module end and spawn daemon threads via `start_*` helpers.
-  - `arrastools2.py` — alternative version with similar functionality and cross-platform support.
-  - `arrastools_nomacropanel.py` — streamlined version of arrastools without the macro panel GUI, same hotkey functionality.
-  - `arrasbot.py` — a watchdog that samples screen pixels with `mss`, reacts to state (disconnected/died/banned), and logs/screenshots.
-  - `arrascopypasta.py` — copypasta automation with platform-agnostic file path handling using pathlib.
-  - `arrascopypastareload.py` — enhanced copypasta with auto-reload functionality and pixel detection for UI state.
-- PPO AI prototypes:
-  - `arrasai.py` — defines PPO agent (PolicyNetwork, PPOMemory, ArrasAI) and training/exec loops over screen observations sampled in a polygon (`GAME_REGION`). Models saved to `arras_models/` (e.g., `arras_model.pt_best`).
-  - `asnake.py` — DQN-based Snake game AI with configurable training via `snake_config.json`. Models saved to `snake_models/`. Optional pygame visualization (headless mode if pygame unavailable).
-- Utilities and helpers:
-  - `arraspixel.py` — click-to-inspect pixel color tool using mss and pynput mouse listener.
-  - `arrasmouselocator.py` — records mouse click positions for coordinate mapping.
-  - `arrasmouse.py` — simple mouse position setter utility.
-  - `keylogger.py` — keypress logger with timestamped output to `logsk/` directory. Press Esc to stop.
-- Game-specific macros:
-  - `arrasantiafk.py` — simple anti-AFK mouse wiggle with periodic clicks.
-  - `arrashealmacro.py` — auto-spam 'h' key for 15s when h is pressed (healer macro).
-  - `arrastank.py` — tank upgrade/control automation sequence.
-  - `arrasstack.py` — stack macro with circular mouse movement at configurable angles/radius.
-  - `arrasdev.py` — multi-threaded ball crash stress test (spawns 32 threads for mass ball spawning).
-  - `arrasreload.py` — automated UI reload with chat message automation.
-  - `arrastext.py` / `arrastext2.py` — in-game text drawing using ball placement with bitmap font support.
-  - `arrasshaver.py` — utility for processing bitmap font character templates.
-  - `arrasbp.py` — blueprint/character pair processing utility.
-- External tools:
-  - `screensender.py` — WebSocket screen streaming server with remote mouse/keyboard input support.
-  - `minesweeper.py` — terminal-based Minesweeper game with ANSI color display.
-  - `cobalt.py` — automated video downloader using cobalt.tools with pixel-based UI detection.
-  - `sumo.py` — pixel-based directional movement automation (detects red pixels for WASD input).
-  - `drawacircle.py` — click two points to define a rectangle, finds white center, draws a circle with mouse drag.
-- Test/development scripts:
-  - `linuxtest.py`, `arrastest2.py`, `arashealertest.py` — minimal pynput test scripts for platform verification.
-- Assets/data: `arras_models/`, `snake_models/`, `logs/`, `logsk/`, `copypastas/`, `bps/`, `bitmap.txt`.
+---
 
-## Cross-platform support and runtime assumptions
+## Project Overview
 
-### Platform detection
-All main scripts now include platform detection using `platform.system().lower()`:
-- Returns: `'darwin'` (macOS), `'linux'`, `'windows'`
-- Scripts print platform on startup and warn if unsupported
+**Type**: Collection of standalone Python automation scripts (no package structure)  
+**Platforms**: Linux, macOS, Windows (primary: Linux)  
+**Python**: 3.10+ required  
+**Testing**: No pytest; manual testing only
 
-### Platform-specific behaviors
-- **macOS (primary development platform)**:
-  - Requires Accessibility + Screen Recording permissions (System Settings > Privacy & Security)
-  - Retina displays: Set `SCALE=2` in `arrasbot.py`
-  - Modifier keys: `Option+Arrow` for 1px mouse nudges
-  - Coordinate system: May differ from Linux/Windows due to Retina scaling
-  
-- **Linux (Arch, Debian, Ubuntu)**:
-  - Install dependencies via package manager: `sudo apt install python3-tk tesseract-ocr` (Debian/Ubuntu) or `sudo pacman -S tk tesseract` (Arch)
-  - Accessibility permissions may vary by DE/WM (check pynput documentation)
-  - Standard displays: Set `SCALE=1` in `arrasbot.py`
-  - Modifier keys: `Alt+Arrow` for 1px mouse nudges
-  - Wayland vs X11: pynput works best on X11; Wayland may have limitations
-  
-- **Windows**:
-  - Install Tesseract OCR separately: Download from https://github.com/UB-Mannheim/tesseract/wiki
-  - May require running as Administrator for input automation
-  - Standard displays: Set `SCALE=1` in `arrasbot.py`
-  - Modifier keys: `Alt+Arrow` for 1px mouse nudges
-  - Path separators: Now handled automatically via pathlib
-  
-- **Android**:
-  - Limited/experimental support
-  - pynput may not work on all devices
-  - Consider using Termux with X11 server for best compatibility
+---
 
-### Display scaling and coordinates
-- Coordinates are absolute screen pixels for a specific UI layout
-- **Critical**: Adjust based on YOUR display resolution:
-  - `arrasbot.py`: `MONITOR_INDEX` (default 1) and `SCALE` (2 on Retina, 1 on standard displays)
-  - `arrasai.py`: Update `GAME_REGION` polygon coordinates to match your game window
-  - `arrastools.py`: Update mouse bounds in `on_press()` and click positions in `conq_quickstart()`
-- Use `arrasbot.py` CLI command `probe` to sample pixel colors and positions on your setup
-- Retina/HiDPI displays require coordinate conversion: multiply or divide by `SCALE` as needed
+## Directory Structure
 
-## Dependencies and installation
+### `««««« CORE »»»»»/` — Core automation scripts
+- **arrastools.py** — Main hotkey-driven macro system with pynput listeners
+- **arrasbot.py** — Pixel-based game state watchdog (disconnect/death/ban detection)
+- **arrascopypasta.py** — Auto-types text from `copypastas/*.txt` files
+- **arrastext_detector.py** — OCR-based text detection using pytesseract
+- **arrasbp.py** — Blueprint and character pair processing
+- **keylogger.py** — Keypress logger with timestamped output to `logsk/`
+- **rollbot.py** — Automated game mechanics bot
+- **rg.py** — Utility script
+- **renderer/** — OpenGL and Tkinter rendering modules with shader support
 
-### Python requirements
-- **Python version**: 3.10+ recommended
-- **Core libraries**: `pynput`, `mss`, `numpy`, `pathlib` (built-in)
-- **Bot utilities**: `ping3`, `Pillow`, `mss.tools`
-- **AI/ML**: `torch`, `shapely`, `pytesseract`, `Pillow`
-- **Snake AI**: `torch`, `numpy`, `pygame` (optional for visualization)
-- **Screen streaming**: `websockets`, `Pillow`, `mss`
+### `random/` — Experimental and utility scripts
+- **asnake.py** — DQN Snake AI with configurable training (see `snake_config.json`)
+- **arrasantiafk.py** — Anti-AFK mouse wiggler
+- **drawacircle.py** — Interactive circle drawing tool
+- **minesweeper.py** — Terminal Minesweeper game
+- **nodebuster.py** — Node automation
+- **ping.py** — Network ping utility
 
-### System dependencies (platform-specific)
-- **macOS**: Tesseract via Homebrew: `brew install tesseract`
-- **Linux**: `sudo apt install python3-tk tesseract-ocr` (Debian/Ubuntu) or equivalent
-- **Windows**: Download Tesseract installer from GitHub, add to PATH
-- **All platforms**: Ensure Python tkinter is installed (usually bundled)
+### `tools/` — Standalone utilities
+- **arraspixel.py** — Click-to-inspect pixel color tool (mss + pynput)
+- **unicode_chunker.py** — Unicode text processing utility
 
-### Quick setup
+### `copypastas/` — Text files for auto-typing
+20+ `.txt` files with pre-written messages
+
+### `bps/` — Blueprint data
+- `color.txt`, `type.txt`, `wall.txt`
+
+---
+
+## Key Technologies
+
+### Core Dependencies (see requirements.txt)
+- **pynput** (>=1.7.6) — Keyboard/mouse input synthesis and monitoring
+- **mss** (>=9.0.1) — Fast cross-platform screen capture
+- **numpy** (>=1.26.0) — Numerical operations for AI models
+- **ping3** (>=4.0.4) — Network connectivity checks
+- **pillow** (>=10.0.0) — Image processing
+- **torch** (>=2.0.0) — PyTorch for AI training
+- **shapely** (>=2.0.0) — Polygon geometry for screen regions
+- **pytesseract** (>=0.3.10) — OCR text extraction
+- **pygame** (>=2.5.0) — Optional visualization for Snake AI
+
+### System Dependencies
+- **Tesseract OCR** (system package):
+  - Linux: `sudo apt install tesseract-ocr python3-tk`
+  - macOS: `brew install tesseract`
+  - Windows: Download from GitHub releases, add to PATH
+
+---
+
+## Architecture Patterns
+
+### Threading Model
+- Use `threading.Thread(..., daemon=True)` for all background tasks
+- Control loops with global boolean flags (e.g., `slowballs`, `randomwalld`)
+- Provide `start_*()` wrapper functions to prevent duplicate threads
+- Example:
+  ```python
+  running = False
+  def start_task():
+      global running
+      if not running:
+          running = True
+          threading.Thread(target=task_loop, daemon=True).start()
+  ```
+
+### Input Synthesis
+- **Single controller per module**: One `KeyboardController()` and `MouseController()` instance
+- **Batch in-game chat commands**: Wrap in backtick quotes
+  ```python
+  controller.press('`')
+  controller.type("arena size 4")
+  controller.release('`')
+  ```
+
+### Color Detection
+- Always use tolerance-based comparison: `color_close(rgb1, rgb2, tol=6)`
+- Accounts for antialiasing/compression artifacts
+- Never use strict `==` for pixel RGB values
+
+### File Paths
+- **Always use `pathlib.Path`** for cross-platform compatibility
+- Never hardcode `/` or `\` separators
+- Example: `Path.home() / "Desktop" / "abss" / session_id`
+
+### Coordinate Systems
+- **Display scaling critical**:
+  - Retina/HiDPI (macOS): `SCALE=2`
+  - Standard displays (Linux/Windows): `SCALE=1`
+- Coordinates are absolute screen pixels
+- Use `arrasbot.py` commands to probe:
+  - `dbgmon` — List all monitors and properties
+  - `probe` — Sample pixel color at cursor position
+
+---
+
+## Platform-Specific Behavior
+
+### Linux (Primary Platform)
+- X11 recommended (Wayland has pynput limitations)
+- Install: `sudo apt install python3-tk tesseract-ocr`
+- Modifier for 1px nudges: `Alt+Arrow`
+- Screenshot paths: `~/Desktop/abss/<session>/`
+
+### macOS
+- Requires Accessibility + Screen Recording permissions (System Settings > Privacy & Security)
+- Retina displays: Set `SCALE=2` in arrasbot.py
+- Modifier for 1px nudges: `Option+Arrow`
+- Install: `brew install tesseract`
+
+### Windows
+- May require Administrator privileges for input automation
+- Install Tesseract manually, add to PATH
+- Modifier for 1px nudges: `Alt+Arrow`
+- Screenshot paths: `C:\Users\<user>\Desktop\abss\<session>\`
+
+### Platform Detection
+All main scripts should detect platform at startup:
+```python
+import platform
+PLATFORM = platform.system().lower()  # 'linux', 'darwin', 'windows'
+```
+
+---
+
+## Script Usage Reference
+
+### arrastools.py — Hotkey Macros
+**Hotkeys** (hold Ctrl unless noted):
+- `Ctrl+1` (1/2/3 presses in 2s) → Arena size automation type 1/2/3
+- `Ctrl+y` → "Controlled Nuke" (click 2 points, spray 'k' in rectangle)
+- `Alt+Arrow` / `Option+Arrow` → 1px mouse movement
+- `Ctrl+6` (double-press in 5s) → `ballcrash()`
+- `Ctrl+9` → `nuke()`
+- `Ctrl+m` → Ball spam benchmark
+- `Esc` → Stop activities
+- `Ctrl+Esc` → Immediate exit
+
+**Threading**: Listeners run as daemon threads spawned by `start_*()` helpers at module end
+
+### arrasbot.py — State Watchdog
+**CLI Commands** (type in terminal while running):
+- `stop` — Stop monitoring
+- `setscale <1|2>` — Adjust display scaling
+- `setmon <index>` — Change monitor
+- `dbgmon` — List all monitors
+- `screenshot` — Capture screen
+- `status` — Show current state
+- `ping` — Network check
+- `probe` — Sample pixel at cursor
+- `forcedisconnect`, `forcedeath`, `forcereconnect` — Simulate states
+
+**Logs**: `logs/abss_*.log`  
+**Screenshots**: `~/Desktop/abss/<session>/` (Linux/macOS)
+
+**Color Detection**: Uses `color_close(rgb1, rgb2, tol=6)` for antialiasing tolerance
+
+### arrascopypasta.py
+- Reads `.txt` files from `copypastas/` directory
+- Uses pathlib for cross-platform file handling
+- Auto-types content into game chat
+
+### keylogger.py
+- Logs all keypresses to `logsk/keylog_<timestamp>.txt`
+- Press `Esc` to stop logging
+
+### asnake.py — DQN Snake AI
+- Config: `random/snake_config.json` (grid size, episodes, rewards, display)
+- Models saved to `snake_models/` with suffixes `_best`, `_ep<N>`, `_interrupted`
+- Hotkeys: `Esc` to quit
+- Optional pygame visualization (headless if unavailable)
+
+### arraspixel.py
+- Click anywhere to display RGB color value
+- Uses mss for capture, pynput for mouse listener
+- Helpful for calibrating color detection thresholds
+
+---
+
+## Development Guidelines
+
+### Adding New Macros
+1. Create function in `arrastools.py`
+2. Add `start_*()` wrapper if it loops
+3. Wire hotkey in `on_press()` with debouncing
+4. Use global flags for state control
+
+### Adding Pixel Detectors
+1. Add small monitor-relative probe in `arrasbot.py`
+2. Use `color_close()` for RGB comparison (tolerance ≥ 6)
+3. Gate actions with cooldowns to prevent spam
+4. Test with `probe` command before hardcoding
+
+### Changing Display Coordinates
+**Critical**: Coordinates are hardcoded for specific resolutions. When changing:
+1. Update `GAME_REGION` in arrasai.py (if applicable)
+2. Update mouse bounds in `arrastools.py` `on_press()`
+3. Update click positions in automation functions (e.g., `conq_quickstart()`)
+4. Use `arrasbot.py probe` command to sample new coordinates
+5. Verify `SCALE` setting matches your display
+
+### Modifier Key Handling
+Use helper functions to handle cross-platform variants:
+```python
+def is_ctrl(key):
+    return key in {Key.ctrl, Key.ctrl_l, Key.ctrl_r}
+
+def is_alt(key):
+    return key in {Key.alt, Key.alt_l, Key.alt_r}
+```
+
+### File Output Conventions
+- Timestamped paths: Use `timestamp()` function
+- Bot logs: `logs/` directory
+- Screenshots: `~/Desktop/abss/<session>/` (use pathlib)
+- Models: `arras_models/`, `snake_models/`
+
+---
+
+## Installation
+
+### Quick Setup
 ```bash
+# Clone repository
+git clone https://github.com/maple-underscore/arrastools
+cd arrastools
+
 # Create virtual environment (recommended)
 python3 -m venv .venv
 source .venv/bin/activate  # Linux/macOS
 # OR
 .venv\Scripts\activate  # Windows
 
-# Install dependencies
-pip install pynput mss numpy ping3 pillow torch shapely pytesseract websockets pygame
+# Install Python dependencies
+pip install -r requirements.txt
 
-# Platform-specific system packages
-# macOS: brew install tesseract
-# Linux: sudo apt install tesseract-ocr python3-tk
-# Windows: Install Tesseract from GitHub releases
+# Install system dependencies (Linux example)
+sudo apt install tesseract-ocr python3-tk
+
+# macOS
+brew install tesseract
+
+# Windows
+# Download Tesseract from https://github.com/UB-Mannheim/tesseract/wiki
+# Add to system PATH
 ```
 
-## How to run and control
-- `arrastools.py` / `arrastools2.py` hotkeys (hold Ctrl):
-  - `Ctrl+1` one/two/three presses within 2s: `$arena size` automation type 1/2/3 (`start_arena_automation`).
-  - `Ctrl+y` begin "Controlled Nuke": click 2 points in 10s to spray `k` within rectangle (uses global mouse listener).
-  - `Alt+Arrow` (Option+Arrow on macOS): Move mouse 1 pixel in arrow direction (for precise positioning).
-  - Safety: `Esc` stops activities; `Ctrl+Esc` immediate exit.
-  - Other examples: `Ctrl+6` double-press within 5s triggers `ballcrash()`; `Ctrl+9` runs `nuke()`; `Ctrl+m` benchmarks ball spam.
-- `arrasbot.py` CLI commands (typed in terminal while running): `stop`, `setscale <1|2>`, `setmon <index>`, `dbgmon`, `screenshot`, `status`, `ping`, `probe`, `forcedisconnect`, `forcedeath`, `forcereconnect`.
-  - Logs: `logs/abss_*.log`; screenshots: `~/Desktop/abss/<session>/` (Linux/macOS) or `C:\Users\<user>\Desktop\abss\<session>\` (Windows).
-  - Uses `color_close()` for tolerant RGB checks (accounts for antialiasing).
-- `arrasai.py` training:
-  - Hotkeys while running: `Esc` force-stop (hard exit), `p` pause/resume, `r` simulate death.
-  - Samples RGB at `OBSERVATION_POINTS = sample_points_in_polygon(GAME_REGION, step=10)` using `mss`; outputs: action (W/A/S/D/Space), mouse target, Sum42 head, and upgrade path.
-  - Models saved in `arras_models/` with suffixes `_best`, `_final`, `_interrupted` based on training flow.
-- `arrascopypasta.py`: Reads `.txt` files from `copypastas/` directory (uses pathlib for cross-platform compatibility).
-- `asnake.py` Snake AI training:
-  - Config: `snake_config.json` controls grid size, training episodes, rewards, display settings, parallel games.
-  - Hotkeys: `Esc` to quit, visualization via pygame (optional).
-  - Models saved in `snake_models/` with suffixes `_best`, `_ep<N>`, `_interrupted`.
-- `keylogger.py`: Run to log all keypresses to `logsk/keylog_<timestamp>.txt`. Press Esc to stop.
-- `screensender.py`: WebSocket server for remote screen streaming. Set `SCREEN_SENDER_TOKEN` env var. Connect via `screenreciever.html`.
-- `drawacircle.py`: Click two points to define rectangle, then automatically draws circle at white center.
-- `cobalt.py`: Reads URLs from `downloadqueue.txt` and automates downloads via cobalt.tools UI.
-
-## Conventions and patterns to follow
-- **Threading**: Use `threading.Thread(..., daemon=True)` for background actions; toggle with global flags (e.g., `slowballs`, `randomwalld`). Provide `start_*` helpers to avoid duplicate threads.
-- **Input synthesis**: Use a single `KeyboardController`/`MouseController` per module; batch keystrokes within backtick-quoted console in-game by `controller.press("`")` … `controller.release("`")`.
-- **Color detection**: Prefer `color_close(tupleRGB, tupleRGB, tol=6)` rather than strict equality to account for antialiasing/transparency.
-- **File paths**: Use `pathlib.Path` for cross-platform compatibility (see `arrascopypasta.py` for example). Avoid hardcoded `/` or `\`.
-- **File outputs**: Prefer timestamped paths from `timestamp()`; keep bot logs under `logs/` and images under `~/Desktop/abss/<session>/`.
-- **Modifier key detection**: Use helper functions `is_ctrl()`, `is_alt()`, `is_modifier_for_arrow_nudge()` to handle cross-platform modifier key variants (Key.ctrl vs Key.ctrl_l vs Key.ctrl_r).
-
-## When extending
-- For new macros, mirror `arrastools.py` style: add a function, a `start_*` wrapper if it loops, and wire a Ctrl+<key> branch in `on_press()` with debouncing if needed.
-- For new detectors, add small, monitor-relative probes (`probe` in `arrasbot.py`) and gate user-visible actions with tolerant checks + cooldowns.
-- If changing layout/resolution, update `GAME_REGION`, bounds and any hard-coded click points in `arrastools.py` (e.g., `conq_quickstart()` positions).
-- **Platform testing**: Test on target platforms before committing. Use virtual machines or containers for cross-platform validation.
-- Add platform detection at script start: `PLATFORM = platform.system().lower()` with appropriate warnings.
+---
 
 ## Troubleshooting
 
-### Permission issues
+### Permission Issues
+- **Linux**: Check X11 vs Wayland; pynput requires X11 for best results
 - **macOS**: Grant Accessibility + Screen Recording in System Settings > Privacy & Security
-- **Linux**: Check X11 vs Wayland; pynput may need additional configuration for Wayland
 - **Windows**: Run Terminal/IDE as Administrator if input automation fails
 
-### Coordinate/scaling issues
-- Use `arrasbot.py` command `dbgmon` to list all monitors and their properties
-- Use `probe` command to check pixel colors at cursor position
-- Adjust `SCALE` variable to match your display (2 for Retina/HiDPI, 1 for standard)
-- Re-map `GAME_REGION` coordinates for your screen resolution
+### Coordinate/Scaling Issues
+1. Run `arrasbot.py` and use `dbgmon` command to list monitors
+2. Use `probe` command to check pixel colors at cursor
+3. Adjust `SCALE` variable (2 for Retina/HiDPI, 1 for standard)
+4. Re-map `GAME_REGION` coordinates for your resolution
 
-### Dependency issues
+### Dependency Issues
 - Ensure Tesseract OCR is installed system-wide and in PATH
-- Virtual environment recommended to isolate Python packages
+- Use virtual environment to isolate Python packages
 - Check pynput documentation for platform-specific requirements
 
-References: `arrastools.py`, `arrastools2.py`, `arrastools_nomacropanel.py`, `arrasbot.py`, `arrasai.py`, `asnake.py`, `arrascopypasta.py`, `screensender.py`, `keylogger.py`, `arras_models/`, `snake_models/`, `logs/`, `logsk/`, `copypastas/`. Keep changes minimal and aligned with existing patterns.
+### pynput on Wayland
+- If using Wayland on Linux, consider switching to X11 session
+- Alternatively, use xwayland-run or similar compatibility layer
+- Some features may not work reliably on Wayland
+
+---
+
+## Code Style Conventions
+
+### Consistency Rules
+- **No pytest**: Manual testing only
+- **Standalone scripts**: No package imports between scripts (except renderer/)
+- **Common patterns**: Repeat patterns rather than abstracting (DRY not enforced)
+- **Daemon threads**: All background tasks must be daemon threads
+- **Global flags**: Use for state control (avoid complex state machines)
+- **Pathlib**: Always use for file paths
+- **Type hints**: Not required but welcome
+- **Comments**: Prefer inline comments explaining "why" not "what"
+
+### When Modifying Code
+- Keep changes minimal and aligned with existing patterns
+- Test on target platform before committing
+- Use virtual machines or containers for cross-platform validation
+- Add platform detection if script hasn't been tested cross-platform
+- Document any new hotkeys or CLI commands in this file
+
+---
+
+## Important Files and Directories
+
+**Critical Assets**:
+- `bitmap.txt` — Bitmap font data for text rendering
+- `copypastas/*.txt` — Pre-written messages for auto-typing
+- `bps/*.txt` — Blueprint configuration data
+- `random/snake_config.json` — Snake AI training configuration
+- `logs/` — Runtime logs from arrasbot.py
+- `logsk/` — Keylogger output directory
+
+**Generated at Runtime**:
+- `arras_models/` — Saved PPO models
+- `snake_models/` — Saved DQN models
+- `~/Desktop/abss/<session>/` — Screenshots from arrasbot.py
+- `progress.json` — Training progress tracking
+
+---
+
+## Additional Notes
+
+### Not Included in This Repo
+The old copilot instructions referenced these files that don't exist in the current structure:
+- `arrastools2.py`, `arrastools_nomacropanel.py`
+- `arrascopypastareload.py`
+- `arrasai.py` (PPO agent)
+- `arrasmouselocator.py`, `arrasmouse.py`
+- `arrashealmacro.py`, `arrastank.py`, `arrasstack.py`
+- `arrasdev.py`, `arrasreload.py`, `arrastext.py`, `arrastext2.py`, `arrasshaver.py`
+- `screensender.py`, `cobalt.py`, `sumo.py`
+- `linuxtest.py`, `arrastest2.py`, `arashealertest.py`
+
+If these scripts are needed, they should be added to the repository and documented here.
+
+### Renderer Module
+The `renderer/` directory contains:
+- `base_renderer.py` — Abstract renderer interface
+- `tkinter_renderer.py` — Tkinter-based rendering
+- `opengl_renderer.py` — OpenGL rendering with shader support
+- `sprite_pool.py` — Sprite management
+- `shaders/` — GLSL vertex/fragment shaders (note.vert/frag, particle.vert/frag)
+
+This is the only modular package in the project; other scripts remain standalone.
+
+---
+
+**Last Updated**: January 2026  
+**Maintainer**: maple-underscore  
+**License**: See LICENSE and NOTICE files

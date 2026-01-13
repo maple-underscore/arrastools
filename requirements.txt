@@ -1,9 +1,9 @@
-pynput
-mss
-numpy
-ping3
-pillow
-torch
-shapely
-pytesseract
+pynput>=1.7.6
+mss>=9.0.1
+numpy>=1.26.0
+ping3>=4.0.4
+pillow>=10.0.0
+torch>=2.0.0
+shapely>=2.0.0
+pytesseract>=0.3.10
 pygame>=2.5.0
