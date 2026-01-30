@@ -72,8 +72,9 @@ if PLATFORM not in ('darwin', 'linux', 'windows'):
     print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
 
 #each line should be 60 chars long
-global ids, copypastaing, controller, thread, filepaths, current_chars, current_percent, is_ai_mode
+global ids, copypastaing, controller, thread, filepaths, current_chars, current_percent, is_ai_mode, listener
 is_ai_mode = False
+listener = None
 
 # Use pathlib for cross-platform file paths
 # Script dir holds automation scripts; copypastas live one level up
@@ -390,6 +391,111 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
     is_ai_mode = custom_text is not None
     start = time.time()
     
+    # Special handling for ad_news - random line mode
+    if id == "ad_news" and custom_text is None:
+        index = ids.index(id)
+        filepath = filepaths[index]
+        if not os.path.exists(filepath):
+            print(f"File not found: {filepath}")
+            copypastaing = False
+            return
+        
+        # Read all lines from file
+        with open(filepath, encoding='utf-8') as f:
+            all_lines = [line.rstrip() for line in f.readlines() if line.strip()]
+        
+        if not all_lines:
+            print(f"No lines found in {filepath}")
+            copypastaing = False
+            return
+        
+        print(f"ad_news mode: {len(all_lines)} lines available. Press Esc to stop.")
+        
+        if prepare:
+            path_obj = Path(filepath)
+            source_text = f"[.../{path_obj.name}]"
+            
+            safe_tap(Key.enter)
+            interruptible_sleep(0.1)
+            safe_type(f"Arras Copypasta Utility [ACU] > v02.04.11-beta.4 < loading")
+            interruptible_sleep(0.1)
+            for _ in range(2):
+                safe_tap(Key.enter)
+                interruptible_sleep(0.1)
+            safe_type(f"Source: > {source_text} < | ad_news random mode | > {len(all_lines)} lines <")
+            interruptible_sleep(0.1)
+            safe_tap(Key.enter)
+            interruptible_sleep(10)
+        
+        # Loop indefinitely, picking random lines
+        while copypastaing:
+            # Wait here if paused
+            pause_event.wait()
+            
+            # Pick a random line
+            line = random.choice(all_lines)
+            
+            # Split the line into sentences following the normal rules
+            sentences = []
+            max_length = 60
+            
+            if disable_space_breaking:
+                # Break only at max_length, preserving all characters including spaces
+                buffer = line
+                while len(buffer) > max_length:
+                    chunk = buffer[:max_length]
+                    sentences.append(chunk)
+                    buffer = buffer[max_length:]
+                if buffer:
+                    sentences.append(buffer)
+            else:
+                # Break at spaces
+                words = line.split()
+                buffer = ""
+                for word in words:
+                    if buffer:
+                        if len(buffer) + 1 + len(word) > max_length:
+                            sentences.append(buffer)
+                            buffer = word
+                        else:
+                            buffer += " " + word
+                    else:
+                        if len(word) > max_length:
+                            sentences.append(word[:max_length])
+                            buffer = word[max_length:]
+                        else:
+                            buffer = word
+                if buffer:
+                    sentences.append(buffer)
+            
+            # Type each sentence
+            for sentence in sentences:
+                if not copypastaing:
+                    break
+                pause_event.wait()  # Check pause before each sentence
+                safe_tap(Key.enter)
+                interruptible_sleep(0.1)
+                sentence_no_emoji = replace_emojis(sentence)
+                safe_type(sentence_no_emoji)
+                interruptible_sleep(0.1)
+                safe_tap(Key.enter)
+                interruptible_sleep(3)
+            
+            # Small delay before next random line
+            if copypastaing:
+                interruptible_sleep(1)
+        
+        print("ad_news random mode stopped")
+        if not disable_finish_text:
+            safe_tap(Key.enter)
+            interruptible_sleep(0.1)
+            safe_type("ad_news random mode stopped")
+            interruptible_sleep(0.1)
+            safe_tap(Key.enter)
+        
+        copypastaing = False
+        return
+    
     # Handle custom text (AI-generated) vs file-based copypasta
     if custom_text is not None:
         # AI mode: split custom text directly at 60 chars
@@ -540,32 +646,38 @@ def on_press(key):
         
         if key == keyboard.Key.esc:
             copypastaing = False
-        elif hasattr(key, 'char') and key.char == 'p' and copypastaing and not is_ai_mode:
-            if pause_event.is_set():
-                pause_event.clear()
-                time.sleep(3)
-                print(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                safe_tap(Key.enter)
-                interruptible_sleep(0.1)
-                safe_type(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                interruptible_sleep(0.1)
-                safe_tap(Key.enter)
-                interruptible_sleep(0.1)
-            else:
-                pause_event.set()
-                time.sleep(3)
-                print(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                safe_tap(Key.enter)
-                interruptible_sleep(0.1)
-                safe_type(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                interruptible_sleep(0.1)
-                safe_tap(Key.enter)
-                interruptible_sleep(0.1)
+        elif hasattr(key, 'char') and key.char == 'p' and copypastaing:
+            # Allow pausing in file mode (including ad_news), but not AI mode
+            if not is_ai_mode:
+                if pause_event.is_set():
+                    pause_event.clear()
+                    time.sleep(3)
+                    print(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                    safe_tap(Key.enter)
+                    interruptible_sleep(0.1)
+                    safe_type(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                    interruptible_sleep(0.1)
+                    safe_tap(Key.enter)
+                    interruptible_sleep(0.1)
+                else:
+                    pause_event.set()
+                    time.sleep(3)
+                    print(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                    safe_tap(Key.enter)
+                    interruptible_sleep(0.1)
+                    safe_type(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
+                    interruptible_sleep(0.1)
+                    safe_tap(Key.enter)
+                    interruptible_sleep(0.1)
     except UnicodeDecodeError:
         print("UnicodeDecodeError: Non-standard key (emoji?) pressed. Ignored.")
 
-# Delay listener setup until first user input
-listener = None
+# Initialize keyboard listener immediately
+if listener is None:
+    _lazy_import_pynput()
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+    print("Keyboard listener started. Press Esc to stop copypasta.")
 
 while True:
     mode_input = input("Mode (copypasta/ai) > ").strip().lower()

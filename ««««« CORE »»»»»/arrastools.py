@@ -4,6 +4,11 @@ The script mirrors historical behavior; readability tweaks (docstrings,
 comments) clarify intent without altering any macro logic.
 """
 
+# Set to True to use C++ implementations when available
+USE_CPP_MACROS = True
+
+tailamount = 40
+
 import random
 import time
 import threading
@@ -87,6 +92,23 @@ class RobustKeyboardListener(KeyboardListener):
 # - Linux: Ctrl hotkeys work; Alt+Arrow for 1px nudges
 # - Windows: Ctrl hotkeys work; Alt+Arrow for 1px nudges
 # - Android: Limited support (pynput may not work on all devices)
+
+# C++ macro integration
+try:
+    from cpp_wrapper import (
+        is_cpp_available,
+        circles_cpp,
+        walls_cpp,
+        circlecrash_cpp,
+        minicirclecrash_cpp,
+        arena_automation_cpp,
+        benchmark_cpp,
+    )
+    HAS_CPP = is_cpp_available()
+except ImportError:
+    HAS_CPP = False
+    print("C++ wrapper not available, using pure Python implementations")
+
 
 length = 4
 
@@ -233,7 +255,7 @@ def repeat_tap_pattern_in_console(pattern: str, count: int, hold_backtick: bool 
                 controller.tap("`")
 automation_process = None
 softwallstack_process = None
-circle_art_process = None
+circle_art_thread: threading.Thread | None = None
 braindamage_process = None
 tail_process = None
 circle_mouse_process = None
@@ -251,7 +273,7 @@ arena_current_type = 1
 # Shared multiprocessing primitives so worker processes can mirror thread-like behavior.
 automation_event = multiprocessing.Event()
 engineer_spam_event = multiprocessing.Event()
-circle_art_event = multiprocessing.Event()
+circle_art_event = threading.Event()  # Changed to threading.Event for faster response time
 braindamage_event = multiprocessing.Event()
 circle_mouse_event = multiprocessing.Event()
 mcrash_event = multiprocessing.Event()
@@ -271,9 +293,9 @@ ctrl6_armed = False
 ctrl7_last_time = 0.0
 ctrl7_armed = False
 
-# new ctrl+1 multi-press globals
-ctrl1_count = 0
-ctrl1_first_time = 0.0
+# double-lock globals for ctrl+1 (arena size automation)
+ctrl1_last_time = 0.0
+ctrl1_armed = False
 
 # double-lock globals for q, a, z, y, u, i, g, r
 ctrlq_last_time = 0.0
@@ -317,7 +339,7 @@ def _overlay_lines() -> list[str]:
         f"Circle mouse: {'ON' if circle_mouse_event.is_set() else 'off'} r={circle_mouse_radius_value.value} v={circle_mouse_speed_value.value:.3f} dir={dir_text}",
         f"Tail: {'ON' if (tail_process is not None and tail_process.is_alive()) else 'off'}",
         f"Softwall: {'ON' if (softwallstack_process is not None and softwallstack_process.is_alive()) else 'off'}",
-        f"Armed: circle={'YES' if ctrl6_armed else 'no'} wall={'YES' if ctrl7_armed else 'no'}",
+        f"Armed: arena={'YES' if ctrl1_armed else 'no'} circle={'YES' if ctrl6_armed else 'no'} wall={'YES' if ctrl7_armed else 'no'} arenaclose={'YES' if ctrlr_armed else 'no'}",
         f"Ctrl swap: {'Cmd' if ctrlswap and PLATFORM == 'darwin' else 'Ctrl'}",
     ]
     return lines
@@ -547,6 +569,22 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> N
         run_event.set()
 
     cmd_count = 0
+    
+    # C++ fast path: generate all commands at once if terminate is enabled
+    if USE_CPP_MACROS and HAS_CPP and arena_auto_terminate:
+        import random
+        seed = random.randint(0, 2**32 - 1)
+        commands = arena_automation_cpp(atype, arena_auto_max_commands, step, seed)
+        print(f"Generated {len(commands)} commands using C++ (fast path)")
+        for cmd in commands:
+            if not run_event.is_set():
+                break
+            type_with_enter(cmd)
+            if cmd_delay > 0:
+                time.sleep(cmd_delay)
+        return
+    
+    # Python fallback or continuous mode
     if atype == 1:
         while run_event.is_set():
             if arena_auto_terminate and cmd_count >= arena_auto_max_commands:
@@ -620,7 +658,7 @@ def arena_size_automation(atype: int = 1, run_event: MpEvent | None = None) -> N
 def click_positions(pos_list: list[tuple[float, float]], delay: float = 0.5) -> None:
     mouse = MouseController()
     for x, y in pos_list:
-        mouse.position = (x, y)
+        mouse.position = (int(x), int(y))
         time.sleep(0.02)
         mouse.click(Button.left, 1)
         print(f"Clicked at {x}, {y}")
@@ -653,18 +691,35 @@ def shape() -> None:
     type_in_console("f"*5000)
 
 def circlecrash() -> None:
-    repeat_tap_pattern_in_console("ch", 180 * 180)
+    if USE_CPP_MACROS and HAS_CPP:
+        pattern = circlecrash_cpp()
+        type_in_console(pattern)
+    else:
+        repeat_tap_pattern_in_console("ccccccccccccccccccccccccch", 1600) # 40,000 = 25 * 1600
 
 def minicirclecrash() -> None:
-    repeat_tap_pattern_in_console("ch", 50 * 100)
+    if USE_CPP_MACROS and HAS_CPP:
+        pattern = minicirclecrash_cpp()
+        type_in_console(pattern)
+    else:
+        repeat_tap_pattern_in_console("ccccccccccccccccccccccccch", 240) # 6,000 = 25 * 240
 
-def circles(amt: int = 210) -> None:
-    repeat_tap_pattern_in_console("ch", amt)
+def circles(amt: int = 22) -> None:
+    if USE_CPP_MACROS and HAS_CPP:
+        pattern = circles_cpp(amt)
+        type_in_console(pattern)
+    else:
+        repeat_tap_pattern_in_console("cccccccccch", amt) # 220 = 22 * 20
 
 def walls() -> None:
-    type_in_console("x"*210)
+    if USE_CPP_MACROS and HAS_CPP:
+        pattern = walls_cpp()
+        type_in_console(pattern)
+    else:
+        type_in_console("x"*210)
 
-def circle_art(run_event: MpEvent) -> None:
+def circle_art(run_event: threading.Event) -> None:
+    """Circle art with threading.Event for fast response time."""
     controller.press("`")
     while run_event.is_set():
         controller.tap("c")
@@ -830,29 +885,35 @@ def circle_mouse(
 def score() -> None:
     type_in_console("n"*20000)
 
-def benchmark(amt: int = 10000) -> None:
+def benchmark(amt: int = 500, mult = 200) -> None: # 500 * 220 = around 100,000 with loss
     shift_pressed = threading.Event()
 
-    def on_press(key: Key) -> None:
+    def on_press(key: Key | KeyCode | None) -> None:
         if key == Key.shift or key == Key.shift_r:
             shift_pressed.set()
             print("Benchmark stopped by Shift key press.")
 
     # start the benchmark
     start = time.time()
-    circles(amt)
+    if USE_CPP_MACROS and HAS_CPP:
+        pattern = benchmark_cpp(amt)
+        controller.tap("`")
+        controller.type(pattern)
+        controller.tap("`")
+    else:
+        circles(amt)
     print("Press any Shift key to stop the benchmark timer...")
     # start keyboard listener
     with KeyboardListener(on_press=on_press) as listener:
         shift_pressed.wait()  # Wait until Shift is pressed
         listener.stop()
     elapsed = time.time() - start
-    print(f"{amt} circles in {round(elapsed*1000, 3)} ms")
-    type_with_enter(f"> [{round(elapsed * 1000, 3)}ms] <", 0.1)
+    print(f"{amt * mult} circles in {round(elapsed*1000, 3)} ms")
+    type_with_enter(f"> [{round(elapsed * 1000, 3)}ms] < for {amt * mult} circles", 0.1)
     time.sleep(0.1)
     press_with_delay(Key.enter, 0.1, 2)
-    bps = round(amt * (1 / elapsed), 3) if elapsed > 0 else 0
-    type_with_enter(f"> [{bps}] <", 0.1)
+    bps = round(amt * mult * (1 / elapsed), 3) if elapsed > 0 else 0
+    type_with_enter(f"> [{bps*2}] < inputs/s, > [bps] < circles/s", 0.1)
 
 def score50m() -> None:
     type_in_console("f"*20)
@@ -1015,13 +1076,14 @@ def _monitor_circle_mouse(proc: Process) -> None:
         circle_mouse_process = None
 
 def start_circle_art() -> None:
-    global circle_art_process
+    global circle_art_thread, circle_art_working
     circle_art_event.set()
+    circle_art_working = True
     ensure_overlay_running("circle_art")
-    if circle_art_process is None or not circle_art_process.is_alive():
-        circle_art_process = multiprocessing.Process(target=circle_art, args=(circle_art_event,))
-        circle_art_process.daemon = True
-        circle_art_process.start()
+    if circle_art_thread is None or not circle_art_thread.is_alive():
+        circle_art_thread = threading.Thread(target=circle_art, args=(circle_art_event,))
+        circle_art_thread.daemon = True
+        circle_art_thread.start()
 
 def start_softwallstack() -> None:
     global softwallstack_process
@@ -1050,23 +1112,12 @@ def start_custom_reload_spam() -> None:
         custom_reload_spam_process.daemon = True
         custom_reload_spam_process.start()
 
-def _ctrl1_waiter() -> None:
-    global ctrl1_count, ctrl1_first_time
-    # wait 2 seconds from first press, then act on count
-    first = ctrl1_first_time
-    time.sleep(2.0)
-    # ensure no newer sequence started
-    if time.time() - first >= 2.0:
-        atype = min(max(ctrl1_count, 1), 3)  # clamp 1..3
-        print(f"Detected {ctrl1_count} ctrl+1 presses -> starting arena automation type {atype}")
-        start_arena_automation(int(atype))
-        ctrl1_count = 0
-        ctrl1_first_time = 0.0
-
 # Normalize modifier detection across platforms
-def is_ctrl(k: Key) -> bool:
+def is_ctrl(k: Key | KeyCode) -> bool:
     """Check if key is Ctrl (or Cmd if ctrlswap=True on macOS)"""
     global ctrlswap
+    if not isinstance(k, Key):
+        return False
     if ctrlswap and PLATFORM == 'darwin':
         # Use Cmd key on macOS when ctrlswap is enabled
         return k in (Key.cmd, Key.cmd_l, Key.cmd_r)
@@ -1074,8 +1125,10 @@ def is_ctrl(k: Key) -> bool:
         # Use Ctrl key normally
         return k in (Key.ctrl, Key.ctrl_l, Key.ctrl_r)
 
-def is_alt(k: Key) -> bool:
+def is_alt(k: Key | KeyCode) -> bool:
     # On macOS, Option is alt; on other platforms, Alt is alt
+    if not isinstance(k, Key):
+        return False
     return k in (Key.alt, Key.alt_l, Key.alt_r)
 
 def get_char(key: Key | KeyCode | None) -> str | None:
@@ -1176,7 +1229,7 @@ def ocr_text_capture() -> None:
             
             if scale_factor > 1:
                 new_size = (int(current_width * scale_factor), int(current_height * scale_factor))
-                img = img.resize(new_size, Image.LANCZOS)
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
                 print(f"Upscaled image from {original_size} to {img.size} ({scale_factor:.2f}x)")
             
             # Convert to grayscale for better OCR
@@ -1337,8 +1390,9 @@ def cleanup_multiprocessing_resources() -> None:
     # The actual cleanup happens when the main process exits.
 
 def stopallthreads() -> None:
-    global automation_process, engineer_spam_process, circle_art_process, braindamage_process
+    global automation_process, engineer_spam_process, braindamage_process
     global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process
+    global circle_art_thread
     global automation_working, engineer_spam_working, circle_art_working, braindamage_working, mcrash_working, custom_reload_spam_working
     global circle_mouse_active
     
@@ -1360,7 +1414,7 @@ def stopallthreads() -> None:
     stop_circle_mouse()
     
     # Terminate all processes and clean up resources
-    for proc in [automation_process, engineer_spam_process, circle_art_process, braindamage_process,
+    for proc in [automation_process, engineer_spam_process, braindamage_process,
                  tail_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process]:
         if proc is not None:
             try:
@@ -1378,7 +1432,7 @@ def stopallthreads() -> None:
     # Reset all process references
     automation_process = None
     engineer_spam_process = None
-    circle_art_process = None
+    circle_art_thread = None
     braindamage_process = None
     tail_process = None
     circle_mouse_process = None
@@ -1402,7 +1456,7 @@ def stopallthreads() -> None:
 def on_press(key: Key | KeyCode | None) -> None:
     # Global variables that track double-press states need to be declared
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
-    global ctrl1_count, ctrl1_first_time
+    global ctrl1_last_time, ctrl1_armed
     global ctrlq_last_time, ctrlq_armed, ctrla_last_time, ctrla_armed
     global ctrlz_last_time, ctrlz_armed, ctrly_last_time, ctrly_armed
     global ctrlu_last_time, ctrlu_armed, ctrli_last_time, ctrli_armed
@@ -1410,7 +1464,7 @@ def on_press(key: Key | KeyCode | None) -> None:
     global circle_art_shift_bind, mcrash_shift_bind, arena_current_type
     global automation_working, braindamage_working, circlecrash_working, circle_art_working, engineer_spam_working, mcrash_working
     global ctrl6_last_time, ctrl6_armed, ctrl7_last_time, ctrl7_armed
-    global ctrl1_count, ctrl1_first_time, ctrlg_armed, ctrlg_last_time
+    global ctrl1_last_time, ctrl1_armed, ctrlg_armed, ctrlg_last_time
     global ctrlq_last_time, ctrlq_armed, ctrla_last_time, ctrla_armed
     global ctrlz_last_time, ctrlz_armed, ctrly_last_time, ctrly_armed
     global ctrlu_last_time, ctrlu_armed, ctrli_last_time, ctrli_armed
@@ -1425,6 +1479,45 @@ def on_press(key: Key | KeyCode | None) -> None:
         if key == Key.shift_r:
             print("softstop")
             stopallthreads()
+            return
+        # Use Right Option to restart all running macros
+        elif key == Key.alt_r:
+            print("Restarting macros...")
+            # Save state of running macros
+            was_automation = automation_event.is_set()
+            was_engineer = engineer_spam_event.is_set()
+            was_circle_art = circle_art_event.is_set()
+            was_brain_damage = braindamage_event.is_set()
+            was_circle_mouse = circle_mouse_event.is_set()
+            was_mcrash = mcrash_event.is_set()
+            was_custom_reload = custom_reload_spam_event.is_set()
+            was_tail = tail_process is not None and tail_process.is_alive()
+            was_softwall = softwallstack_process is not None and softwallstack_process.is_alive()
+            
+            # Stop everything
+            stopallthreads()
+            time.sleep(0.1)  # Brief pause to ensure clean shutdown
+            
+            # Restart what was running
+            if was_automation:
+                start_arena_automation(arena_current_type)
+            if was_engineer:
+                start_engineer_spam()
+            if was_circle_art:
+                start_circle_art()
+            if was_brain_damage:
+                start_brain_damage()
+            if was_circle_mouse:
+                start_circle_mouse()
+            if was_mcrash:
+                start_mcrash()
+            if was_custom_reload:
+                start_custom_reload_spam()
+            if was_tail:
+                start_tail()
+            if was_softwall:
+                start_softwallstack()
+            print("Macros restarted")
             return
         elif is_ctrl(key):
             pressed_keys.add('ctrl')
@@ -1503,29 +1596,16 @@ def on_press(key: Key | KeyCode | None) -> None:
                 controller.type("₥ἆȵɪꜻƈ [𒈙]")
         elif hasattr(key, 'char') and key.char and key.char=='1':
             if 'ctrl' in pressed_keys:
-                # count ctrl+1 presses within 2 seconds to select atype 1/2/3
                 now = time.time()
-                if ctrl1_count == 0:
-                    ctrl1_first_time = now
-                    ctrl1_count = 1
-                    # spawn waiter thread (still using thread for timing)
-                    waiter = threading.Thread(target=_ctrl1_waiter)
-                    waiter.daemon = True
-                    waiter.start()
-                    print("arena scrip")
+                # double-tap lock: first tap arms, second tap within 5s triggers arena automation
+                if ctrl1_armed and (now - ctrl1_last_time <= 5):
+                    print("arena automation starting (type 1)")
+                    start_arena_automation(atype=1)
+                    ctrl1_armed = False
                 else:
-                    # if within 2s of first press, increment count (cap at 3)
-                    if now - ctrl1_first_time <= 2.0:
-                        ctrl1_count = min(ctrl1_count + 1, 3)
-                        print(f"ctrl+1 detected ({ctrl1_count})")
-                    else:
-                        # too late, start new sequence
-                        ctrl1_first_time = now
-                        ctrl1_count = 1
-                        waiter = threading.Thread(target=_ctrl1_waiter)
-                        waiter.daemon = True
-                        waiter.start()
-                        print("arena script")
+                    print("arena automation armed - press Ctrl+1 again within 5s to confirm")
+                    ctrl1_armed = True
+                    ctrl1_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='v':
             if 'ctrl' in pressed_keys:
                 mcrash_shift_bind = True
@@ -1570,7 +1650,7 @@ def on_press(key: Key | KeyCode | None) -> None:
         elif hasattr(key, 'char') and key.char and key.char=='8':
             if 'ctrl' in pressed_keys:
                 print("simple tail")
-                simpletail()
+                simpletail(tailamount)
         elif hasattr(key, 'char') and key.char and key.char=='9':
             if 'ctrl' in pressed_keys:
                 print("NUKE GO BRRRRRRRRRR")
@@ -1653,6 +1733,8 @@ def on_press(key: Key | KeyCode | None) -> None:
                     ctrlg_last_time = now
         elif hasattr(key, 'char') and key.char and key.char=='d':
             if 'ctrl' in pressed_keys:
+                for _ in range(50):
+                    controller.tap("n")
                 controller.tap("k")
                 controller.press(Key.space)
                 time.sleep(0.1)
@@ -1776,9 +1858,9 @@ def on_press(key: Key | KeyCode | None) -> None:
                     for _ in range(100):
                         angle = random.uniform(0, 2 * math.pi)
                         radius = 75
-                        x = start[0] + radius * math.cos(angle)
-                        y = start[1] + radius * math.sin(angle)
-                        mouse.position = (int(x), int(y))
+                        x_float = start[0] + radius * math.cos(angle)
+                        y_float = start[1] + radius * math.sin(angle)
+                        mouse.position = (int(x_float), int(y_float))
                         time.sleep(0.003)
                         controller.tap("f")
                         time.sleep(0.006)
@@ -1909,10 +1991,8 @@ def on_release(key: Key | KeyCode | None) -> None:
             print("circle_art off")
             circle_art_working = False
             circle_art_event.clear()
-            # Actually stop the process
-            if circle_art_process is not None and circle_art_process.is_alive():
-                circle_art_process.terminate()
-                circle_art_process.join(timeout=1)
+            # Actually stop the thread (circle_art uses threading, not multiprocessing)
+            # Thread will stop when event is cleared
         if mcrash_shift_bind and mcrash_working:
             print("mcrash off")
             mcrash_working = False
@@ -1921,8 +2001,11 @@ def on_release(key: Key | KeyCode | None) -> None:
             if mcrash_process is not None and mcrash_process.is_alive():
                 mcrash_process.terminate()
                 mcrash_process.join(timeout=1)
-    elif key in pressed_keys:
-        pressed_keys.remove(key)
+    # Remove key from pressed_keys (convert to string for set membership)
+    if isinstance(key, Key):
+        key_str = key.name if hasattr(key, 'name') else str(key)
+        if key_str in pressed_keys:
+            pressed_keys.discard(key_str)
 
 if __name__ == '__main__':
     # Required for multiprocessing on macOS and Windows
@@ -1934,13 +2017,13 @@ if __name__ == '__main__':
         print("Tested on macOS, Linux (Arch/Debian/Ubuntu), and Windows.")
     
     # Wrapper to suppress pynput Unicode decode errors on macOS
-    def safe_on_press(key: Key | None) -> None:
+    def safe_on_press(key: Key | KeyCode | None) -> None:
         try:
             on_press(key)
         except UnicodeDecodeError:
             pass  # Ignore Unicode decode errors from special keys
     
-    def safe_on_release(key: Key | None) -> None:
+    def safe_on_release(key: Key | KeyCode | None) -> None:
         try:
             on_release(key)
         except UnicodeDecodeError:

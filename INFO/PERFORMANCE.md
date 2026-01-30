@@ -1,5 +1,8 @@
 # Rhythm Game Performance Optimization Guide
 
+> [!NOTE]
+> This document details the performance optimization work done for the rhythm game (`rg.py`) with dual-renderer architecture and GPU acceleration.
+
 This document details the performance optimization work done for the rhythm game (`rg.py`) and provides benchmarks, usage instructions, and troubleshooting tips.
 
 ## Table of Contents
@@ -57,6 +60,9 @@ The rhythm game has been optimized with a dual-renderer architecture:
 ## Renderer Options
 
 ### Auto (Recommended)
+
+> [!TIP]
+> The "auto" option is recommended for most users—it intelligently selects the best renderer for your system.
 
 ```json
 {
@@ -328,6 +334,9 @@ pip install PyOpenGL PyOpenGL-accelerate pygame
 
 ### Issue: Low FPS despite GPU renderer
 
+> [!WARNING]
+> Low FPS can be caused by many factors. Work through these solutions systematically.
+
 **Symptoms:**
 - FPS below target
 - High frame time
@@ -389,6 +398,9 @@ pip install PyOpenGL PyOpenGL-accelerate pygame
 3. Metrics require `show_performance_metrics: true` in settings.json
 
 ## Advanced Configuration
+
+> [!IMPORTANT]
+> Advanced settings allow fine-tuning of performance. Incorrect values may degrade gameplay experience.
 
 ### settings.json Structure
 

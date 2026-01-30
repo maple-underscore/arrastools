@@ -604,7 +604,7 @@ if __name__ == '__main__':
             time.sleep(2.5)
             c.tap(Key.enter)
             time.sleep(0.1)
-            type2(f"Rarest roll ({index + 1}/{count}) gained {round(round(3.5 ** (int(name.split('× T')[1])), 3)*int(name.split('× T')[0]) - 2.5, 2)} ★")
+            type2(f"Rarest roll ({index + 1}/{count}) gained {round(round(3.5 ** (int(name.split('× T')[1])), 3)*int(name.split('× T')[0]) - 2.5, 2)} 2.1385%) | 33335 ★")
             time.sleep(0.1)
             c.tap(Key.enter)
             time.sleep(2.5)
