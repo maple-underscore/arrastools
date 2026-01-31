@@ -44,32 +44,43 @@ window.addEventListener = function(...args) {
 }
 
 function keyEvent(key, type) {
-  const eventType = type ? "keydown" : "keyup";
-  const eventInit = {
-    key: key,
-    code: key,
-    keyCode: key === "Enter" ? 13 : 0,
-    which: key === "Enter" ? 13 : 0,
-    bubbles: true,
-    cancelable: true,
-    composed: true
-  };
-  
-  // Find canvas element (game usually listens on canvas)
-  const canvas = document.querySelector('canvas');
-  
-  // Dispatch to all available targets
-  if (canvas) {
-    canvas.dispatchEvent(new KeyboardEvent(eventType, eventInit));
-  }
-  if (document) {
-    document.dispatchEvent(new KeyboardEvent(eventType, eventInit));
-  }
-  if (document.body) {
-    document.body.dispatchEvent(new KeyboardEvent(eventType, eventInit));
-  }
-  if (window) {
-    window.dispatchEvent(new KeyboardEvent(eventType, eventInit));
+  try {
+    const eventType = type ? "keydown" : "keyup";
+    const eventInit = {
+      key: key,
+      code: key,
+      keyCode: key === "Enter" ? 13 : 0,
+      which: key === "Enter" ? 13 : 0,
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    };
+    
+    // Find canvas element (game usually listens on canvas)
+    const canvas = document.querySelector('canvas');
+    
+    // Dispatch to all available targets
+    if (canvas) {
+      canvas.dispatchEvent(new KeyboardEvent(eventType, eventInit));
+    } else {
+      console.warn("Canvas not found for keyEvent");
+    }
+    
+    if (document) {
+      document.dispatchEvent(new KeyboardEvent(eventType, eventInit));
+    }
+    
+    if (document.body) {
+      document.body.dispatchEvent(new KeyboardEvent(eventType, eventInit));
+    }
+    
+    if (window) {
+      window.dispatchEvent(new KeyboardEvent(eventType, eventInit));
+    }
+    
+    console.log(`Key event: ${key} ${eventType}`);
+  } catch (e) {
+    console.error("Error in keyEvent:", e);
   }
 }
 
@@ -90,12 +101,13 @@ function clickCanvasAt(x, y) {
 
 async function chat(msg) {
   return new Promise(async (resolve) => {
-    // Press Enter to open chat
+    // First, press Enter to open chat
+    console.log("Opening chat...");
     keyEvent("Enter", true);
     await new Promise(r => setTimeout(r, 50));
     keyEvent("Enter", false);
     
-    // Wait up to 10 seconds for chat input
+    // Wait up to 10 seconds for chat input to appear
     let input = null;
     const startTime = Date.now();
     while (!input && Date.now() - startTime < 10000) {
@@ -115,6 +127,7 @@ async function chat(msg) {
           const clickX = canvasW * 0.55;
           const clickY = canvasH * 0.629;
           clickCanvasAt(clickX, clickY);
+          console.log("Reconnect click sent");
         }
 
         // After reconnecting, press Enter again to open chat
@@ -127,15 +140,16 @@ async function chat(msg) {
       }
     }
     
-    // Chat is open, type the message
+    // Chat is now open, type the message
+    console.log("Typing message...");
     input.focus();
     input.value = msg;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
     
-    // Wait a bit then press Enter to send (use global keyEvent)
+    // Wait a bit, then press Enter to send the message
     await new Promise(r => setTimeout(r, 100));
-    
+    console.log("Sending message...");
     keyEvent("Enter", true);
     await new Promise(r => setTimeout(r, 50));
     keyEvent("Enter", false);
@@ -146,7 +160,7 @@ async function chat(msg) {
 
 function pause() {
   return new Promise((resolve) => {
-    setTimeout(resolve, 3300); // 3.3 second delay between messages
+    setTimeout(resolve, 3050); // 3.05 second delay between messages
   });
 }
 
