@@ -1395,6 +1395,8 @@ def stopallthreads() -> None:
     global circle_art_thread
     global automation_working, engineer_spam_working, circle_art_working, braindamage_working, mcrash_working, custom_reload_spam_working
     global circle_mouse_active
+    if custom_reload_spam_working:
+        controller.tap(Key.space)
     
     # Set all flags to False
     automation_working = False
