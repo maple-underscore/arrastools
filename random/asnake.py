@@ -8,6 +8,7 @@ import json
 import os
 import time
 import platform
+import warnings
 
 # Detect platform
 PLATFORM = platform.system().lower()
@@ -15,28 +16,32 @@ print(f"Snake AI running on: {PLATFORM}")
 
 # Try to import pygame, but make it optional and verify font availability
 PYGAME_AVAILABLE = False
+PYGAME_FONT_AVAILABLE = False
 try:
     import pygame
     # Try to initialize pygame and the font subsystem; if font isn't available
-    # disable visualization gracefully.
+    # disable text rendering gracefully.
     try:
         pygame.init()
         try:
-            pygame.font.init()
-        except Exception:
-            # Some pygame builds may not have font support (or SDL_ttf missing)
-            raise
-        if not getattr(pygame, 'font', None) or not pygame.font.get_init():
-            raise ImportError('pygame.font not available')
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                pygame.font.init()
+                PYGAME_FONT_AVAILABLE = bool(getattr(pygame, 'font', None)) and pygame.font.get_init()
+        except Exception as e:
+            print(f"pygame imported but font subsystem unavailable: {e}")
+            PYGAME_FONT_AVAILABLE = False
+        if not PYGAME_FONT_AVAILABLE:
+            print("Font subsystem not available, running without text rendering.")
     except Exception as e:
-        print(f"pygame imported but font subsystem unavailable: {e}")
+        print(f"pygame initialization failed: {e}")
         PYGAME_AVAILABLE = False
     else:
         PYGAME_AVAILABLE = True
 except ImportError:
+    print("Pygame is not installed.")
     PYGAME_AVAILABLE = False
-    print("pygame not installed. Running in headless mode (no visualization).")
-    print("To enable visualization: pip install pygame")
+    PYGAME_FONT_AVAILABLE = False
 
 # Load configuration
 def load_config(config_path="random/snake_config.json"):
@@ -442,14 +447,13 @@ class SnakeVisualizer:
         pygame.draw.rect(self.screen, APPLE_COLOR, (x, y, self.cell_size-1, self.cell_size-1))
         
         # Draw info text (if font subsystem available)
-        try:
-            if getattr(pygame, 'font', None) and pygame.font.get_init():
+        if PYGAME_FONT_AVAILABLE:
+            try:
                 font = pygame.font.Font(None, 36)
                 text = font.render(f'Episode: {episode} | Score: {score} | ε: {epsilon:.3f}', True, (255, 255, 255))
                 self.screen.blit(text, (10, 10))
-        except Exception:
-            # If rendering fails for any reason, skip text rendering silently
-            pass
+            except Exception:
+                pass
         
         pygame.display.flip()
         self.clock.tick(GAME_SPEED)
@@ -551,9 +555,10 @@ class SnakeVisualizer:
             pygame.draw.rect(self.screen, APPLE_COLOR, (x, y, cell_size, cell_size))
             
             # Draw small info text for this game
-            font = pygame.font.Font(None, 18)
-            text = font.render(f'#{idx+1} Ep:{episode} S:{score}', True, (255, 255, 255))
-            self.screen.blit(text, (offset_x + 5, offset_y + 5))
+            if PYGAME_FONT_AVAILABLE:
+                font = pygame.font.Font(None, 18)
+                text = font.render(f'#{idx+1} Ep:{episode} S:{score}', True, (255, 255, 255))
+                self.screen.blit(text, (offset_x + 5, offset_y + 5))
         
         # Draw info bar at bottom
         info_bar_y = self.games_height
@@ -943,7 +948,11 @@ if __name__ == "__main__":
         mode = sys.argv[1]
     
     if mode == "train":
-        train()
+        if PARALLEL_GAMES_H * PARALLEL_GAMES_V > 1:
+            print("Parallel games configured; running parallel training.")
+            train_parallel()
+        else:
+            train()
     elif mode == "parallel":
         train_parallel()
     elif mode == "play":

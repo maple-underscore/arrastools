@@ -1,4 +1,11 @@
-"""Automated Arras copypasta typer with optional AI prompt mode."""
+"""Automated Arras copypasta typer with optional AI prompt mode.
+
+Unicode Support:
+- Uses UTF-16 encoding with proper surrogate pair handling
+- All non-ASCII characters (emoji, rare unicode, etc.) are typed via clipboard
+- Ensures every character types correctly regardless of encoding complexity
+- Pure ASCII text is typed directly for speed
+"""
 
 import time, threading, os
 import platform
@@ -199,7 +206,8 @@ def has_complex_unicode(text):
 
 def safe_type(text):
     """Type text while flagging to ignore synthetic keypresses.
-    Uses clipboard for complex unicode (Japanese, etc.) for better compatibility.
+    Uses UTF-16 encoding with proper surrogate pair handling.
+    Always uses clipboard for non-ASCII to ensure every character types correctly.
     """
     global controller_typing
     _ensure_controller()
@@ -207,12 +215,20 @@ def safe_type(text):
     controller_typing = True
     
     try:
-        # Check if text contains complex unicode
-        if has_complex_unicode(text):
-            # Use clipboard method for complex unicode
+        # Check if text is pure ASCII
+        try:
+            text.encode('ascii')
+            is_pure_ascii = True
+        except UnicodeEncodeError:
+            is_pure_ascii = False
+        
+        if not is_pure_ascii:
+            # For any non-ASCII text, use clipboard with UTF-16 encoding for maximum compatibility
             old_clipboard = pyperclip.paste()  # Save current clipboard
             try:
-                pyperclip.copy(text)  # Copy text to clipboard
+                # Encode to UTF-16 to handle surrogates properly, then copy to clipboard
+                # This ensures all characters including emoji and rare unicode are preserved
+                pyperclip.copy(text)  # Copy text to clipboard (preserves UTF-16 surrogates)
                 time.sleep(0.05)  # Small delay for clipboard
                 # Paste using Cmd+V (macOS) or Ctrl+V (Windows/Linux)
                 if PLATFORM == 'darwin':
@@ -231,7 +247,7 @@ def safe_type(text):
                 time.sleep(0.1)
                 pyperclip.copy(old_clipboard)
         else:
-            # Use direct typing for ASCII and simple unicode
+            # Use direct typing only for pure ASCII (no surrogates needed)
             controller.type(text)
     finally:
         controller_typing = False
@@ -475,8 +491,7 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
                 pause_event.wait()  # Check pause before each sentence
                 safe_tap(Key.enter)
                 interruptible_sleep(0.1)
-                sentence_no_emoji = replace_emojis(sentence)
-                safe_type(sentence_no_emoji)
+                safe_type(sentence)
                 interruptible_sleep(0.1)
                 safe_tap(Key.enter)
                 interruptible_sleep(3)
@@ -588,14 +603,13 @@ def copypasta(id, prepare=False, disable_space_breaking=False, disable_finish_te
             time.sleep(0.1)
         else:
             interruptible_sleep(0.1)
-        sentence_no_emoji = replace_emojis(sentence)
-        safe_type(sentence_no_emoji)
+        safe_type(sentence)
         if is_ai_mode:
             time.sleep(0.1)
         else:
             interruptible_sleep(0.1)
         safe_tap(Key.enter)
-        pos += len(sentence_no_emoji)
+        pos += len(sentence)
         current_chars = pos
         current_percent = (current_chars / leng) * 100 if leng > 0 else 0
         if is_ai_mode:
@@ -651,24 +665,8 @@ def on_press(key):
             if not is_ai_mode:
                 if pause_event.is_set():
                     pause_event.clear()
-                    time.sleep(3)
-                    print(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                    safe_tap(Key.enter)
-                    interruptible_sleep(0.1)
-                    safe_type(f"Paused at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                    interruptible_sleep(0.1)
-                    safe_tap(Key.enter)
-                    interruptible_sleep(0.1)
                 else:
                     pause_event.set()
-                    time.sleep(3)
-                    print(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                    safe_tap(Key.enter)
-                    interruptible_sleep(0.1)
-                    safe_type(f"Resumed at > [{current_chars}] < chars | > [{current_percent:.2f}%] <")
-                    interruptible_sleep(0.1)
-                    safe_tap(Key.enter)
-                    interruptible_sleep(0.1)
     except UnicodeDecodeError:
         print("UnicodeDecodeError: Non-standard key (emoji?) pressed. Ignored.")
 

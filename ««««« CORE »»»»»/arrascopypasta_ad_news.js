@@ -79,8 +79,65 @@ function clickCanvasAt(x, y) {
   return true;
 }
 
+function isDead() {
+  // Check if the death overlay is visible or if we're on the respawn screen
+  const deathOverlay = document.querySelector('[style*="display"][style*="absolute"]');
+  const gameContainer = document.querySelector('.gameContainer');
+  
+  // Check for respawn button or death screen indicators
+  const respawnButton = Array.from(document.querySelectorAll('*')).find(el => 
+    el.textContent && el.textContent.includes('Respawn')
+  );
+  
+  // If we can see respawn button or death message is visible, we're dead
+  return !!respawnButton;
+}
+
+async function tryRespawn() {
+  // Try to click the respawn button or trigger respawn
+  const canvas = document.querySelector('canvas');
+  if (!canvas) return false;
+  
+  const rect = canvas.getBoundingClientRect();
+  const canvasW = rect.width;
+  const canvasH = rect.height;
+  
+  // Click on respawn area (center of screen)
+  const clickX = canvasW * 0.5;
+  const clickY = canvasH * 0.5;
+  clickCanvasAt(clickX, clickY);
+  
+  // Wait a bit to see if respawn succeeds
+  await new Promise(r => setTimeout(r, 100));
+  
+  // Check if we're still dead
+  return !isDead();
+}
+
+async function ensureAlive() {
+  // If bot is dead, try to respawn, retrying every 500ms
+  if (!isDead()) {
+    return; // Already alive
+  }
+  
+  console.log("Bot is dead, attempting respawn...");
+  
+  while (isDead()) {
+    const respawned = await tryRespawn();
+    if (respawned) {
+      console.log("Successfully respawned!");
+      return;
+    }
+    console.log("Respawn failed, retrying in 500ms...");
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
 async function chat(msg) {
   return new Promise(async (resolve) => {
+    // Check if bot is dead and respawn if necessary
+    await ensureAlive();
+    
     // First, press Enter to open chat
     console.log("Opening chat...");
     keyEvent("Enter", true);
@@ -140,7 +197,7 @@ async function chat(msg) {
 
 function pause() {
   return new Promise((resolve) => {
-    setTimeout(resolve, 3050); // 3.05 second delay between messages
+    setTimeout(resolve, 3100); // 3.1 second delay between messages
   });
 }
 

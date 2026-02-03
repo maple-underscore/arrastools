@@ -273,27 +273,32 @@ def calculate_max_score():
 
 def load_chart(id, difficulty):
     global chart, bpm_changes, speed_changes, initial_bpm
-    with open(f"{CHART_DIRECTORY}/{id}_{difficulty}.txt", "r") as f:
-        f.seek(0)
+    chart_path = f"{CHART_DIRECTORY}/{id}_{difficulty}.txt"
+    with open(chart_path, "r") as f:
         lines = f.readlines()
-        chart = []
-        bpm_changes = []
-        speed_changes = []
+
+    chart = []
+    bpm_changes = []
+    speed_changes = []
+
+    is_percent_format = any('%' in line for line in lines)
+
+    if is_percent_format:
         initial_bpm = float(id.split("_")[1])
-        
+
         # Calculate beat offset for 2-second delay
         # At BPM X: 2 seconds = (2 * X) / 60 beats
         beat_offset = (2.0 * initial_bpm) / 60.0
-        
+
         slide_starts = {}  # Track slide start positions by lane:  {lane:  (beat, multiplier)}
         last_beat = 0  # Track last beat for BPM changes
-        
+
         for line in lines:
             if '%' not in line:
                 continue
-            
+
             parts = line.split("%")
-            
+
             # Check for BPM change first (format: bpm%{new_bpm})
             if parts[0].strip() == "bpm":
                 try:
@@ -303,7 +308,7 @@ def load_chart(id, difficulty):
                     continue
                 except:
                     pass
-            
+
             # Check for speed change (format: spd%{percentage})
             if parts[0].strip() == "spd":
                 try:
@@ -313,11 +318,11 @@ def load_chart(id, difficulty):
                     continue
                 except:
                     pass
-            
+
             beat = float(parts[0]) + beat_offset  # Add offset for 2-second delay
             last_beat = beat  # Update last beat
             note_data = parts[1] if len(parts) > 1 else ""
-            
+
             # Check for BPM change at specific beat (format: {beat}%bpm{new_bpm})
             if note_data.strip().startswith("bpm"):
                 # Format: {beat}%bpm{new_bpm}
@@ -325,9 +330,9 @@ def load_chart(id, difficulty):
                     new_bpm = float(note_data.strip().replace("bpm", "").strip())
                     bpm_changes.append((beat, new_bpm))
                     continue
-                except: 
+                except:
                     pass
-            
+
             # Check for speed change at specific beat (format: {beat}%spd{percentage})
             if note_data.strip().startswith("spd"):
                 # Format: {beat}%spd{percentage}
@@ -337,11 +342,11 @@ def load_chart(id, difficulty):
                     continue
                 except:
                     pass
-            
+
             char_index = 0
             for char in note_data:
                 lane = char_index % LANE_COUNT
-                
+
                 if char == "X":
                     # Regular tap note
                     note_time = beats_to_seconds(beat, bpm_changes, initial_bpm)
@@ -353,31 +358,31 @@ def load_chart(id, difficulty):
                         'multiplier': 1,
                         'id': f"tap_{beat}_{lane}_{random.randint(1000, 9999)}"
                     })
-                
+
                 elif char == "x":
                     # Double score tap note
                     note_time = beats_to_seconds(beat, bpm_changes, initial_bpm)
                     chart.append({
                         'time': note_time,
-                        'beat':  beat,
-                        'lane':  lane,
-                        'type':  'tap',
+                        'beat': beat,
+                        'lane': lane,
+                        'type': 'tap',
                         'multiplier': 2,
-                        'id': f"tap_{beat}_{lane}_{random. randint(1000, 9999)}"
+                        'id': f"tap_{beat}_{lane}_{random.randint(1000, 9999)}"
                     })
-                
+
                 elif char == "s":
                     # Slide start
                     if lane in slide_starts:
                         print(f"Warning: Overlapping slide starts in lane {lane} at beat {beat}")
                     slide_starts[lane] = (beat, 1)  # Normal slide
-                
+
                 elif char == "S":
                     # Double score slide start (uppercase S)
                     if lane in slide_starts:
                         print(f"Warning: Overlapping slide starts in lane {lane} at beat {beat}")
                     slide_starts[lane] = (beat, 2)  # Double score slide
-                
+
                 elif char == "e":
                     # Slide end
                     if lane in slide_starts:
@@ -385,7 +390,7 @@ def load_chart(id, difficulty):
                         end_beat = beat
                         start_time = beats_to_seconds(start_beat, bpm_changes, initial_bpm)
                         end_time = beats_to_seconds(end_beat, bpm_changes, initial_bpm)
-                        
+
                         chart.append({
                             'time': start_time,
                             'end_time': end_time,
@@ -393,25 +398,132 @@ def load_chart(id, difficulty):
                             'end_beat': end_beat,
                             'lane': lane,
                             'type': 'slide',
-                            'multiplier':  multiplier,
+                            'multiplier': multiplier,
                             'id': f"slide_{start_beat}_{lane}_{random.randint(1000, 9999)}"
                         })
                         del slide_starts[lane]
                     else:
                         print(f"Warning: Slide end without start in lane {lane} at beat {beat}")
-                
+
                 char_index += 1
-        
+
         # Warn about unclosed slides
         for lane, (start_beat, _) in slide_starts.items():
             print(f"Warning: Slide start without end in lane {lane} at beat {start_beat}")
-        
-        f.close()
-        chart. sort(key=lambda x: x['time'])
-        bpm_changes.sort(key=lambda x: x[0])
-        
-        # Calculate max possible score
-        calculate_max_score()
+    else:
+        initial_bpm = None
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("---"):
+                continue
+            if line.lower().startswith("bpm="):
+                try:
+                    initial_bpm = float(line.split("=", 1)[1].strip())
+                    break
+                except Exception:
+                    pass
+
+        if initial_bpm is None:
+            try:
+                initial_bpm = float(id.split("_")[1])
+            except Exception:
+                initial_bpm = 60
+
+        beat_offset = (2.0 * initial_bpm) / 60.0
+
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("---"):
+                continue
+
+            lower = line.lower()
+            if lower.startswith("bpm="):
+                continue
+
+            if lower.startswith("bpm_change"):
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 3:
+                    try:
+                        beat = float(parts[1]) + beat_offset
+                        new_bpm = float(parts[2])
+                        bpm_changes.append((beat, new_bpm))
+                    except Exception:
+                        pass
+                continue
+
+            if lower.startswith("spd"):
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 3:
+                    try:
+                        beat = float(parts[1]) + beat_offset
+                        mult = float(parts[2])
+                        speed_changes.append((beat, mult))
+                    except Exception:
+                        pass
+                continue
+
+            if lower.startswith("tap"):
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 3:
+                    try:
+                        lane = int(parts[1])
+                        beat = float(parts[2]) + beat_offset
+                        multiplier = 1
+                        if len(parts) >= 4 and parts[3].lower().startswith("x"):
+                            try:
+                                multiplier = int(parts[3][1:])
+                            except Exception:
+                                multiplier = 1
+
+                        note_time = beats_to_seconds(beat, bpm_changes, initial_bpm)
+                        chart.append({
+                            'time': note_time,
+                            'beat': beat,
+                            'lane': lane,
+                            'type': 'tap',
+                            'multiplier': multiplier,
+                            'id': f"tap_{beat}_{lane}_{random.randint(1000, 9999)}"
+                        })
+                    except Exception:
+                        pass
+                continue
+
+            if lower.startswith("slide"):
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 4:
+                    try:
+                        lane = int(parts[1])
+                        start_beat = float(parts[2]) + beat_offset
+                        end_beat = float(parts[3]) + beat_offset
+                        multiplier = 1
+                        if len(parts) >= 5 and parts[4].lower().startswith("x"):
+                            try:
+                                multiplier = int(parts[4][1:])
+                            except Exception:
+                                multiplier = 1
+
+                        start_time = beats_to_seconds(start_beat, bpm_changes, initial_bpm)
+                        end_time = beats_to_seconds(end_beat, bpm_changes, initial_bpm)
+
+                        chart.append({
+                            'time': start_time,
+                            'end_time': end_time,
+                            'beat': start_beat,
+                            'end_beat': end_beat,
+                            'lane': lane,
+                            'type': 'slide',
+                            'multiplier': multiplier,
+                            'id': f"slide_{start_beat}_{lane}_{random.randint(1000, 9999)}"
+                        })
+                    except Exception:
+                        pass
+                continue
+
+    chart.sort(key=lambda x: x['time'])
+    bpm_changes.sort(key=lambda x: x[0])
+
+    # Calculate max possible score
+    calculate_max_score()
 
 def draw_lane_separators():
     """Draw vertical lines separating lanes"""
@@ -1209,26 +1321,6 @@ def update_notes(current_time):
             draw_slide(slide['lane'], int(y_start), int(y_end), slide['id'],
                       slide.get('holding', False), slide.get('multiplier', 1))
 
-def show_countdown():
-    """Display 3-2-1 countdown before game starts"""
-    canvas.delete('all')
-    canvas.configure(bg='black')
-    
-    # Draw static elements during countdown
-    draw_lane_separators()
-    draw_hit_bar()
-    draw_key_labels()
-    
-    for count in [3, 2, 1]:
-        canvas.delete('countdown')
-        canvas.create_text(width // 2, height // 2, text=str(count),
-                         fill='white', font=('Arial', 120, 'bold'), tags='countdown')
-        root.update()
-        time.sleep(1.0)
-    
-    canvas.delete('countdown')
-    root.update()
-
 def save_replay(chart_id, difficulty, score, accuracy, inputs, rank):
     """Save replay data to file in JSON format"""
     import json
@@ -1530,9 +1622,6 @@ def game_loop():
     for i in range(LANE_COUNT):
         key_pressed_flags[i] = False
         key_is_down[i] = False
-    
-    # Show countdown
-    show_countdown()
     
     # Start music if available
     if AUDIO_AVAILABLE and current_chart_id and current_difficulty:

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """Hotkey-driven Arras macros and drawing helpers.
 
 The script mirrors historical behavior; readability tweaks (docstrings,
@@ -9,6 +11,8 @@ USE_CPP_MACROS = True
 
 tailamount = 40
 
+style = None
+
 import random
 import time
 import threading
@@ -17,6 +21,7 @@ from multiprocessing import Process
 import platform
 import sys
 import math
+import string
 from typing import Any, TYPE_CHECKING
 
 # Detect platform early (needed for overlay decision)
@@ -51,6 +56,21 @@ except ImportError:
     print("Install with: python3 -m pip install -r requirements.txt")
     sys.exit(1)
 
+# macOS Quartz support for better Unicode typing
+HAS_QUARTZ = False
+if PLATFORM == 'darwin':
+    try:
+        from Quartz import (
+            CGEventCreateKeyboardEvent,
+            CGEventKeyboardSetUnicodeString,
+            CGEventPost,
+            kCGHIDEventTap
+        )
+        HAS_QUARTZ = True
+    except ImportError:
+        print("Warning: Quartz not available. Unicode typing may not work properly.")
+        print("Install with: pip install pyobjc-framework-Quartz")
+
 try:
     import mss
     import pytesseract
@@ -61,6 +81,9 @@ except ImportError:
     print("Warning: OCR dependencies (mss, pytesseract, Pillow) not available.")
     print("Text scanning features will be disabled.")
     print("Install with: pip install mss pytesseract pillow")
+
+
+listener_event_injected = False
 
 
 class RobustKeyboardListener(KeyboardListener):
@@ -76,6 +99,8 @@ class RobustKeyboardListener(KeyboardListener):
         This is called from the C callback handler and processes keyboard events.
         On macOS, some special keys can cause UnicodeDecodeError in _event_to_key().
         """
+        global listener_event_injected
+        listener_event_injected = bool(is_injected)
         try:
             super()._handle_message(proxy, event_type, event, refcon, is_injected)
         except UnicodeDecodeError:
@@ -85,6 +110,8 @@ class RobustKeyboardListener(KeyboardListener):
         except Exception as e:
             # Log but don't crash on other unexpected errors
             print(f"Keyboard listener error (suppressed): {type(e).__name__}: {e}")
+        finally:
+            listener_event_injected = False
 
 
 # Platform notes:
@@ -124,6 +151,8 @@ circle_mouse_active = False
 circle_mouse_speed = 0.02  # Time delay between updates (lower = faster)
 circle_mouse_radius = 100  # Radius in pixels
 circle_mouse_direction = 1  # 1 for clockwise, -1 for counterclockwise
+berserk = False  # When True, every typed character becomes random from a random fancy style
+emoji_replacement_enabled = False  # Toggle emoji :{text}: replacement on/off (Ctrl+H)
 
 # Arena automation limits
 arena_auto_terminate = True  # If True, stop after arena_auto_max_commands
@@ -161,6 +190,30 @@ def press_with_delay(key: str | Key, wait: float = 0.1, count: int = 2) -> None:
             time.sleep(wait)
 
 
+def type_unicode(text: str) -> None:
+    """Type Unicode text using the best available method for the platform.
+    
+    On macOS with Quartz, uses CGEvent for proper Unicode support.
+    Falls back to pynput on other platforms or if Quartz is unavailable.
+    
+    Args:
+        text: The Unicode text to type
+    """
+    if PLATFORM == 'darwin' and HAS_QUARTZ:
+        # Create a dummy keyboard event
+        event = CGEventCreateKeyboardEvent(None, 0, True)
+        
+        # IMPORTANT: Quartz expects UTF-16 code units, not Python length
+        utf16 = text.encode("utf-16-le")
+        length = len(utf16) // 2
+        
+        CGEventKeyboardSetUnicodeString(event, length, text)
+        CGEventPost(kCGHIDEventTap, event)
+    else:
+        # Fallback to pynput for non-macOS or if Quartz unavailable
+        controller.type(text)
+
+
 def type_with_enter(text: str, wait: float = 0) -> None:
     """Type text wrapped with Enter key presses.
     
@@ -168,10 +221,12 @@ def type_with_enter(text: str, wait: float = 0) -> None:
         text: The text to type
         wait: Optional delay after first enter and before final enter (default: 0)
     """
+    processed_text = process_fancy_patterns(text)
+    processed_text = process_emoji_patterns(processed_text)
     controller.tap(Key.enter)
     if wait > 0:
         time.sleep(wait)
-    controller.type(text)
+    type_unicode(processed_text)
     if wait > 0:
         time.sleep(wait)
     controller.tap(Key.enter)
@@ -184,14 +239,525 @@ def type_in_console(text: str, hold_backtick: bool = True) -> None:
         text: The text to type
         hold_backtick: If True, hold backtick during typing for speed (default: True)
     """
+    processed_text = process_fancy_patterns(text)
+    processed_text = process_emoji_patterns(processed_text)
     if hold_backtick:
         controller.press("`")
-        controller.type(text)
+        controller.type(processed_text)
         controller.release("`")
     else:
         controller.tap("`")
-        controller.type(text)
+        controller.type(processed_text)
         controller.tap("`")
+
+
+def safe_chr(codepoint):
+    try:
+        return chr(codepoint)
+    except ValueError:
+        return None
+
+
+STYLES = {
+    # ───────────── Mathematical ─────────────
+    "bold_serif": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        "𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳"
+        "𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙"
+        "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"
+    )),
+
+    "italic_sans": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡"
+    )),
+
+    "bold_sans": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        "𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇"
+        "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭"
+        "𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵𝟬"
+    )),
+
+    "bold_italic_serif": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛"
+        "𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁"
+    )),
+
+    "bold_italic_sans": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "𝙖𝙗𝙘𝙙𝙚𝙛𝙜𝙝𝙞𝙟𝙠𝙡𝙢𝙣𝙤𝙥𝙦𝙧𝙨𝙩𝙪𝙫𝙬𝙭𝙮𝙯"
+        "𝘼𝘽𝘾𝘿𝙀𝙁𝙂𝙃𝙄𝙅𝙆𝙇𝙈𝙉𝙊𝙋𝙌𝙍𝙎𝙏𝙐𝙑𝙒𝙓𝙔𝙕"
+    )),
+
+    "double_struck": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        "𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫"
+        "𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ"
+        "𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡"
+    )),
+
+    "monospace": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        "𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣"
+        "𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂𝚃𝚄𝚅𝚆𝚇𝚈𝚉"
+        "𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"
+    )),
+
+    # ───────────── Decorative ─────────────
+    "circled": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        "ⓐⓑⓒⓓⓔⓕⓖⓗⓘⓙⓚⓛⓜⓝⓞⓟⓠⓡⓢⓣⓤⓥⓦⓧⓨⓩ"
+        "ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀⓁⓂⓃⓄⓅⓆⓇⓈⓉⓊⓋⓌⓍⓎⓏ"
+        "⓪①②③④⑤⑥⑦⑧⑨"
+    )),
+
+    "squared": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "🄰🄱🄲🄳🄴🄵🄶🄷🄸🄹🄺🄻🄼🄽🄾🄿🅀🅁🅂🅃🅄🅅🅆🅇🅈🅉🄰🄱🄲🄳🄴🄵🄶🄷🄸🄹🄺🄻🄼🄽🄾🄿🅀🅁🅂🅃🅄🅅🅆🅇🅈🅉"
+    )),
+
+    "fullwidth": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ"
+        "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
+        "０１２３４５６７８９"
+    )),
+
+    # ───────────── Script / Gothic ─────────────
+    "script": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "𝒶𝒷𝒸𝒹ℯ𝒻ℊ𝒽𝒾𝒿𝓀𝓁𝓂𝓃ℴ𝓅𝓆𝓇𝓈𝓉𝓊𝓋𝓌𝓍𝓎𝓏"
+        "𝒜ℬ𝒞𝒟ℰℱ𝒢ℋℐ𝒥𝒦ℒℳ𝒩𝒪𝒫𝒬ℛ𝒮𝒯𝒰𝒱𝒲𝒳𝒴𝒵"
+    )),
+
+    "bold_script": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "𝓪𝓫𝓬𝓭𝓮𝓯𝓰𝓱𝓲𝓳𝓴𝓵𝓶𝓷𝓸𝓹𝓺𝓻𝓼𝓽𝓾𝓿𝔀𝔁𝔂𝔃"
+        "𝓐𝓑𝓒𝓓𝓔𝓕𝓖𝓗𝓘𝓙𝓚𝓛𝓜𝓝𝓞𝓟𝓠𝓡𝓢𝓣𝓤𝓥𝓦𝓧𝓨𝓩"
+    )),
+
+    "fraktur": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷"
+        "𝔄𝔅ℭ𝔇𝔈𝔉𝔊ℌℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ"
+    )),
+
+    "cursed2": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "ค๒ς๔єŦﻮђเןкɭ๓ภ๏קợгรՇยשฬאץչค๒ς๔єŦﻮђเןкɭ๓ภ๏קợгรՇยשฬאץչ"
+    )),
+
+    "cursed3": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "ąɓƈđɛƒɠɦįʝƙŀɱŋơƥɋřşŧųʋŵҳyʐĄƁƇĐƐƑƓĦĮʝƘĿƜŊƠƤɊŘŞŦŲƲŴҲYʐ"
+    )),
+
+    "cursed4": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "αႦƈԃҽϝɠԋιʝƙʅɱɳσρϙɾʂƚυʋɯxყȥΑႦƇԂƐϜƓԊΙʝƘʟƜƝΣΡϘɌƧƬΥƲɰXყȤ"
+    )),
+
+    "cursed5": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "ǟɮƈɖɛʄɢɦɨʝӄʟʍռօքզʀֆȶʊʋաӼʏʐǟɮƈɖɛʄɢɦɨʝӄʟʍռօքզʀֆȶʊʋաӼʏʐ"
+    )),
+
+    "cursed6": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "ᏗᏰፈᎴᏋᎦᎶᏂᎥᏠᏦᏝᎷᏁᎧᎮᎤᏒᏕᏖᏬᏉᏇጀᎩፚᏗᏰፈᎴᏋᎦᎶᏂᎥᏠᏦᏝᎷᏁᎧᎮᎤᏒᏕᏖᏬᏉᏇጀᎩፚ"
+    )),
+
+    "cursed7": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "ąცƈɖɛʄɠɧıʝƙƖɱŋơ℘զཞʂɬų۷ῳҳყʑąცƈɖɛʄɠɧıʝƙƖɱŋơ℘զཞʂɬų۷ῳҳყʑ"
+    )),
+
+    "cursed8": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "ค๖¢໓ēfງhiวkl๓ຖ໐p๑rŞtนงຟxฯຊค๖¢໓ēfງhiวkl๓ຖ໐p๑rŞtนงຟxฯຊ"
+    )),
+
+    "cursed9": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "åß¢Ðê£ghïjklmñðþqr§†µvwx¥zÄßÇÐÈ£GHÌJKLMñÖþQR§†ÚVW×¥Z"
+    )),
+
+    "cursed10": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "₳฿₵ĐɆ₣₲ⱧłJ₭Ⱡ₥₦Ø₱QⱤ₴₮ɄV₩ӾɎⱫ₳฿₵ĐɆ₣₲ⱧłJ₭Ⱡ₥₦Ø₱QⱤ₴₮ɄV₩ӾɎⱫ"
+    )),
+
+    "bold_fraktur": dict(zip(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅"
+    ))
+}
+
+# Emoji mapping system: [text, emoji] pairs
+# Usage: type :{text}: to replace with emoji
+EMOJIS = [
+    ["heart", "❤️"],
+    ["love", "❤️"],
+    ["smile", "😊"],
+    ["happy", "😊"],
+    ["sad", "😢"],
+    ["sob", "😭"],
+    ["laugh", "😂"],
+    ["lol", "😂"],
+    ["fire", "🔥"],
+    ["hot", "🔥"],
+    ["cool", "😎"],
+    ["wow", "😲"],
+    ["shocked", "😲"],
+    ["angry", "😠"],
+    ["rage", "😡"],
+    ["puke", "🤮"],
+    ["sick", "🤢"],
+    ["thumbs", "👍"],
+    ["thumbsup", "👍"],
+    ["thumbsdown", "👎"],
+    ["clap", "👏"],
+    ["wave", "👋"],
+    ["pray", "🙏"],
+    ["thanks", "🙏"],
+    ["point", "👉"],
+    ["ok", "👌"],
+    ["victory", "✌️"],
+    ["peace", "☮️"],
+    ["star", "⭐"],
+    ["sparkle", "✨"],
+    ["boom", "💥"],
+    ["explosion", "💥"],
+    ["sun", "☀️"],
+    ["moon", "🌙"],
+    ["star", "⭐"],
+    ["zap", "⚡"],
+    ["lightning", "⚡"],
+    ["flower", "🌸"],
+    ["rose", "🌹"],
+    ["skull", "💀"],
+    ["snake", "🐍"],
+    ["turtle", "🐢"],
+    ["cat", "🐱"],
+    ["dog", "🐶"],
+    ["pig", "🐷"],
+    ["bird", "🐦"],
+    ["fish", "🐠"],
+    ["dragon", "🐉"],
+    ["unicorn", "🦄"],
+    ["pizza", "🍕"],
+    ["cake", "🍰"],
+    ["candy", "🍬"],
+    ["apple", "🍎"],
+    ["watermelon", "🍉"],
+    ["beer", "🍺"],
+    ["wine", "🍷"],
+    ["coffee", "☕"],
+    ["gift", "🎁"],
+    ["bomb", "💣"],
+    ["gun", "🔫"],
+    ["sword", "⚔️"],
+    ["shield", "🛡️"],
+    ["medal", "🏅"],
+    ["trophy", "🏆"],
+    ["rocket", "🚀"],
+    ["car", "🚗"],
+    ["bike", "🚲"],
+    ["money", "💰"],
+    ["gem", "💎"],
+    ["clock", "🕐"],
+    ["watch", "⌚"],
+    ["calendar", "📅"],
+    ["phone", "📱"],
+    ["computer", "💻"],
+    ["keyboard", "⌨️"],
+    ["mouse", "🖱️"],
+    ["printer", "🖨️"],
+    ["camera", "📷"],
+    ["video", "🎥"],
+    ["music", "🎵"],
+    ["notes", "🎶"],
+    ["art", "🎨"],
+    ["game", "🎮"],
+    ["dice", "🎲"],
+    ["cards", "🃏"],
+    ["soccer", "⚽"],
+    ["basketball", "🏀"],
+    ["football", "🏈"],
+    ["baseball", "⚾"],
+    ["skull", "💀"],
+    ["wilted_rose", "🥀"],
+    ["tennis", "🎾"],
+    ["volleyball", "🏐"],
+    ["ping", "🏓"],
+    ["checkmark", "✅"],
+    ["check", "✅"],
+    ["cross", "❌"],
+    ["x", "❌"],
+    ["warning", "⚠️"],
+    ["error", "❌"],
+    ["info", "ℹ️"],
+    ["question", "❓"],
+    ["idea", "💡"],
+    ["bulb", "💡"],
+    ["eyes", "👀"],
+    ["see", "👀"],
+    ["look", "👀"],
+]
+
+
+def fancy(text, style):
+    candidate = STYLES.get(style)
+    while candidate == style:
+        candidate = STYLES.get(style)
+    if not candidate:
+        raise ValueError(f"Unknown style: {style}")
+    print(f"fancy style: {style}")
+    return "".join(candidate.get(c, c) for c in text)
+
+
+def apply_berserk(text: str) -> str:
+    """Transform each character with a random fancy style.
+    
+    Args:
+        text: The text to berserkify
+        
+    Returns:
+        Text with each character replaced with its fancy equivalent from a random style
+    """
+    if not berserk:
+        return text
+    
+    result = []
+    for char in text:
+        # Pick a random style for each character
+        style = random.choice(list(STYLES.keys()))
+        table = STYLES.get(style)
+        if table:
+            # Get the fancy character or keep original if not in style
+            result.append(table.get(char, char))
+        else:
+            result.append(char)
+    
+    return ''.join(result)
+
+
+def process_fancy_patterns(text: str) -> str:
+    """Replace 'f:{text}:' patterns with randomly styled text.
+    
+    Supports escaping:
+    - \\f:text: -> literal "f:text:" (escaped pattern)
+    - f:text\\:more: -> allows escaped colons within the pattern
+    
+    Args:
+        text: Input text that may contain f:{text}: patterns
+        
+    Returns:
+        Text with all fancy patterns replaced with styled versions
+    """
+    import re
+    
+    def replace_fancy(match):
+        # Check if this match is escaped with backslash
+        start_pos = match.start()
+        if start_pos > 0 and text[start_pos - 1] == '\\':
+            # Remove the escape backslash and return the literal pattern
+            return match.group(0)
+        
+        # Get content and unescape any \: within it
+        content = match.group(1).replace('\\:', ':')
+        random_style = random.choice(list(STYLES.keys()))
+        return fancy(content, random_style)
+    
+    # First, handle escaped patterns by temporarily replacing them
+    text = text.replace('\\f:', '\x00ESCAPED_FANCY\x00')
+    
+    # Match f:content: where content can include \: but not unescaped :
+    # This regex allows \: within the content
+    text = re.sub(r'f:((?:[^:\\]|\\:|\\.)+):', replace_fancy, text)
+    
+    # Restore escaped patterns (remove the escape backslash)
+    text = text.replace('\x00ESCAPED_FANCY\x00', 'f:')
+    
+    return text
+
+
+def check_and_replace_fancy_pattern() -> None:
+    """Check if keyboard buffer ends with f:{text}: and replace it.
+    
+    Called when ':' is typed to check if we've completed a fancy pattern.
+    Supports escaping:
+    - \\f:text: -> won't trigger (escaped pattern)
+    - f:text\\:more: -> allows escaped colons within the pattern
+    """
+    global keyboard_buffer
+    
+    # Get the buffer as a string
+    buffer_str = ''.join(keyboard_buffer)
+    
+    # Look for f:{text}: pattern at the end, allowing \: within content
+    import re
+    match = re.search(r'f:((?:[^:\\]|\\:|\\.)+):$', buffer_str)
+    
+    if match:
+        # Check if the pattern is escaped (preceded by backslash)
+        match_start = len(buffer_str) - len(match.group(0))
+        if match_start > 0 and buffer_str[match_start - 1] == '\\':
+            # This is an escaped pattern, remove the escape backslash
+            controller.tap(Key.backspace)
+            time.sleep(0.01)
+            # Update buffer to remove the escape backslash
+            keyboard_buffer.pop(-len(match.group(0)) - 1)
+            return
+        
+        # Get the captured text from the pattern and unescape \:
+        inner_text = match.group(1).replace('\\:', ':')
+        
+        # Choose a random style
+        style = random.choice(list(STYLES.keys()))
+        styled_text = fancy(inner_text, style)
+        
+        # Calculate how many characters to delete (f: + text + :)
+        pattern_len = len(match.group(0))
+        
+        # Delete the pattern by pressing backspace
+        time.sleep(0.05)  # Initial delay before starting backspaces
+        for _ in range(pattern_len):
+            controller.tap(Key.backspace)
+            time.sleep(0.02)  # Increased delay between backspaces
+        
+        # Type the styled text using Unicode-aware function
+        time.sleep(0.05)
+        type_unicode(styled_text)
+        
+        # Clear the matching portion from buffer
+        keyboard_buffer[:] = keyboard_buffer[:-pattern_len]
+        
+        # Trim buffer if too long
+        if len(keyboard_buffer) > max_buffer_size:
+            keyboard_buffer = keyboard_buffer[-max_buffer_size:]
+
+
+def process_emoji_patterns(text: str) -> str:
+    """Replace ':{text}:' patterns with corresponding emojis.
+    
+    Only processes if emoji_replacement_enabled is True.
+    
+    Supports escaping:
+    - \\:text: -> literal ":text:" (escaped pattern)
+    - :text\\:more: -> allows escaped colons within the pattern
+    
+    Emoji mapping is defined in the EMOJIS list: [[text, emoji], ...]
+    
+    Args:
+        text: Input text that may contain :{text}: patterns
+        
+    Returns:
+        Text with all emoji patterns replaced with their emoji equivalents
+    """
+    global emoji_replacement_enabled
+    
+    if not emoji_replacement_enabled:
+        return text
+    
+    import re
+    
+    def replace_emoji(match):
+        # Check if this match is escaped with backslash
+        start_pos = match.start()
+        if start_pos > 0 and text[start_pos - 1] == '\\':
+            # Remove the escape backslash and return the literal pattern
+            return match.group(0)
+        
+        # Get content and unescape any \: within it
+        content = match.group(1).replace('\\:', ':').lower()
+        
+        # Look for matching emoji
+        for emoji_text, emoji_char in EMOJIS:
+            if emoji_text.lower() == content:
+                return emoji_char
+        
+        # If no match found, return original pattern
+        return match.group(0)
+    
+    # First, handle escaped patterns by temporarily replacing them
+    text = text.replace('\\:', '\x00ESCAPED_COLON\x00')
+    
+    # Match :content: where content can include escaped colons
+    # This regex allows \: within the content (before escaping is restored)
+    text = re.sub(r':((?:[^:\\]|\\.)+):', replace_emoji, text)
+    
+    # Restore escaped colons
+    text = text.replace('\x00ESCAPED_COLON\x00', ':')
+    
+    return text
+
+
+def check_and_replace_emoji_pattern() -> None:
+    """Check if keyboard buffer ends with :{text}: and replace it with emoji.
+    
+    Only processes if emoji_replacement_enabled is True.
+    
+    Called when ':' is typed to check if we've completed an emoji pattern.
+    Supports escaping:
+    - \\:text: -> won't trigger (escaped pattern)
+    - :text\\:more: -> allows escaped colons within the pattern
+    """
+    global keyboard_buffer, emoji_replacement_enabled
+    
+    if not emoji_replacement_enabled:
+        return
+    
+    # Get the buffer as a string
+    buffer_str = ''.join(keyboard_buffer)
+    
+    # Look for :text: pattern at the end
+    import re
+    match = re.search(r':((?:[^:\\]|\\.)+):$', buffer_str)
+    
+    if match:
+        # Check if the pattern is escaped (preceded by backslash)
+        match_start = len(buffer_str) - len(match.group(0))
+        if match_start > 0 and buffer_str[match_start - 1] == '\\':
+            # This is an escaped pattern, remove the escape backslash
+            controller.tap(Key.backspace)
+            time.sleep(0.01)
+            # Update buffer to remove the escape backslash
+            keyboard_buffer.pop(-len(match.group(0)) - 1)
+            return
+        
+        # Get the captured text from the pattern and unescape \:
+        inner_text = match.group(1).replace('\\:', ':').lower()
+        
+        # Find matching emoji
+        emoji_char = None
+        for emoji_text, emoji_replacement in EMOJIS:
+            if emoji_text.lower() == inner_text:
+                emoji_char = emoji_replacement
+                break
+        
+        if emoji_char:
+            # Calculate how many characters to delete (:text:)
+            pattern_len = len(match.group(0))
+            
+            # Delete the pattern by pressing backspace
+            time.sleep(0.05)  # Initial delay before starting backspaces
+            for _ in range(pattern_len):
+                controller.tap(Key.backspace)
+                time.sleep(0.02)
+            
+            # Type the emoji using Unicode-aware function
+            time.sleep(0.05)
+            type_unicode(emoji_char)
+            
+            # Clear the matching portion from buffer
+            keyboard_buffer[:] = keyboard_buffer[:-pattern_len]
+            
+            # Trim buffer if too long
+            if len(keyboard_buffer) > max_buffer_size:
+                keyboard_buffer = keyboard_buffer[-max_buffer_size:]
 
 
 def tap_in_console(keys: str, hold_backtick: bool = True) -> None:
@@ -269,6 +835,11 @@ overlay_visible = False
 overlay_user_disabled = False
 overlay_refresh_ms = 250
 arena_current_type = 1
+
+# Keyboard buffer for fancy text auto-expansion
+keyboard_buffer = []
+max_buffer_size = 100  # Keep last 100 characters
+fancy_pattern_active = False
 
 # Shared multiprocessing primitives so worker processes can mirror thread-like behavior.
 automation_event = multiprocessing.Event()
@@ -520,7 +1091,7 @@ def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3) -> None:
 
     out = ''.join(chars)
     print(f"unicode blocks: {' '.join(groups)} -> '{out}'")
-    controller.type(out)
+    type_unicode(out)
 
 def custom_reload_spam(run_event: MpEvent) -> None:
     chars = "kyu"
@@ -1473,14 +2044,88 @@ def on_press(key: Key | KeyCode | None) -> None:
     global ctrlr_last_time, ctrlr_armed
     global circle_art_shift_bind, mcrash_shift_bind, ctrlswap
     global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
+    global keyboard_buffer, berserk
+    
     try:
         # Workaround for pynput macOS Unicode decode bug - some special keys trigger this
         if key is None:
             return
-        # Use Right Shift to stop all macros
+        if listener_event_injected:
+            return
+        
+        # Track typed characters for fancy pattern detection
+        char = get_char(key)
+        if char and len(char) == 1:
+            keyboard_buffer.append(char)
+            if len(keyboard_buffer) > max_buffer_size:
+                keyboard_buffer = keyboard_buffer[-max_buffer_size:]
+            
+            # Apply berserk effect: delete original character and replace with random fancy version
+            if berserk and 'ctrl' not in pressed_keys and is_alt(key) is False:
+                # Spawn a background thread to handle the replacement
+                # This gives the character time to appear before we delete it
+                def berserk_replace():
+                    try:
+                        # Give the character a moment to appear in the application
+                        time.sleep(0.02)
+                        
+                        # Delete the character that was just typed
+                        controller.tap(Key.backspace)
+                        
+                        # Small delay before typing the replacement
+                        time.sleep(0.01)
+                        
+                        # Pick a random style and transform the character
+                        style = random.choice(list(STYLES.keys()))
+                        table = STYLES.get(style)
+                        if table:
+                            fancy_char = table.get(char, char)
+                        else:
+                            fancy_char = char
+                        
+                        # Type the fancy character
+                        type_unicode(fancy_char)
+                    except Exception as e:
+                        print(f"Berserk replacement error: {e}")
+                
+                threading.Thread(target=berserk_replace, daemon=True).start()
+            
+            # Check for fancy pattern completion when ':' is typed
+            if char == ':':
+                threading.Thread(target=check_and_replace_fancy_pattern, daemon=True).start()
+                threading.Thread(target=check_and_replace_emoji_pattern, daemon=True).start()
+        elif key == Key.space:
+            # Explicitly track space key
+            keyboard_buffer.append(' ')
+            if len(keyboard_buffer) > max_buffer_size:
+                keyboard_buffer = keyboard_buffer[-max_buffer_size:]
+        elif key == Key.backspace:
+            # Remove last character from buffer on backspace
+            if keyboard_buffer:
+                keyboard_buffer.pop()
+        elif key == Key.enter:
+            # Clear buffer on enter (new line/message)
+            keyboard_buffer.clear()
+        
+        # Use Right Shift to disable shift-bound macros (circle_art/mcrash) and circle_mouse spin
         if key == Key.shift_r:
-            print("softstop")
-            stopallthreads()
+            if circle_art_shift_bind:
+                print("circle_art shift-bind off")
+                circle_art_shift_bind = False
+                circle_art_working = False
+                circle_art_event.clear()
+            if mcrash_shift_bind:
+                print("mcrash shift-bind off")
+                mcrash_shift_bind = False
+                mcrash_working = False
+                mcrash_event.clear()
+                if mcrash_process is not None and mcrash_process.is_alive():
+                    mcrash_process.terminate()
+                    mcrash_process.join(timeout=1)
+            if circle_mouse_active:
+                print("circle mouse off")
+                circle_mouse_active = False
+                stop_circle_mouse()
             return
         # Use Right Option to restart all running macros
         elif key == Key.alt_r:
@@ -1499,26 +2144,6 @@ def on_press(key: Key | KeyCode | None) -> None:
             # Stop everything
             stopallthreads()
             time.sleep(0.1)  # Brief pause to ensure clean shutdown
-            
-            # Restart what was running
-            if was_automation:
-                start_arena_automation(arena_current_type)
-            if was_engineer:
-                start_engineer_spam()
-            if was_circle_art:
-                start_circle_art()
-            if was_brain_damage:
-                start_brain_damage()
-            if was_circle_mouse:
-                start_circle_mouse()
-            if was_mcrash:
-                start_mcrash()
-            if was_custom_reload:
-                start_custom_reload_spam()
-            if was_tail:
-                start_tail()
-            if was_softwall:
-                start_softwallstack()
             print("Macros restarted")
             return
         elif is_ctrl(key):
@@ -1702,7 +2327,10 @@ def on_press(key: Key | KeyCode | None) -> None:
                 controller.release("`")
         elif hasattr(key, 'char') and key.char and key.char=='h': 
             if 'ctrl' in pressed_keys:
-                repeat_tap_in_console("h", 3000)
+                global emoji_replacement_enabled
+                emoji_replacement_enabled = not emoji_replacement_enabled
+                status = "enabled" if emoji_replacement_enabled else "disabled"
+                print(f"emoji replacement {status}")
         elif hasattr(key, 'char') and key.char and key.char=='r':
             if 'ctrl' in pressed_keys:
                 now = time.time()
@@ -1944,12 +2572,16 @@ def on_press(key: Key | KeyCode | None) -> None:
             if 'ctrl' in pressed_keys:
                 type_with_enter("$arena team 1", 0.05)
                 type_with_enter("$arena spawnpoint 0 0", 0.05)
-        elif hasattr(key, 'char') and key.char and key.char.lower()=='p':
-            pass
         elif hasattr(key, 'char') and key.char and key.char=='t':
             if 'ctrl' in pressed_keys:
                 print("custom_reload_spam")
                 start_custom_reload_spam()
+        elif hasattr(key, 'char') and key.char and key.char.lower()=='p':
+            # Ctrl+B toggles berserk mode
+            if 'ctrl' in pressed_keys:
+                berserk = not berserk
+                mode_text = "ON" if berserk else "OFF"
+                print(f"berserk: {mode_text}")
         if hasattr(key, 'char') and key.char and key.char=='-':
             circle_mouse_speed = min(circle_mouse_speed + 0.001, 0.5)
             circle_mouse_speed_value.value = circle_mouse_speed
@@ -1976,6 +2608,8 @@ def on_release(key: Key | KeyCode | None) -> None:
         # Workaround for pynput macOS Unicode decode bug
         if key is None:
             return
+        if listener_event_injected:
+            return
     except UnicodeDecodeError:
         return
     
@@ -1987,8 +2621,8 @@ def on_release(key: Key | KeyCode | None) -> None:
     elif is_alt(key):
         pressed_keys.discard('alt')
         # print("alt up")  # uncomment to debug
-    # NEW: releasing Left Shift stops circle_art_working if binding is enabled
-    elif key == Key.shift_l:
+    # NEW: releasing Left/Right Shift stops circle_art_working if binding is enabled
+    elif key in (Key.shift_l, Key.shift_r, Key.shift):
         if circle_art_shift_bind and circle_art_working:
             print("circle_art off")
             circle_art_working = False
@@ -2051,4 +2685,3 @@ if __name__ == '__main__':
         
         # Give processes time to fully terminate
         time.sleep(0.2)
-
