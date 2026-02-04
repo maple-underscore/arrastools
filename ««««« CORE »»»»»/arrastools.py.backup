@@ -137,54 +137,45 @@ except ImportError:
     print("C++ wrapper not available, using pure Python implementations")
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# GLOBAL VARIABLES
-# ═══════════════════════════════════════════════════════════════════════════
-
-# -------- Controllers and Basic State --------
-controller = KeyboardController()
-mouse = MouseController()
-pressed_keys = set()
 length = 4
+
+# Function
+# Centralized set of flags/shared state used across macro helpers. Values are
+# kept as globals because listeners spin up background threads that need access.
+global automation_working, controller, circlecrash_working, mouse, circle_art_working, step, ctrlswap, mcrash_working, custom_reload_spam_working
+global circle_mouse_active, circle_mouse_speed, circle_mouse_radius, circle_mouse_direction
 step = 20
-s = 25  # circle spacing in px
-
-# -------- Feature Flags --------
+s = 25 #circle spacing in px
 ctrlswap = False  # When True, use Cmd (macOS) instead of Ctrl for macros
-berserk = False  # When True, every typed character becomes random from a random fancy style
-emoji_replacement_enabled = False  # Toggle emoji :{text}: replacement on/off (Ctrl+H)
-
-# -------- Arena Automation Settings --------
-arena_auto_terminate = True  # If True, stop after arena_auto_max_commands
-arena_auto_max_commands = 576  # Number of commands before auto-termination
-arena_auto_rate_limit = 150  # Maximum commands per second (0 = unlimited)
-arena_size_step = 8  # Step size for arena size changes (must be even, default: 2)
-arena_current_type = 1
-
-# -------- Circle Mouse Settings --------
 circle_mouse_active = False
 circle_mouse_speed = 0.02  # Time delay between updates (lower = faster)
 circle_mouse_radius = 100  # Radius in pixels
 circle_mouse_direction = 1  # 1 for clockwise, -1 for counterclockwise
+berserk = False  # When True, every typed character becomes random from a random fancy style
+emoji_replacement_enabled = False  # Toggle emoji :{text}: replacement on/off (Ctrl+H)
 
-# -------- Macro State Flags --------
+# Arena automation limits
+arena_auto_terminate = True  # If True, stop after arena_auto_max_commands
+arena_auto_max_commands = 576  # Number of commands before auto-termination
+arena_auto_rate_limit = 150  # Maximum commands per second (0 = unlimited)
+arena_size_step = 8  # Step size for arena size changes (must be even, default: 2)
+
 automation_working = False
 engineer_spam_working = False
 mcrash_working = False
+mcrash_thread = None
+engineer_spam_thread = None
 custom_reload_spam_working = False
 circle_art_working = False
 circlecrash_working = False
-braindamage_working = False
-
-# -------- Legacy Thread References (deprecated) --------
-mcrash_thread = None
-engineer_spam_thread = None
 circlecrash_thread = None
+braindamage_working = False
+controller = KeyboardController()
+mouse = MouseController()
+pressed_keys = set()
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# INPUT HELPER FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════
+# -------- Input Helper Functions -------- #
 def press_with_delay(key: str | Key, wait: float = 0.1, count: int = 2) -> None:
     """Press a key multiple times with delay between presses.
     
@@ -517,10 +508,6 @@ EMOJIS = [
 ]
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# FANCY TEXT AND STYLING FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════
-
 def fancy(text, style):
     candidate = STYLES.get(style)
     while candidate == style:
@@ -773,10 +760,6 @@ def check_and_replace_emoji_pattern() -> None:
                 keyboard_buffer = keyboard_buffer[-max_buffer_size:]
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# CONSOLE INPUT FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════
-
 def tap_in_console(keys: str, hold_backtick: bool = True) -> None:
     """Tap individual keys in the game console (backtick-wrapped).
     
@@ -836,10 +819,6 @@ def repeat_tap_pattern_in_console(pattern: str, count: int, hold_backtick: bool 
                 controller.tap("`")
                 controller.tap(k)
                 controller.tap("`")
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PROCESS AND THREAD REFERENCES
-# ═══════════════════════════════════════════════════════════════════════════
 automation_process = None
 softwallstack_process = None
 circle_art_thread: threading.Thread | None = None
@@ -850,22 +829,19 @@ custom_reload_spam_process = None
 engineer_spam_process = None
 circlecrash_process = None
 mcrash_process: Process | None = None
-
-# -------- Overlay System --------
 overlay_thread: threading.Thread | None = None
 overlay_stop_event = threading.Event()
 overlay_visible = False
 overlay_user_disabled = False
 overlay_refresh_ms = 250
+arena_current_type = 1
 
-# -------- Keyboard Buffer for Fancy Text Auto-Expansion --------
+# Keyboard buffer for fancy text auto-expansion
 keyboard_buffer = []
 max_buffer_size = 100  # Keep last 100 characters
 fancy_pattern_active = False
 
-# ═══════════════════════════════════════════════════════════════════════════
-# MULTIPROCESSING EVENTS AND SHARED VALUES
-# ═══════════════════════════════════════════════════════════════════════════
+# Shared multiprocessing primitives so worker processes can mirror thread-like behavior.
 automation_event = multiprocessing.Event()
 engineer_spam_event = multiprocessing.Event()
 circle_art_event = threading.Event()  # Changed to threading.Event for faster response time
@@ -877,15 +853,22 @@ circle_mouse_radius_value = multiprocessing.Value('i', circle_mouse_radius)
 circle_mouse_speed_value = multiprocessing.Value('d', circle_mouse_speed)
 circle_mouse_direction_value = multiprocessing.Value('i', circle_mouse_direction)
 
-# ═══════════════════════════════════════════════════════════════════════════
-# DOUBLE-TAP TIMING VARIABLES
-# ═══════════════════════════════════════════════════════════════════════════
+processes = ["automation", "engineer_spam", "circle_art", "braindamage_working", "tail", "circle_mouse", "softwallstack", "circlecrash", "mcrash", "custom_reload_spam"]
+for process in processes:
+    exec(f"{process}_process = None")
+    exec(f"global {process}_process, {process}_working")
+
+# Add these globals near the top
 ctrl6_last_time = 0.0
 ctrl6_armed = False
 ctrl7_last_time = 0.0
 ctrl7_armed = False
+
+# double-lock globals for ctrl+1 (arena size automation)
 ctrl1_last_time = 0.0
 ctrl1_armed = False
+
+# double-lock globals for q, a, z, y, u, i, g, r
 ctrlq_last_time = 0.0
 ctrlq_armed = False
 ctrla_last_time = 0.0
@@ -903,31 +886,15 @@ ctrlg_armed = False
 ctrlr_last_time = 0.0
 ctrlr_armed = False
 
-# ═══════════════════════════════════════════════════════════════════════════
-# SHIFT-BIND FLAGS
-# ═══════════════════════════════════════════════════════════════════════════
+# NEW: bind circle_art_working to Left Shift when enabled via Ctrl+C
 circle_art_shift_bind = False
 mcrash_shift_bind = False
-
-# ═══════════════════════════════════════════════════════════════════════════
-# CIRCLE FINDER MODE STATE
-# ═══════════════════════════════════════════════════════════════════════════
-circle_finder_active = False
-circle_finder_event = multiprocessing.Event()
-circle_finder_process = None
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# UTILITY FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════
 
 def generate_even(low: int = 2, high: int = 1024) -> int:
     return random.choice([i for i in range(low, high + 1) if i % 2 == 0])
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# OVERLAY SYSTEM
-# ═══════════════════════════════════════════════════════════════════════════
+# -------- Overlay helpers -------- #
 def _overlay_lines() -> list[str]:
     """Build overlay text for long-running macros."""
     dir_text = 'cw' if circle_mouse_direction_value.value >= 0 else 'ccw'
@@ -941,7 +908,6 @@ def _overlay_lines() -> list[str]:
         f"custom_reload_spam: {'ON' if custom_reload_spam_event.is_set() else 'off'}",
         f"Brain damage: {'ON' if braindamage_event.is_set() else 'off'}",
         f"Circle mouse: {'ON' if circle_mouse_event.is_set() else 'off'} r={circle_mouse_radius_value.value} v={circle_mouse_speed_value.value:.3f} dir={dir_text}",
-        f"Circle finder: {'ON' if circle_finder_event.is_set() else 'off'}",
         f"Tail: {'ON' if (tail_process is not None and tail_process.is_alive()) else 'off'}",
         f"Softwall: {'ON' if (softwallstack_process is not None and softwallstack_process.is_alive()) else 'off'}",
         f"Armed: arena={'YES' if ctrl1_armed else 'no'} circle={'YES' if ctrl6_armed else 'no'} wall={'YES' if ctrl7_armed else 'no'} arenaclose={'YES' if ctrlr_armed else 'no'}",
@@ -1127,11 +1093,6 @@ def type_unicode_blocks(hex_string: str | None = None, blocks: int = 3) -> None:
     print(f"unicode blocks: {' '.join(groups)} -> '{out}'")
     type_unicode(out)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# AUTOMATION MACROS
-# ═══════════════════════════════════════════════════════════════════════════
-
 def custom_reload_spam(run_event: MpEvent) -> None:
     chars = "kyu"
     controller.press("`")
@@ -1273,11 +1234,6 @@ def click_positions(pos_list: list[tuple[float, float]], delay: float = 0.5) -> 
         mouse.click(Button.left, 1)
         print(f"Clicked at {x}, {y}")
         time.sleep(delay)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# DRAWING MACROS (CIRCLES, WALLS, SHAPES)
-# ═══════════════════════════════════════════════════════════════════════════
 
 def conq_quickstart() -> None:
     for _ in range(50):
@@ -1602,11 +1558,6 @@ def simpletail(amt: int = 20) -> None:
         time.sleep(delay)
         controller.release("j")
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PROCESS MANAGEMENT (START/STOP HELPERS)
-# ═══════════════════════════════════════════════════════════════════════════
-
 def start_arena_automation(atype: int = 1) -> None:
     global automation_process, automation_working
     global arena_current_type
@@ -1745,11 +1696,6 @@ def is_ctrl(k: Key | KeyCode) -> bool:
         # Use Ctrl key normally
         return k in (Key.ctrl, Key.ctrl_l, Key.ctrl_r)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# KEY/MODIFIER UTILITY FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════
-
 def is_alt(k: Key | KeyCode) -> bool:
     # On macOS, Option is alt; on other platforms, Alt is alt
     if not isinstance(k, Key):
@@ -1761,11 +1707,6 @@ def get_char(key: Key | KeyCode | None) -> str | None:
     if isinstance(key, KeyCode):
         return key.char
     return None
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# OCR AND TEXT SCANNING FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════
 
 def ocr_text_capture() -> None:
     """Capture text from a screen region defined by two mouse clicks.
@@ -2001,192 +1942,15 @@ def scan_screen_for_text(search_text: str, monitor_index: int = 1) -> tuple[bool
         print(f"Error scanning screen for text: {e}")
         return (False, None)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# DOUBLE-TAP HELPER
-# ═══════════════════════════════════════════════════════════════════════════
-
-def handle_double_tap(armed_flag_name: str, last_time_var_name: str, action_fn, description: str = "", timeout: float = 5.0) -> bool:
-    """Handle double-tap pattern for safety-critical macros.
-    
-    Args:
-        armed_flag_name: Name of global flag tracking armed state (e.g., 'ctrl1_armed')
-        last_time_var_name: Name of global variable tracking last press time (e.g., 'ctrl1_last_time')
-        action_fn: Function to call on second tap
-        description: Description for logging
-        timeout: Timeout in seconds (default: 5.0)
-    
-    Returns:
-        True if action was executed, False if arming
-    """
-    now = time.time()
-    armed = globals()[armed_flag_name]
-    last_time = globals()[last_time_var_name]
-    
-    if armed and (now - last_time <= timeout):
-        # Second tap within timeout - execute action
-        if description:
-            print(f"{description} - executing")
-        action_fn()
-        globals()[armed_flag_name] = False
-        return True
-    else:
-        # First tap or timeout expired - arm the trigger
-        if description:
-            print(f"{description} - armed (press again within {timeout}s to confirm)")
-        globals()[armed_flag_name] = True
-        globals()[last_time_var_name] = now
-        return False
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# CIRCLE FINDER MODE
-# ═══════════════════════════════════════════════════════════════════════════
-
-def circle_finder_mode(run_event: MpEvent) -> None:
-    """Circle detection mode that finds and tracks colored circle borders.
-    
-    Workflow:
-    1. Wait for two mouse clicks to define search rectangle
-    2. Search within rectangle for circular shapes with colored borders
-    3. Move mouse to center of found circle
-    4. Continue tracking/centering until Left Shift is released
-    
-    Uses basic image processing with mss and PIL to detect circles.
-    """
-    if not HAS_OCR:
-        print("Circle finder requires mss and PIL - install with: pip install mss pillow")
-        return
-    
-    print("Circle finder: Click two corners to define search rectangle")
-    points: list[tuple[int, int]] = []
-    
-    def click_handler(x: int, y: int, button: Button, pressed: bool) -> None:
-        if pressed and button == Button.left and run_event.is_set() and len(points) < 2:
-            points.append((x, y))
-            print(f"Circle finder: Point {len(points)}/2 captured at ({x}, {y})")
-    
-    temp_listener = MouseListener(on_click=click_handler)
-    temp_listener.start()
-    
-    # Wait for two points or timeout
-    start_time = time.time()
-    while len(points) < 2 and run_event.is_set() and (time.time() - start_time) < 30:
-        time.sleep(0.05)
-    
-    temp_listener.stop()
-    
-    if len(points) < 2:
-        print("Circle finder: Cancelled or timed out")
-        return
-    
-    # Define search rectangle
-    x1, y1 = points[0]
-    x2, y2 = points[1]
-    search_rect = {
-        'left': min(x1, x2),
-        'top': min(y1, y2),
-        'width': abs(x2 - x1),
-        'height': abs(y2 - y1)
-    }
-    
-    print(f"Circle finder: Searching in {search_rect['width']}x{search_rect['height']} region")
-    
-    with mss.mss() as sct:
-        while run_event.is_set():
-            try:
-                # Capture search region
-                screenshot = sct.grab(search_rect)
-                img = Image.frombytes('RGB', screenshot.size, screenshot.rgb)
-                
-                # Convert to grayscale for edge detection (basic approach)
-                gray = img.convert('L')
-                width, height = gray.size
-                
-                # Simple circle detection: find regions with high edge density
-                # This is a basic implementation - for production, use cv2.HoughCircles
-                center_x = width // 2
-                center_y = height // 2
-                
-                # Scan for brightest/darkest contrasts indicating circle edges
-                max_contrast = 0
-                best_x, best_y = center_x, center_y
-                
-                # Sample in a grid pattern
-                step = 20
-                for y in range(step, height - step, step):
-                    for x in range(step, width - step, step):
-                        # Calculate local contrast (simple gradient)
-                        neighbors = []
-                        for dy in [-step, 0, step]:
-                            for dx in [-step, 0, step]:
-                                ny, nx = y + dy, x + dx
-                                if 0 <= ny < height and 0 <= nx < width:
-                                    neighbors.append(gray.getpixel((nx, ny)))
-                        
-                        if len(neighbors) > 0:
-                            contrast = max(neighbors) - min(neighbors)
-                            if contrast > max_contrast:
-                                max_contrast = contrast
-                                best_x, best_y = x, y
-                
-                # Move mouse to detected position (absolute screen coordinates)
-                abs_x = search_rect['left'] + best_x
-                abs_y = search_rect['top'] + best_y
-                mouse.position = (abs_x, abs_y)
-                
-                time.sleep(0.1)  # Update rate
-                
-            except Exception as e:
-                print(f"Circle finder error: {e}")
-                time.sleep(0.5)
-    
-    print("Circle finder: Stopped")
-
-
-def start_circle_finder() -> None:
-    """Start circle finder mode in separate process."""
-    global circle_finder_process, circle_finder_active
-    
-    if circle_finder_process is not None and circle_finder_process.is_alive():
-        print("Circle finder already running")
-        return
-    
-    circle_finder_active = True
-    circle_finder_event.set()
-    circle_finder_process = Process(target=circle_finder_mode, args=(circle_finder_event,))
-    circle_finder_process.start()
-    ensure_overlay_running("circle_finder started")
-    print("Circle finder started (release Left Shift to stop)")
-
-
-def stop_circle_finder() -> None:
-    """Stop circle finder mode."""
-    global circle_finder_process, circle_finder_active
-    
-    circle_finder_active = False
-    circle_finder_event.clear()
-    
-    if circle_finder_process is not None:
-        if circle_finder_process.is_alive():
-            circle_finder_process.terminate()
-            circle_finder_process.join(timeout=1)
-            if circle_finder_process.is_alive():
-                circle_finder_process.kill()
-        circle_finder_process = None
-    
-    print("Circle finder stopped")
-
-
 def cleanup_multiprocessing_resources() -> None:
     """Clean up multiprocessing Events and Values to prevent semaphore leaks."""
     global automation_event, engineer_spam_event, circle_art_event, braindamage_event
-    global circle_mouse_event, mcrash_event, custom_reload_spam_event, circle_finder_event
+    global circle_mouse_event, mcrash_event, custom_reload_spam_event
     global circle_mouse_radius_value, circle_mouse_speed_value, circle_mouse_direction_value
     
     # Clear all events first
     for event in [automation_event, engineer_spam_event, circle_art_event, braindamage_event,
-                  circle_mouse_event, mcrash_event, custom_reload_spam_event, circle_finder_event]:
+                  circle_mouse_event, mcrash_event, custom_reload_spam_event]:
         try:
             event.clear()
         except Exception:
@@ -2198,10 +1962,10 @@ def cleanup_multiprocessing_resources() -> None:
 
 def stopallthreads() -> None:
     global automation_process, engineer_spam_process, braindamage_process
-    global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process, circle_finder_process
+    global tail_process, circle_mouse_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process
     global circle_art_thread
     global automation_working, engineer_spam_working, circle_art_working, braindamage_working, mcrash_working, custom_reload_spam_working
-    global circle_mouse_active, circle_finder_active
+    global circle_mouse_active
     if custom_reload_spam_working:
         controller.tap(Key.space)
     
@@ -2213,7 +1977,6 @@ def stopallthreads() -> None:
     circle_mouse_active = False
     mcrash_working = False
     custom_reload_spam_working = False
-    circle_finder_active = False
     automation_event.clear()
     engineer_spam_event.clear()
     circle_art_event.clear()
@@ -2221,12 +1984,11 @@ def stopallthreads() -> None:
     circle_mouse_event.clear()
     mcrash_event.clear()
     custom_reload_spam_event.clear()
-    circle_finder_event.clear()
     stop_circle_mouse()
     
     # Terminate all processes and clean up resources
     for proc in [automation_process, engineer_spam_process, braindamage_process,
-                 tail_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process, circle_finder_process]:
+                 tail_process, softwallstack_process, circlecrash_process, mcrash_process, custom_reload_spam_process]:
         if proc is not None:
             try:
                 if proc.is_alive():
@@ -2251,7 +2013,6 @@ def stopallthreads() -> None:
     circlecrash_process = None
     mcrash_process = None
     custom_reload_spam_process = None
-    circle_finder_process = None
     
     # Clean up multiprocessing resources
     cleanup_multiprocessing_resources()
@@ -2264,174 +2025,6 @@ def stopallthreads() -> None:
         - Android: Alt (if supported)
         """
         return is_alt(k)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# KEYBIND SYSTEM
-# ═══════════════════════════════════════════════════════════════════════════
-
-# Handler functions for keybinds (simple wrappers for commonly used actions)
-
-def handler_circle():
-    """Ctrl+3: Draw a circle."""
-    circle()
-
-def handler_circle_square():
-    """Ctrl+4: Draw circle square pattern."""
-    print("circle square")
-    start_tail()
-
-def handler_circles_batch():
-    """Ctrl+B: Draw 200 circles."""
-    print("200 circles")
-    circles()
-
-def handler_walls_batch():
-    """Ctrl+W: Draw 200 walls."""
-    print("200 walls")
-    walls()
-
-def handler_engineer_spam():
-    """Ctrl+E: Start engineer spam."""
-    global engineer_spam_working
-    print("engineer_spam")
-    engineer_spam_working = True
-    start_engineer_spam()
-
-def handler_nuke():
-    """Ctrl+9: Execute nuke."""
-    print("NUKE GO BRRRRRRRRRR")
-    nuke()
-
-def handler_shape():
-    """Ctrl+F: Shape nuke."""
-    print("shape nuke")
-    shape()
-
-def handler_score():
-    """Ctrl+N: Score macro."""
-    print("score")
-    score()
-
-def handler_benchmark():
-    """Ctrl+M: Run benchmark."""
-    print("benchmarking...")
-    benchmark()
-
-def handler_minicirclecrash():
-    """Ctrl+6: Mini circle crash."""
-    print("minicirclecrash")
-    minicirclecrash()
-
-def handler_simple_tail():
-    """Ctrl+8: Simple tail."""
-    print("simple tail")
-    simpletail(tailamount)
-
-def handler_brain_damage():
-    """Ctrl+2: Brain damage mode."""
-    global braindamage_working
-    braindamage_working = True
-    print("bdmg")
-    start_brain_damage()
-
-def handler_toggle_emoji():
-    """Ctrl+H: Toggle emoji replacement."""
-    global emoji_replacement_enabled
-    emoji_replacement_enabled = not emoji_replacement_enabled
-    status = "enabled" if emoji_replacement_enabled else "disabled"
-    print(f"emoji replacement {status}")
-
-def handler_toggle_berserk():
-    """Ctrl+P: Toggle berserk mode."""
-    global berserk
-    berserk = not berserk
-    mode_text = "ON" if berserk else "OFF"
-    print(f"berserk: {mode_text}")
-
-def handler_custom_reload_spam():
-    """Ctrl+T: Custom reload spam."""
-    print("custom_reload_spam")
-    start_custom_reload_spam()
-
-def handler_ocr_capture():
-    """Ctrl+0: OCR text capture."""
-    print("OCR Text Capture - Click two corners to define region")
-    threading.Thread(target=ocr_text_capture, daemon=True).start()
-
-def handler_toggle_circle_mouse():
-    """Ctrl+O: Toggle circle mouse."""
-    global circle_mouse_active, circle_mouse_direction
-    circle_mouse_active = not circle_mouse_active
-    if circle_mouse_active:
-        circle_mouse_direction = 1  # reset to default on start
-        circle_mouse_direction_value.value = circle_mouse_direction
-        print(f"circle mouse on (radius: {circle_mouse_radius}, speed: {circle_mouse_speed})")
-        start_circle_mouse()
-    else:
-        print("circle mouse off")
-        stop_circle_mouse()
-
-def handler_toggle_circle_art():
-    """Ctrl+C: Toggle circle art shift binding."""
-    global circle_art_shift_bind, circle_art_working
-    circle_art_shift_bind = True
-    circle_art_working = False  # ensure idle until Left Shift is pressed
-    circle_art_event.clear()
-    print("toggle circle_art")
-
-def handler_toggle_mcrash():
-    """Ctrl+V: Toggle mcrash shift binding."""
-    global mcrash_shift_bind, mcrash_working
-    mcrash_shift_bind = True
-    mcrash_working = False
-    mcrash_event.clear()
-    print("toggle mcrash")
-
-def handler_arena_team_setup():
-    """Ctrl+K: Arena team setup."""
-    type_with_enter("$arena team 1", 0.05)
-    type_with_enter("$arena spawnpoint 0 0", 0.05)
-
-# Keybinds list: (char, modifier, handler_function, description)
-# modifier can be 'ctrl', 'alt', or None
-# char can be a string character or a Key object
-KEYBINDS = [
-    ('1', 'ctrl', lambda: handle_double_tap('ctrl1_armed', 'ctrl1_last_time', 
-                                            lambda: start_arena_automation(atype=1), 
-                                            "arena automation starting (type 1)"), "Arena automation type 1 (double-tap)"),
-    ('2', 'ctrl', handler_brain_damage, "Brain damage mode"),
-    ('3', 'ctrl', handler_circle, "Draw circle"),
-    ('4', 'ctrl', handler_circle_square, "Circle square pattern"),
-    ('5', 'ctrl', lambda: handle_double_tap('ctrl6_armed', 'ctrl6_last_time',
-                                            circlecrash,
-                                            "death by circle"), "Circle crash (double-tap)"),
-    ('6', 'ctrl', handler_minicirclecrash, "Mini circle crash"),
-    ('7', 'ctrl', lambda: handle_double_tap('ctrl7_armed', 'ctrl7_last_time',
-                                            wallcrash,
-                                            "death by wall"), "Wall crash (double-tap)"),
-    ('8', 'ctrl', handler_simple_tail, "Simple tail"),
-    ('9', 'ctrl', handler_nuke, "Nuke"),
-    ('0', 'ctrl', handler_ocr_capture, "OCR text capture"),
-    
-    ('b', 'ctrl', handler_circles_batch, "200 circles"),
-    ('c', 'ctrl', handler_toggle_circle_art, "Toggle circle art"),
-    ('e', 'ctrl', handler_engineer_spam, "Engineer spam"),
-    ('f', 'ctrl', handler_shape, "Shape nuke"),
-    ('h', 'ctrl', handler_toggle_emoji, "Toggle emoji replacement"),
-    ('k', 'ctrl', handler_arena_team_setup, "Arena team setup"),
-    ('m', 'ctrl', handler_benchmark, "Benchmark"),
-    ('n', 'ctrl', handler_score, "Score"),
-    ('o', 'ctrl', handler_toggle_circle_mouse, "Toggle circle mouse"),
-    ('p', 'ctrl', handler_toggle_berserk, "Toggle berserk mode"),
-    ('t', 'ctrl', handler_custom_reload_spam, "Custom reload spam"),
-    ('v', 'ctrl', handler_toggle_mcrash, "Toggle mcrash"),
-    ('w', 'ctrl', handler_walls_batch, "200 walls"),
-    
-    # Alt keybinds
-    ('1', 'alt', start_circle_finder, "Circle finder mode (hold Left Shift)"),
-]
-
 
 def on_press(key: Key | KeyCode | None) -> None:
     # Global variables that track double-press states need to be declared
@@ -2574,14 +2167,10 @@ def on_press(key: Key | KeyCode | None) -> None:
                 elif key == Key.right:
                     mouse.position = (x + 1, y)
                 return
-        # Left Shift: activate circle art OR circle finder OR pause/unpause spam macros (only if already running)
+        # Left Shift: activate circle art OR pause/unpause spam macros (only if already running)
         elif key == Key.shift_l:
-            # Priority 0: Circle finder mode
-            if circle_finder_active:
-                # Left shift is held during circle finder - do nothing special
-                pass
             # Priority 1: Circle art shift bind
-            elif circle_art_shift_bind:
+            if circle_art_shift_bind:
                 if not circle_art_working:
                     print("circle_art on")
                 circle_art_working = True
@@ -2596,23 +2185,6 @@ def on_press(key: Key | KeyCode | None) -> None:
                 # Only allow resume if process is alive and currently paused
                 custom_reload_spam_event.set()
                 print("Custom reload spam RESUMED (left shift)")
-        
-        # ── Check keybinds list for simple handlers ──
-        char = get_char(key)
-        if char:
-            for keybind_char, modifier, handler, description in KEYBINDS:
-                if char == keybind_char:
-                    if modifier == 'ctrl' and 'ctrl' in pressed_keys:
-                        handler()
-                        return
-                    elif modifier == 'alt' and 'alt' in pressed_keys:
-                        handler()
-                        return
-                    elif modifier is None:
-                        handler()
-                        return
-        
-        # ── Special character handlers (not in keybinds list) ──
         elif get_char(key) == "'":
             if 'ctrl' in pressed_keys:
                 print("unicode blocks macro")
@@ -3031,7 +2603,7 @@ def on_press(key: Key | KeyCode | None) -> None:
         print(f"Error: {e}")
     
 def on_release(key: Key | KeyCode | None) -> None:
-    global circle_art_working, circle_art_shift_bind, mcrash_working, mcrash_shift_bind, circle_finder_active
+    global circle_art_working, circle_art_shift_bind, mcrash_working, mcrash_shift_bind
     try:
         # Workaround for pynput macOS Unicode decode bug
         if key is None:
@@ -3049,11 +2621,8 @@ def on_release(key: Key | KeyCode | None) -> None:
     elif is_alt(key):
         pressed_keys.discard('alt')
         # print("alt up")  # uncomment to debug
-    # Releasing Left/Right Shift stops circle_art, mcrash, and circle_finder
+    # NEW: releasing Left/Right Shift stops circle_art_working if binding is enabled
     elif key in (Key.shift_l, Key.shift_r, Key.shift):
-        if circle_finder_active:
-            print("circle_finder stopping (shift released)")
-            stop_circle_finder()
         if circle_art_shift_bind and circle_art_working:
             print("circle_art off")
             circle_art_working = False
