@@ -133,9 +133,22 @@ arrastools/
 | `Ctrl+6` (2× in 5s) | Ball crash |
 | `Ctrl+9` | Nuke |
 | `Ctrl+m` | Ball spam benchmark |
+| `Alt+1` | Circle finder (click 2 corners, hold Left Shift) |
 | `Alt+Arrow` | 1px mouse nudge |
 | `Esc` | Stop current activity |
 | `Ctrl+Esc` | Immediate exit |
+
+#### Circle Finder Mode (Alt+1)
+
+The circle finder automatically detects and tracks circles with colored borders:
+
+1. Press **Alt+1** to activate
+2. Click **two corners** to define search rectangle  
+3. Hold **Left Shift** — mouse moves to center of detected circles
+4. Release **Left Shift** to stop tracking
+
+> [!TIP]
+> Best used for tracking moving circular objects. The algorithm uses basic edge detection to find high-contrast regions.
 
 ### arrasbot.py — State Watchdog
 
