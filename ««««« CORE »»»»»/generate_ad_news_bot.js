@@ -3,14 +3,25 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const adNewsPath = path.join(__dirname, '..', 'copypastas', 'ad_news.txt');
+const regenerateScriptPath = path.join(__dirname, '..', 'copypastas', 'regenerate_ad_news.py');
 const outputPath = path.join(__dirname, 'arrascopypasta_ad_news.js');
 
 if (!fs.existsSync(adNewsPath)) {
   console.error(`Error: ${adNewsPath} not found!`);
   console.log('Run "node news.js" first to generate ad_news.txt');
   process.exit(1);
+}
+
+// Shuffle the ad_news.txt before generating
+console.log('Shuffling ad_news.txt...');
+try {
+  execSync(`python3 "${regenerateScriptPath}"`, { stdio: 'inherit' });
+} catch (err) {
+  console.error('Warning: Could not shuffle ad_news.txt');
+  console.error(err.message);
 }
 
 const adNewsContent = fs.readFileSync(adNewsPath, 'utf8');
@@ -240,3 +251,4 @@ console.log('1. Open Arras.io in your browser');
 console.log('2. Open browser console (F12)');
 console.log(`3. Copy and paste the contents of ${path.basename(outputPath)}`);
 console.log('4. Press Enter to start the bot');
+console.log('\nNote: This script automatically shuffles ad_news.txt before generating the bot.');
