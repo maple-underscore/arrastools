@@ -4,6 +4,9 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Backup files
+*.backup
+
 # Virtual environments
 .venv/
 venv/
